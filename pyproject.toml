@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "roxie"
+version = "1.0.0"
+description = "Advanced Cluster Security Deployment Tool"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "rich",
+    "pyyaml",
+]
+
+[project.scripts]
+roxie = "roxie.main:main"
+
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+
+[tool.ruff.lint]
+# Enable specific rule sets
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings  
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "S",   # flake8-bandit (security)
+]
+
+# Ignore specific rules that may be too strict for this project
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "B008",   # Do not perform function calls in argument defaults
+    "S603",   # subprocess call - check for execution of untrusted input
+    "S607",   # Starting a process with a partial executable path
+    "S608",   # Possible SQL injection vector through string-based query construction
+    "N806",   # Variable in function should be lowercase
+    "N803",   # Argument name should be lowercase
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**.py" = ["S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["deployer", "helpers", "docker_auth", "image_cache"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_any_generics = true
+check_untyped_defs = true
+no_implicit_reexport = true
+disallow_untyped_defs = false  # Set to true when ready for strict typing
+
+# For external dependencies that don't have type stubs
+ignore_missing_imports = true
+
+# Specific module configurations
+[[tool.mypy.overrides]]
+module = [
+    "rich.*",
+    "yaml.*",
+]
+ignore_missing_imports = true 
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: end-to-end tests that interact with a real cluster",
+]
+testpaths = [
+    "tests",
+]

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fast path when already in the Nix dev environment
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+if [[ -n "${IN_NIX_SHELL-}" ]]; then
+  PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
+    python -u -m roxie.main "$@"
+  exit $?
+fi
+
+# Fallback: enter Nix dev shell for THIS repository just for this command
+exec nix --extra-experimental-features 'nix-command flakes' develop "${REPO_ROOT}" -c \
+  env PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
+  python -u -m roxie.main "$@"
+
+
