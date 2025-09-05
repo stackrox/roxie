@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import time
 import math
+import random
 from tracemalloc import start
 from typing import Any, Dict, List, Optional
 
@@ -480,23 +481,81 @@ class ACSDeployer:
 
     def generate_crs(self, cluster_name: str) -> str:
         """Generate CRS (Central Resource Secret) for secured cluster deployment"""
-        try:
-            result = subprocess.run(
-                ["roxctl", "--insecure-skip-tls-verify", "-e", self.central_endpoint, "central", "crs", "generate", cluster_name, "--output=-"],
-                capture_output=True, text=True, check=True, env={**os.environ, "ROX_ADMIN_PASSWORD": self.central_password},
-            )
-            return result.stdout.strip()
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
-            detail = ""
+        # Retry up to 3 times on network-related transient errors
+        retryable_error_substrings = [
+            "connection refused",
+            "connection reset",
+            "connection timed out",
+            "timed out",
+            "timeout",
+            "network is unreachable",
+            "temporary failure in name resolution",
+            "no route to host",
+            "tls handshake timeout",
+            "eof",
+            "bad gateway",
+            "service unavailable",
+        ]
+
+        max_attempts = 3
+        for attempt_number in range(1, max_attempts + 1):
             try:
-                if hasattr(e, "stderr") and e.stderr:
-                    detail = f": {e.stderr.strip()}"
-                elif hasattr(e, "stdout") and e.stdout:
-                    detail = f": {e.stdout.strip()}"
-            except Exception:
+                result = subprocess.run(
+                    [
+                        "roxctl",
+                        "--insecure-skip-tls-verify",
+                        "-e",
+                        self.central_endpoint,
+                        "central",
+                        "crs",
+                        "generate",
+                        cluster_name,
+                        "--output=-",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    env={**os.environ, "ROX_ADMIN_PASSWORD": self.central_password},
+                )
+                return result.stdout.strip()
+            except FileNotFoundError:
+                # Not retryable: binary not found
+                self.logger.error("CRS issuing failed: roxctl not found in PATH")
+                raise
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                # Decide whether to retry based on error text
+                error_output = ""
+                try:
+                    if hasattr(e, "stderr") and e.stderr:
+                        error_output = e.stderr
+                    elif hasattr(e, "stdout") and e.stdout:
+                        error_output = e.stdout
+                except Exception:
+                    error_output = ""
+
+                error_output_lc = (error_output or "").lower()
+                should_retry = isinstance(e, subprocess.TimeoutExpired) or any(substr in error_output_lc for substr in retryable_error_substrings)
+
+                if should_retry and attempt_number < max_attempts:
+                    backoff_seconds = 2 ** (attempt_number - 1)
+                    jitter_seconds = random.uniform(0, 0.25)
+                    total_sleep = backoff_seconds + jitter_seconds
+                    self.logger.print_with_timestamp(
+                        f"Transient network error from roxctl (attempt {attempt_number}/{max_attempts}). Retrying in {total_sleep:.2f}s...",
+                        style="yellow",
+                    )
+                    time.sleep(total_sleep)
+                    continue
+
+                # Final attempt or non-retryable error
                 detail = ""
-            self.logger.error(f"CRS issuing failed: {detail}")
-            raise
+                try:
+                    if error_output:
+                        detail = f": {error_output.strip()}"
+                except Exception:
+                    detail = ""
+                self.logger.error(f"CRS issuing failed{detail}")
+                raise
 
     def apply_yaml_to_namespace(self, namespace: str, crs_content: str):
         """Apply CRS content as a Kubernetes Secret for operator consumption"""
