@@ -12,7 +12,7 @@ if [[ -n "${IN_NIX_SHELL-}" ]]; then
 fi
 
 # Fallback: enter Nix dev shell for THIS repository just for this command
-exec nix --extra-experimental-features 'nix-command flakes' develop "${REPO_ROOT}" -c \
+exec nix --extra-experimental-features 'nix-command flakes' --accept-flake-config --no-warn-dirty develop "${REPO_ROOT}" -c \
   env PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
   python -u -m roxie.main "$@"
 
