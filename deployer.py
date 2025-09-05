@@ -482,21 +482,8 @@ class ACSDeployer:
         """Generate CRS (Central Resource Secret) for secured cluster deployment"""
         try:
             result = subprocess.run(
-                [
-                    "roxctl",
-                    "--insecure-skip-tls-verify",
-                    "-e",
-                    self.central_endpoint,
-                    "central",
-                    "crs",
-                    "generate",
-                    cluster_name,
-                    "--output=-",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-                env={**os.environ, "ROX_ADMIN_PASSWORD": self.central_password},
+                ["roxctl", "--insecure-skip-tls-verify", "-e", self.central_endpoint, "central", "crs", "generate", cluster_name, "--output=-"],
+                capture_output=True, text=True, check=True, env={**os.environ, "ROX_ADMIN_PASSWORD": self.central_password},
             )
             return result.stdout.strip()
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
