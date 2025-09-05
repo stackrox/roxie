@@ -867,7 +867,7 @@ metadata:
             if desired_clean != current_clean:
                 self.logger.print_with_timestamp("🔄 Version mismatch detected:", style="bold yellow")
                 self.logger.print_with_timestamp(f"  • Current: {current_version}", style="dim yellow")
-                self.logger.print_with_timestamp(f"  • Desired: {desired_operator_tag}", style="dim yellow")
+                self.logger.print_with_timestamp(f"  • Desired: {desired_clean}", style="dim yellow")
                 return True
             else:
                 self.logger.print_with_timestamp(f"✓ Version match: {current_version}", style="bold green")
