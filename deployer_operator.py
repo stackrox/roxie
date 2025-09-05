@@ -364,19 +364,23 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             bundle_dir = tempfile.mkdtemp(prefix="stackrox-operator-bundle-")
             self.logger.print_with_timestamp(f"Created temporary directory: {bundle_dir}", style="dim blue")
 
-            # Download and extract the bundle image using docker/podman
-            # Try podman first, then docker
-            container_tool = helpers.get_container_tool()
-            if not container_tool:
-                raise RuntimeError("Neither podman nor docker is available")
+            # Download and extract the bundle image using podman
+            container_tool = helpers.get_container_tool()  # podman-only
 
             self.logger.print_with_timestamp(f"Using {container_tool} to extract bundle", style="dim blue")
 
-            # Pull the bundle image
+            # Pull the bundle image (silent on success)
             try:
-                subprocess.run([container_tool, "pull", bundle_image], capture_output=True, text=True, check=True)
+                subprocess.run(
+                    [container_tool, "pull", bundle_image],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=True,
+                )
             except subprocess.CalledProcessError as e:
-                raise RuntimeError(f"Failed to pull bundle image: {bundle_image}") from e
+                detail = (e.stderr or "").strip()
+                raise RuntimeError(f"Failed to pull bundle image: {bundle_image}: {detail}") from e
 
             # Extract bundle contents using container copy
             # Create a temporary container and copy files out
@@ -386,7 +390,8 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
                 # Create container
                 subprocess.run(
                     [container_tool, "create", "--name", container_id, bundle_image],
-                    capture_output=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
                     text=True,
                     check=True,
                 )
@@ -394,7 +399,8 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
                 # Copy manifests directory from container to host
                 subprocess.run(
                     [container_tool, "cp", f"{container_id}:/manifests/.", bundle_dir],
-                    capture_output=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
                     text=True,
                     check=True,
                 )
@@ -402,7 +408,12 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             finally:
                 # Clean up container
                 try:
-                    subprocess.run([container_tool, "rm", container_id], capture_output=True, check=False)
+                    subprocess.run(
+                        [container_tool, "rm", container_id],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                    )
                 except Exception:  # noqa: S110
                     pass
 

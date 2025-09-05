@@ -51,10 +51,10 @@ def _run(cmd: list[str], env: dict[str, str] | None = None, timeout: int = 900) 
 
 
 def _preflight_operator_bundle_pull(env: dict[str, str]) -> None:
-    # Determine container tool
-    tool = shutil.which("podman") or shutil.which("docker")
-    if not tool:
-        msg = "Neither podman nor docker found; skipping e2e"
+    # Use skopeo to verify image availability (silent on success)
+    skopeo = shutil.which("skopeo")
+    if not skopeo:
+        msg = "skopeo not found; skipping e2e"
         print(msg, flush=True)
         pytest.skip(msg)
 
@@ -79,12 +79,19 @@ def _preflight_operator_bundle_pull(env: dict[str, str]) -> None:
         operator_tag = override
 
     image = f"quay.io/rhacs-eng/stackrox-operator-bundle:{operator_tag}"
-    print(f"Preflight: pulling {image} with {tool}")
     try:
-        subprocess.run([tool, "pull", image], check=True)
-    except subprocess.CalledProcessError:
+        # skopeo inspect is fast and does not pull; silence output unless error
+        res = subprocess.run(
+            [skopeo, "inspect", "--raw", f"docker://{image}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        detail = (e.stderr or "").strip()
         msg = (
-            f"Preflight failed to pull {image}. Ensure you are logged in or provide an accessible tag via MAIN_IMAGE_TAG/ROXIE_E2E_OPERATOR_BUNDLE_TAG."
+            f"Preflight failed to access {image}. Ensure you are logged in or provide an accessible tag via MAIN_IMAGE_TAG/ROXIE_E2E_OPERATOR_BUNDLE_TAG.\n{detail}"
         )
         print(msg, flush=True)
         pytest.skip(msg)
@@ -204,16 +211,9 @@ def test_deploy_both_components_together():
     env.pop("IN_NIX_SHELL", None)
     env["PYTHONUNBUFFERED"] = "1"
 
-    # Merge env from ~/.envrc.roxie for secured-cluster bits
-    merged_env = env.copy()
-    envrc_env = _load_envrc_env("~/.envrc.roxie")
-    if envrc_env:
-        print("Loaded environment from ~/.envrc.roxie for both-components deploy", flush=True)
-        merged_env.update(envrc_env)
-
     print("=== Deploying both components ===", flush=True)
-    _preflight_operator_bundle_pull(merged_env)
-    _run([roxie_path, "deploy", "both"], env=merged_env, timeout=2400)
+    _preflight_operator_bundle_pull(env)
+    _run([roxie_path, "deploy", "both"], env=env, timeout=2400)
 
     print("Verifying namespace: acs-central", flush=True)
     subprocess.run(["kubectl", "get", "namespace", "acs-central"], check=True)
@@ -245,7 +245,7 @@ def test_deploy_central_and_secured_cluster_via_helm():
     merged_env.update(envrc_env)
 
     print("=== Deploying secured-cluster via Helm ===", flush=True)
-    _run([roxie_path, "deploy", "secured-cluster", "--helm"], env=env, timeout=2400)
+    _run([roxie_path, "deploy", "secured-cluster", "--helm"], env=merged_env, timeout=2400)
 
     print("Verifying namespace: acs-central-helm", flush=True)
     subprocess.run(["kubectl", "get", "namespace", "acs-central-helm"], check=True)

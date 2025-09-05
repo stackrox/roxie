@@ -29,7 +29,8 @@
             # Python environment with packages
             pythonEnv
             
-            # Kubernetes and container tools (from shebang)
+            # Kubernetes and container tools
+            podman
             skopeo
             kubectl
             kubernetes-helm
@@ -55,6 +56,7 @@
               echo "  Python: $(python --version)"
               echo "  kubectl: $(kubectl version --client --short 2>/dev/null || echo 'kubectl available')"
               echo "  helm: $(helm version --short 2>/dev/null || echo 'helm available')"
+              echo "  podman: $(podman --version 2>/dev/null || echo 'podman available')"
               echo "  skopeo: $(skopeo --version 2>/dev/null || echo 'skopeo available')"
               echo "  make: $(make --version | head -1)"
               echo "  ruff: $(ruff --version)"
