@@ -1,4 +1,5 @@
 import os
+import tempfile
 import shutil
 import subprocess
 import sys
@@ -47,6 +48,25 @@ def e2e_startup():
         os.environ["MAIN_IMAGE_TAG"] = main_image_tag
     ctx = _require_kube_context()
     print(f"Using kubectl context: {ctx}")
+
+
+@pytest.fixture(scope="module")
+def e2e_envrc_path():
+    # Create a temporary, permission-protected envrc file path for tests
+    tmp = tempfile.NamedTemporaryFile(prefix=".envrc.roxie-test-", delete=False)
+    path = tmp.name
+    tmp.close()
+    try:
+        os.chmod(path, 0o600)
+    except Exception:
+        pass
+    try:
+        yield path
+    finally:
+        try:
+            os.unlink(path)
+        except Exception:
+            pass
 
 
 def _run(cmd: list[str], env: dict[str, str] | None = None, timeout: int = 900) -> subprocess.CompletedProcess[str]:
@@ -118,7 +138,7 @@ def _load_envrc_env(path: str) -> dict[str, str]:
     return {k: v for k, v in values.items() if v is not None}
 
 
-def test_deploy_central_and_secured_cluster():
+def test_deploy_central_and_secured_cluster(e2e_envrc_path):
 
     repo_root = os.path.dirname(os.path.abspath(__file__))
     # tests/ -> project root
@@ -137,10 +157,10 @@ def test_deploy_central_and_secured_cluster():
     # Prefer operator by default (no --helm flag). Deploy central
     print("=== Deploying central ===", flush=True)
     _preflight_operator_bundle_pull(env)
-    _run([roxie_path, "deploy", "central"], env=env, timeout=1800)
+    _run([roxie_path, "deploy", "central", "--envrc", e2e_envrc_path], env=env, timeout=1800)
 
     merged_env = env.copy()
-    envrc_env = _load_envrc_env("~/.envrc.roxie")
+    envrc_env = _load_envrc_env(e2e_envrc_path)
     print("Loaded environment from ~/.envrc.roxie for secured-cluster", flush=True)
     merged_env.update(envrc_env)
 
@@ -197,7 +217,7 @@ def test_teardown_central_and_secured_cluster():
     _ns_absent("acs-central")
     _ns_absent("acs-sensor")
 
-def test_deploy_both_components_together():
+def test_deploy_both_components_together(e2e_envrc_path):
 
     repo_root = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
@@ -211,14 +231,14 @@ def test_deploy_both_components_together():
 
     print("=== Deploying both components ===", flush=True)
     _preflight_operator_bundle_pull(env)
-    _run([roxie_path, "deploy", "both"], env=env, timeout=2400)
+    _run([roxie_path, "deploy", "both", "--envrc", e2e_envrc_path], env=env, timeout=2400)
 
     print("Verifying namespace: acs-central", flush=True)
     subprocess.run(["kubectl", "get", "namespace", "acs-central"], check=True)
     print("Verifying namespace: acs-sensor", flush=True)
     subprocess.run(["kubectl", "get", "namespace", "acs-sensor"], check=True)
 
-def test_deploy_central_and_secured_cluster_via_helm():
+def test_deploy_central_and_secured_cluster_via_helm(e2e_envrc_path):
 
     repo_root = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
@@ -231,10 +251,10 @@ def test_deploy_central_and_secured_cluster_via_helm():
     env["PYTHONUNBUFFERED"] = "1"
 
     print("=== Deploying central via Helm ===", flush=True)
-    _run([roxie_path, "deploy", "central", "--helm"], env=env, timeout=2400)
+    _run([roxie_path, "deploy", "central", "--helm", "--envrc", e2e_envrc_path], env=env, timeout=2400)
 
     merged_env = env.copy()
-    envrc_env = _load_envrc_env("~/.envrc.roxie")
+    envrc_env = _load_envrc_env(e2e_envrc_path)
     print("Loaded environment from ~/.envrc.roxie for secured-cluster", flush=True)
     merged_env.update(envrc_env)
 

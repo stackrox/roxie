@@ -1,6 +1,8 @@
 """Main entry point for the roxie deployment tool."""
 
 import argparse
+import os
+import subprocess
 from subprocess import CalledProcessError
 
 from rich.console import Console
@@ -29,6 +31,16 @@ def main() -> int:
         "--helm",
         action="store_true",
         help="Deploy using Helm charts instead of operator (default is operator). Use -- to separate helm args.",
+    )
+    deploy_parser.add_argument(
+        "--envrc",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "Preserve envrc behavior: write API_ENDPOINT and ROX_ADMIN_PASSWORD to a file (default path if omitted). "
+            "If not provided, roxie will spawn a subshell with these variables set and teardown on exit."
+        ),
     )
 
     # Teardown subcommand
@@ -69,8 +81,40 @@ def main() -> int:
         else:
             deployer = ACSDeployerOperator(console=console)
 
+        # If --envrc provided, optionally override the output path on the deployer
+        envrc_provided = getattr(args, "envrc", None) is not None
+        if envrc_provided:
+            if args.envrc:
+                deployer.central_env_file = args.envrc
+
         if args.command == "deploy":
             deployer.deploy(args.component)
+
+            # Spawn subshell only for central/both when --envrc is not used
+            if args.component in ("central", "both") and not envrc_provided:
+                banner = (
+                    "\n[roxie] Entering a subshell with ACS environment variables set.\n"
+                    "[roxie] Exit this shell to trigger automatic teardown.\n"
+                )
+                console.print(banner, style="bold cyan")
+
+                env = os.environ.copy()
+                if getattr(deployer, "central_endpoint", ""):
+                    env["API_ENDPOINT"] = deployer.central_endpoint
+                if getattr(deployer, "central_password", ""):
+                    env["ROX_ADMIN_PASSWORD"] = deployer.central_password
+
+                shell = os.environ.get("SHELL") or "/bin/sh"
+                try:
+                    subprocess.run([shell, "-i"], check=False, env=env)
+                finally:
+                    try:
+                        deployer.teardown(args.component)
+                    except Exception:
+                        console.print(
+                            "[roxie] Teardown after subshell exit encountered errors",
+                            style="bold yellow",
+                        )
         elif args.command == "teardown":
             deployer.teardown(args.component)
         elif args.command == "upgrade-operator":
