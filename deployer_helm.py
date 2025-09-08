@@ -42,6 +42,24 @@ central:
     exposure:
         loadBalancer:
             enabled: true
+    telemetry:
+        enabled: false
+scanner:
+    replicas: 1
+    autoscaling:
+        disable: true
+        minReplicas: 1
+scannerV4:
+    indexer:
+        replicas: 1
+        autoscaling:
+            disable: true
+            minReplicas: 1
+    matcher:
+        replicas: 1
+        autoscaling:
+            disable: true
+            minReplicas: 1
 allowNonstandardNamespace: true
 """
 

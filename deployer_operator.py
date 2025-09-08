@@ -105,14 +105,47 @@ class ACSDeployerOperator(ACSDeployer):
             "metadata": {
                 "name": "stackrox-central-services",
                 "namespace": self.central_namespace_operator,
-                "labels": {"app": "stackrox-central"},
+                "labels": {
+                    "app": "stackrox-central"
+                },
             },
             "spec": {
                 "central": {
-                    "adminPasswordSecret": {"name": "admin-password"},
-                    "exposure": {"loadBalancer": {"enabled": True}},
+                    "adminPasswordSecret": {
+                        "name": "admin-password"
+                    },
+                    "exposure": {
+                        "loadBalancer": {
+                            "enabled": True
+                        }
+                    },
+                    "telemetry": {
+                        "enabled": False
+                    }
                 },
-                "scanner": {"analyzer": {"scaling": {"autoScaling": "Enabled"}}},
+                "scanner": {
+                    "analyzer": {
+                        "scaling": {
+                            "autoScaling": "Enabled"
+                        }
+                    }
+                },
+                "scannerV4": {
+                    "indexer": {
+                        "scaling": {
+                            "autoScaling": "Disabled",
+                            "minReplicas": 1,
+                            "replicas": 1
+                        }
+                    },
+                    "matcher": {
+                        "scaling": {
+                            "autoScaling": "Disabled",
+                            "minReplicas": 1,
+                            "replicas": 1
+                        }
+                    }
+                }
             },
         }
 
