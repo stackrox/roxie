@@ -27,12 +27,7 @@ class ACSDeployerOperator(ACSDeployer):
             crd_filename = os.path.basename(crd_file)
 
             # Apply the CRD using kubectl
-            try:
-                subprocess.run([self.kubectl, "apply", "-f", crd_file], capture_output=True, text=True, check=True)
-                applied_count += 1
-            except subprocess.CalledProcessError as e:
-                raise RoxieError(f"Failed to apply CRD: {crd_filename}") from e
-
+            subprocess.run([self.kubectl, "apply", "-f", crd_file], capture_output=True, text=True, check=True)
             self.logger.print_with_timestamp(f"✓ Successfully applied {applied_count} CRD(s)", style="bold green")
 
     def deploy_rhacs_operator(self):
