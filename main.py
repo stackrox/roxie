@@ -104,6 +104,9 @@ def main() -> int:
                     env["ROX_ENDPOINT"] = deployer.central_endpoint # For roxctl
                 if getattr(deployer, "central_password", ""):
                     env["ROX_ADMIN_PASSWORD"] = deployer.central_password
+                ca_file = getattr(deployer, "ca_cert_file", "")
+                if ca_file:
+                    env["ROX_CA_CERT_FILE"] = ca_file
 
                 shell = os.environ.get("SHELL") or "/bin/sh"
                 try:

@@ -126,6 +126,11 @@ class ACSDeployerOperator(ACSDeployer):
         )
         self.wait_for_ready_deployment(self.central_namespace_operator, "central")
         self.wait_for_central_endpoint(self.central_namespace_operator)
+        # Fetch Central CA certificate and persist to temp file
+        try:
+            self.fetch_central_ca_cert(self.central_namespace_operator)
+        except Exception as e:
+            self.logger.print_with_timestamp(f"Warning: failed to fetch central CA: {e}", style="bold yellow")
 
     def create_secured_cluster_cr(self, cluster_name="sensor"):
         """Create SecuredCluster Custom Resource for operator deployment"""

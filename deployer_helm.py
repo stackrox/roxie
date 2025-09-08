@@ -160,6 +160,11 @@ scannerV4:
 
             self.wait_for_ready_deployment(self.central_namespace, "central")
             self.wait_for_central_endpoint(self.central_namespace)
+            # Fetch Central CA certificate and persist to temp file
+            try:
+                self.fetch_central_ca_cert(self.central_namespace)
+            except Exception as e:
+                self.console.print(f"Warning: failed to fetch central CA: {e}", style="bold yellow")
 
             success_panel = Panel.fit(
                 f"[bold green]✓ Central Deployment Complete[/bold green]\n\n"

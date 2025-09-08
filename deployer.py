@@ -6,6 +6,7 @@ for both Helm-based and operator-based deployments.
 """
 
 import os
+import base64
 import secrets
 import string
 import subprocess
@@ -732,3 +733,50 @@ class ACSDeployer:
             progress.stop()
 
         raise RoxieError(f"Timeout waiting for {deployment} deployment to become ready after {timeout}s")
+
+    def fetch_central_ca_cert(self, namespace: str) -> str:
+        """Fetch central CA certificate from Kubernetes secret and persist it to a temp file.
+
+        Returns the path to the written PEM file.
+        """
+        try:
+            # Get base64-encoded CA from the secret
+            result = subprocess.run(
+                [
+                    self.kubectl,
+                    "-n",
+                    namespace,
+                    "get",
+                    "secret",
+                    "central-tls",
+                    "-o",
+                    "jsonpath={.data.ca\\.pem}",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            encoded = (result.stdout or "").strip()
+            if not encoded:
+                raise RoxieError("central CA not found in secret central-tls")
+
+            decoded_bytes = base64.b64decode(encoded)
+
+            fd, path = tempfile.mkstemp(prefix="roxie-ca-", suffix=".pem", text=False)
+            try:
+                os.write(fd, decoded_bytes)
+            finally:
+                os.close(fd)
+            try:
+                os.chmod(path, 0o600)
+            except Exception:
+                pass
+
+            # Store on the instance for downstream consumers (e.g., subshell)
+            self.ca_cert_file = path  # type: ignore[attr-defined]
+            return path
+
+        except subprocess.CalledProcessError as e:
+            detail = (e.stderr or e.stdout or "").strip()
+            raise RoxieError(f"Failed to fetch central CA: {detail}") from e
