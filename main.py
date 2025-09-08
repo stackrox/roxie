@@ -33,6 +33,10 @@ def main() -> int:
         help="Deploy using Helm charts instead of operator (default is operator). Use -- to separate helm args.",
     )
     deploy_parser.add_argument(
+        "--shell",
+        help="Specify shell to spawn as sub-shell after Central deployment. If not provided, roxie will use the shell specified by the SHELL environment variable.",
+    )
+    deploy_parser.add_argument(
         "--envrc",
         nargs="?",
         const="",
@@ -108,7 +112,10 @@ def main() -> int:
                 if ca_file:
                     env["ROX_CA_CERT_FILE"] = ca_file
 
-                shell = os.environ.get("SHELL") or "/bin/sh"
+                shell = getattr(args, "shell")
+                if shell is None:
+                    shell = os.environ.get("ROXIE_USER_SHELL")
+                deployer.logger.print_with_timestamp(f"Spawning sub-shell: {shell}", style="bold cyan")
                 try:
                     subprocess.run([shell, "-i"], check=False, env=env)
                 finally:

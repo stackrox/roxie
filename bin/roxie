@@ -5,15 +5,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-if [[ -n "${IN_NIX_SHELL-}" ]]; then
-  PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
+export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+export ROXIE_USER_SHELL="${SHELL:-/bin/sh}"
+
+if [[ -n "${IN_NIX_SHELL:-}" ]]; then
     python -u -m roxie.main "$@"
-  exit $?
+    exit $?
 fi
 
 # Fallback: enter Nix dev shell for THIS repository just for this command
 exec nix --extra-experimental-features 'nix-command flakes' --accept-flake-config --no-warn-dirty develop "${REPO_ROOT}" -c \
-  env PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
+  env PYTHONPATH="${PYTHONPATH}" \
   python -u -m roxie.main "$@"
-
-

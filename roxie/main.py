@@ -11,6 +11,5 @@ def main() -> int:
     module = importlib.import_module("main")
     return module.main()
 
-
 if __name__ == "__main__":
     sys.exit(main())
