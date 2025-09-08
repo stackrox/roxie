@@ -54,9 +54,22 @@ class ACSDeployerOperator(ACSDeployer):
         operator_exists_and_ready = self.is_operator_deployed_and_ready()
         if operator_exists_and_ready:
             if self.has_operator_version_mismatch(self.operator_tag):
+                # First remove any deployed components so CRDs can be safely removed afterward
+                self.logger.print_with_timestamp(
+                    "Version mismatch detected: tearing down Central and SecuredCluster before operator upgrade",
+                    style="bold yellow",
+                )
+                try:
+                    self.teardown_operator_custom_resources("both")
+                except Exception as e:
+                    self.logger.print_with_timestamp(
+                        f"Warning: teardown of existing components encountered issues: {e}", style="bold yellow"
+                    )
+
+                # Then remove the operator (including CRDs)
                 self.teardown_rhacs_operator()
                 self.logger.print_with_timestamp(
-                    "Cleaned up existing operator deployments", style="bold yellow"
+                    "Cleaned up existing operator deployment", style="bold yellow"
                 )
                 self.deploy_rhacs_operator()
         else:
