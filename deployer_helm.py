@@ -64,11 +64,9 @@ scannerV4:
             tag: "{main_image_tag}"
 """
 
-            current_context = self.get_current_context()
-
             info_panel = Panel.fit(
                 f"[bold]Namespace:        [/bold] {self.central_namespace}\n"
-                f"[bold]Context:          [/bold] {current_context}\n"
+                f"[bold]Context:          [/bold] {self.kube_context}\n"
                 f"[bold]Image Tag:        [/bold] {main_image_tag or 'default'}\n"
                 f"[bold]Log File:         [/bold] {self.log_file}",
                 title="[bold magenta]ACS Central Deployment Plan[/bold magenta]",

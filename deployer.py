@@ -59,6 +59,7 @@ class ACSDeployer:
         self.log_file = os.environ.get("LOG_FILE", self.create_temp_log())
         self.roxctl_version = self.get_roxctl_version()
         self.logger.print_with_timestamp("🚀 ACS Deployer initialized", style="bold green")
+        self.kube_context = self.get_current_context()
 
     def lookup_latest_tag_from_stackrox_git_root(self) -> str:
         """Lookup latest tag from stackrox git root"""
@@ -694,7 +695,7 @@ class ACSDeployer:
             self.logger.error(f"Failed to wait for namespace deletion: {str(e)}")
             return False
 
-    def wait_for_ready_deployment(self, namespace: str, deployment: str, timeout: int = 600):
+    def wait_for_ready_deployment(self, namespace: str, deployment: str, timeout: int = 800):
         """Wait for deployment to become ready"""
         with self.create_progress_with_timestamp(include_bar=True) as progress:
             task = progress.add_task("Waiting for Central deployment readiness", total=timeout)
