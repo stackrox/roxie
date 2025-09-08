@@ -49,7 +49,7 @@ class ACSDeployerOperator(ACSDeployer):
 
     def deploy(self, component: str = "both"):
         """Deploy specified component(s) using operator."""
-        self.logger.print_with_timestamp("🚀 Initiating operator-based deployment of ACS", style="bold cyan")
+        self.logger.print_with_timestamp("Initiating operator-based deployment of ACS", style="bold cyan")
 
         operator_exists_and_ready = self.is_operator_deployed_and_ready()
         if operator_exists_and_ready:

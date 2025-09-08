@@ -11,29 +11,30 @@ class ACSDeployerHelm(ACSDeployer):
     """Helm-specific deployer that implements Helm deployment/teardown."""
 
     def deploy(self, component: str = "both", helm_args: Optional[List[str]] = None, input_yaml: str = ""):
-        self.deploy_component_helm(component, helm_args, input_yaml)
+        self.logger.print_with_timestamp("Initiating Helm-based deployment of ACS", style="bold cyan")
+        self.deploy_component(component, helm_args, input_yaml)
 
     def teardown(self, component: str = "both"):
         self.teardown_component(component)
 
-    def deploy_component_helm(
+    def deploy_component(
         self, component: str = "both", helm_args: Optional[List[str]] = None, input_yaml: str = ""
     ):
         if helm_args is None:
             helm_args = []
 
         if component == "central":
-            self.deploy_central_helm(helm_args, input_yaml)
+            self.deploy_central(helm_args, input_yaml)
         elif component == "secured-cluster":
-            self.deploy_secured_cluster_helm(helm_args, input_yaml)
+            self.deploy_secured_clusterhelm(helm_args, input_yaml)
         elif component in ["both"]:
-            self.deploy_component_helm("central", helm_args, input_yaml)
-            self.deploy_component_helm("secured-cluster", helm_args, input_yaml)
+            self.deploy_central(helm_args, input_yaml)
+            self.deploy_secured_cluster(helm_args, input_yaml)
         else:
             self.logger.error("Error: central or secured-cluster?")
             raise ValueError("FIXME")
 
-    def deploy_central_helm(self, helm_args: List[str], input_yaml: str = ""):
+    def deploy_central(self, helm_args: List[str], input_yaml: str = ""):
         with tempfile.TemporaryDirectory() as central_chart_dir:
             default_settings = f"""
 central:
@@ -201,7 +202,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             with open(self.central_env_file, "w") as f:
                 f.write(env_content)
 
-    def deploy_secured_cluster_helm(self, helm_args: List[str], input_yaml: str = ""):
+    def deploy_secured_cluster(self, helm_args: List[str], input_yaml: str = ""):
         main_image_tag = self.main_image_tag
         with tempfile.TemporaryDirectory() as chart_dir:
             import random

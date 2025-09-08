@@ -44,7 +44,6 @@ class ACSDeployer:
         self.logger = Logger()
         self.start_time = time.time()
         self.console = console or Console()
-        self.current_context = get_current_cluster_context()
         self.docker_auth = DockerAuth(console=self.console, cache_enabled=cache_enabled)
         self.image_cache = ImageCache(self.logger)
         self.central_env_file = os.environ.get("ROXIE_ENVRC", os.path.expanduser("~/.envrc.roxie"))
@@ -61,6 +60,8 @@ class ACSDeployer:
         self.roxctl_version = self.get_roxctl_version()
         self.logger.print_with_timestamp("🚀 ACS Deployer initialized", style="bold green")
         self.kube_context = self.get_current_context()
+
+        self.logger.print_with_timestamp(f"Kubernetes context: {self.kube_context}", style="bold cyan")
 
     def lookup_latest_tag_from_stackrox_git_root(self) -> str:
         """Lookup latest tag from stackrox git root"""
