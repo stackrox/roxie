@@ -101,6 +101,7 @@ def main() -> int:
                 env = os.environ.copy()
                 if getattr(deployer, "central_endpoint", ""):
                     env["API_ENDPOINT"] = deployer.central_endpoint
+                    env["ROX_ENDPOINT"] = deployer.central_endpoint # For roxctl
                 if getattr(deployer, "central_password", ""):
                     env["ROX_ADMIN_PASSWORD"] = deployer.central_password
 
