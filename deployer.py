@@ -518,10 +518,6 @@ class ACSDeployer:
                     env={**os.environ, "ROX_ADMIN_PASSWORD": self.central_password},
                 )
                 return result.stdout.strip()
-            except FileNotFoundError:
-                # Not retryable: binary not found
-                self.logger.error("CRS issuing failed: roxctl not found in PATH")
-                raise
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
                 # Decide whether to retry based on error text
                 error_output = ""

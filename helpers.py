@@ -35,10 +35,4 @@ def get_current_cluster_context() -> str:
 
 
 def get_container_tool() -> str:
-    """Return the required container tool (podman only)."""
-    import shutil
-
-    tool = shutil.which("podman")
-    if tool:
-        return "podman"
-    raise RoxieError("podman is required but was not found in PATH")
+    return "podman"
