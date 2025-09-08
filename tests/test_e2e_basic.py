@@ -16,6 +16,7 @@ except Exception:  # noqa: BLE001
 
 pytestmark = pytest.mark.e2e
 
+main_image_tag = "4.8.2"
 
 def _require_binary(name: str) -> None:
     if shutil.which(name) is None:
@@ -41,6 +42,9 @@ def e2e_startup():
     _require_binary("kubectl")
     _require_binary("nix")
     _require_binary("skopeo")
+    # Provide a default MAIN_IMAGE_TAG for all scenarios if not already set
+    if not os.environ.get("MAIN_IMAGE_TAG"):
+        os.environ["MAIN_IMAGE_TAG"] = main_image_tag
     ctx = _require_kube_context()
     print(f"Using kubectl context: {ctx}")
 
@@ -124,9 +128,7 @@ def test_deploy_central_and_secured_cluster():
     if not os.path.exists(roxie_path):
         pytest.skip("bin/roxie not found; skipping e2e")
 
-    # Ensure MAIN_IMAGE_TAG is provided for operator path if required by code
     env = os.environ.copy()
-    env.setdefault("MAIN_IMAGE_TAG", env.get("MAIN_IMAGE_TAG", "4.12.x-1-gdeadbee"))
     # Force roxie to use nix develop for e2e to ensure dependencies are present
     env.pop("IN_NIX_SHELL", None)
     # Reduce Python stdio buffering in child processes for more immediate output
@@ -204,7 +206,6 @@ def test_deploy_both_components_together():
         pytest.skip("bin/roxie not found; skipping e2e")
 
     env = os.environ.copy()
-    env.setdefault("MAIN_IMAGE_TAG", env.get("MAIN_IMAGE_TAG", "4.12.x-1-gdeadbee"))
     env.pop("IN_NIX_SHELL", None)
     env["PYTHONUNBUFFERED"] = "1"
 
