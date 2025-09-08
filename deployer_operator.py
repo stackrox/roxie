@@ -1032,12 +1032,18 @@ metadata:
         for step in cleanup_steps:
             try:
                 self.logger.print_with_timestamp(f"➡️  {step['description']}", style="dim cyan")
-                subprocess.run(step["command"], text=True, check=True)
+                subprocess.run(
+                    step["command"],
+                    text=True,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                )
                 success_count += 1
             except subprocess.CalledProcessError as e:
                 # Log but continue with other cleanup steps
                 self.logger.print_with_timestamp(
-                    f"⚠️  Failed: {step['description']} (continuing...) - {e}", style="dim yellow"
+                    f"⚠️  Failed: {step['description']} (continuing...) - {(e.stderr or str(e)).strip()}", style="dim yellow"
                 )
                 # continue to next step
                 continue
