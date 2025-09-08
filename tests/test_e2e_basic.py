@@ -36,6 +36,15 @@ def _require_kube_context() -> str:
     return ctx
 
 
+@pytest.fixture(scope="module", autouse=True)
+def e2e_startup():
+    _require_binary("kubectl")
+    _require_binary("nix")
+    _require_binary("skopeo")
+    ctx = _require_kube_context()
+    print(f"Using kubectl context: {ctx}")
+
+
 def _run(cmd: list[str], env: dict[str, str] | None = None, timeout: int = 900) -> subprocess.CompletedProcess[str]:
     print(f"$ {' '.join(cmd)}", flush=True)
     # Stream output in real time
@@ -106,10 +115,6 @@ def _load_envrc_env(path: str) -> dict[str, str]:
 
 
 def test_deploy_central_and_secured_cluster():
-    _require_binary("kubectl")
-    _require_binary("nix")
-    ctx = _require_kube_context()
-    print(f"Using kubectl context: {ctx}")
 
     repo_root = os.path.dirname(os.path.abspath(__file__))
     # tests/ -> project root
@@ -156,10 +161,6 @@ def test_deploy_central_and_secured_cluster():
 
 
 def test_teardown_central_and_secured_cluster():
-    _require_binary("kubectl")
-    _require_binary("nix")
-    ctx = _require_kube_context()
-    print(f"Using kubectl context: {ctx}")
 
     repo_root = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
@@ -195,10 +196,6 @@ def test_teardown_central_and_secured_cluster():
     _ns_absent("acs-sensor")
 
 def test_deploy_both_components_together():
-    _require_binary("kubectl")
-    _require_binary("nix")
-    ctx = _require_kube_context()
-    print(f"Using kubectl context: {ctx}")
 
     repo_root = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
@@ -221,10 +218,6 @@ def test_deploy_both_components_together():
     subprocess.run(["kubectl", "get", "namespace", "acs-sensor"], check=True)
 
 def test_deploy_central_and_secured_cluster_via_helm():
-    _require_binary("kubectl")
-    _require_binary("nix")
-    ctx = _require_kube_context()
-    print(f"Using kubectl context: {ctx}")
 
     repo_root = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
