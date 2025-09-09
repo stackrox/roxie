@@ -24,7 +24,8 @@ class ACSDeployerOperator(ACSDeployer):
 
         for crd_file in crd_files:
             subprocess.run([self.kubectl, "apply", "-f", crd_file], capture_output=True, text=True, check=True)
-            self.logger.print_with_timestamp(f"✓ Successfully applied CRD {crd_file}", style="bold green")
+            crd_basename = os.path.basename(crd_file)
+            self.logger.print_with_timestamp(f"✓ Successfully applied CRD {crd_basename}", style="bold green")
 
     def deploy_rhacs_operator(self):
         operator_tag_for_image = self.operator_tag
