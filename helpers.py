@@ -9,8 +9,6 @@ import time
 from rich.progress import ProgressColumn
 from rich.text import Text
 
-from errors import RoxieError
-
 
 class TimestampColumn(ProgressColumn):
     """A column that shows a live timestamp relative to start time"""

@@ -7,6 +7,7 @@ includes the repo root (as ensured by `bin/roxie`).
 import importlib
 import sys
 
+
 def main() -> int:
     module = importlib.import_module("main")
     return module.main()

@@ -5,16 +5,15 @@ This module contains the ACSDeployer class and all deployment functionality
 for both Helm-based and operator-based deployments.
 """
 
-import os
 import base64
+import math
+import os
+import random
 import secrets
 import string
 import subprocess
 import tempfile
 import time
-import math
-import random
-from tracemalloc import start
 from typing import Any, Dict, List, Optional
 
 import yaml
@@ -31,7 +30,7 @@ from rich.progress import (
 
 from docker_auth import DockerAuth
 from errors import RoxieError
-from helpers import TimestampColumn, get_current_cluster_context
+from helpers import TimestampColumn
 from image_cache import ImageCache
 from logger import Logger
 
@@ -251,7 +250,7 @@ class ACSDeployer:
                     progress.update(task, advance=4)
                     time.sleep(1)
 
-                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                     progress.update(task, advance=1)
                     time.sleep(1)
 

@@ -1,8 +1,8 @@
 import os
+import random
 import subprocess
 import time
 from typing import Any, Dict, List, Optional
-import random
 
 import yaml
 from rich.panel import Panel

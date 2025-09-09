@@ -10,7 +10,6 @@ from rich.console import Console
 from deployer_helm import ACSDeployerHelm
 from deployer_operator import ACSDeployerOperator
 from errors import RoxieError
-from logger import Logger
 
 
 def main() -> int:
@@ -97,7 +96,7 @@ def main() -> int:
 
             # Spawn subshell only for central/both when --envrc is not used
             if args.component in ("central", "both") and not envrc_provided:
-                shell = getattr(args, "shell")
+                shell = args.shell
                 if shell is None:
                     shell = os.environ.get("ROXIE_USER_SHELL")
                 deployer.logger.print_with_timestamp(f"Spawning sub-shell: {shell}", style="bold cyan")
