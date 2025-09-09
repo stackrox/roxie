@@ -18,6 +18,7 @@ pytestmark = pytest.mark.e2e
 
 main_image_tag = "4.8.2"
 
+
 def _require_binary(name: str) -> None:
     if shutil.which(name) is None:
         msg = f"'{name}' not found in PATH; skipping e2e test"
@@ -55,17 +56,11 @@ def e2e_envrc_path():
     tmp = tempfile.NamedTemporaryFile(prefix=".envrc.roxie-test-", delete=False)
     path = tmp.name
     tmp.close()
-    try:
-        os.chmod(path, 0o600)
-    except Exception:
-        pass
+    os.chmod(path, 0o600)
     try:
         yield path
     finally:
-        try:
-            os.unlink(path)
-        except Exception:
-            pass
+        os.unlink(path)
 
 
 def _run(cmd: list[str], env: dict[str, str] | None = None, timeout: int = 900) -> subprocess.CompletedProcess[str]:
@@ -103,9 +98,7 @@ def _preflight_operator_bundle_pull(env: dict[str, str]) -> None:
         # Fallback: expect override
         override = env.get("ROXIE_E2E_OPERATOR_BUNDLE_TAG")
         if not override:
-            msg = (
-                "Cannot determine operator bundle tag. Set MAIN_IMAGE_TAG to a valid value or set ROXIE_E2E_OPERATOR_BUNDLE_TAG."
-            )
+            msg = "Cannot determine operator bundle tag. Set MAIN_IMAGE_TAG to a valid value or set ROXIE_E2E_OPERATOR_BUNDLE_TAG."
             print(msg, flush=True)
             pytest.skip(msg)
         operator_tag = override
@@ -113,7 +106,7 @@ def _preflight_operator_bundle_pull(env: dict[str, str]) -> None:
     image = f"quay.io/rhacs-eng/stackrox-operator-bundle:{operator_tag}"
     try:
         # skopeo inspect is fast and does not pull; silence output unless error
-        res = subprocess.run(
+        subprocess.run(
             [skopeo, "inspect", "--raw", f"docker://{image}"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -122,9 +115,7 @@ def _preflight_operator_bundle_pull(env: dict[str, str]) -> None:
         )
     except subprocess.CalledProcessError as e:
         detail = (e.stderr or "").strip()
-        msg = (
-            f"Preflight failed to access {image}. Ensure you are logged in or provide an accessible tag via MAIN_IMAGE_TAG/ROXIE_E2E_OPERATOR_BUNDLE_TAG.\n{detail}"
-        )
+        msg = f"Preflight failed to access {image}. Ensure you are logged in or provide an accessible tag via MAIN_IMAGE_TAG/ROXIE_E2E_OPERATOR_BUNDLE_TAG.\n{detail}"
         print(msg, flush=True)
         pytest.skip(msg)
 
@@ -138,7 +129,6 @@ def _load_envrc_env(path: str) -> dict[str, str]:
 
 
 def test_deploy_central_and_secured_cluster(e2e_envrc_path):
-
     repo_root = os.path.dirname(os.path.abspath(__file__))
     # tests/ -> project root
     repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
@@ -182,7 +172,6 @@ def test_deploy_central_and_secured_cluster(e2e_envrc_path):
 
 
 def test_teardown_central_and_secured_cluster():
-
     repo_root = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
     roxie_path = os.path.join(repo_root, "bin", "roxie")
@@ -216,8 +205,8 @@ def test_teardown_central_and_secured_cluster():
     _ns_absent("acs-central")
     _ns_absent("acs-sensor")
 
-def test_deploy_both_components_together(e2e_envrc_path):
 
+def test_deploy_both_components_together(e2e_envrc_path):
     repo_root = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
     roxie_path = os.path.join(repo_root, "bin", "roxie")
@@ -237,8 +226,8 @@ def test_deploy_both_components_together(e2e_envrc_path):
     print("Verifying namespace: acs-sensor", flush=True)
     subprocess.run(["kubectl", "get", "namespace", "acs-sensor"], check=True)
 
-def test_deploy_central_and_secured_cluster_via_helm(e2e_envrc_path):
 
+def test_deploy_central_and_secured_cluster_via_helm(e2e_envrc_path):
     repo_root = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
     roxie_path = os.path.join(repo_root, "bin", "roxie")
@@ -264,4 +253,3 @@ def test_deploy_central_and_secured_cluster_via_helm(e2e_envrc_path):
     subprocess.run(["kubectl", "get", "namespace", "acs-central-helm"], check=True)
     print("Verifying namespace: acs-sensor-helm", flush=True)
     subprocess.run(["kubectl", "get", "namespace", "acs-sensor-helm"], check=True)
-

@@ -3,7 +3,6 @@
 import json
 import os
 import subprocess
-from typing import List, Optional, Tuple
 
 from rich.console import Console
 
@@ -13,14 +12,14 @@ from logger import Logger
 class ImageCache:
     """Manages cache of verified pullable Docker images"""
 
-    def __init__(self, logger: Logger, cache_file: Optional[str] = None, max_entries: int = 20):
+    def __init__(self, logger: Logger, cache_file: str | None = None, max_entries: int = 20):
         """Initialize ImageCache with optional cache file path and max entries"""
         self.cache_file = cache_file or os.path.expanduser("~/.roxie.image_cache")
         self.max_entries = max_entries
         self._cache = self.load_cache()
         self.logger = logger
 
-    def load_cache(self) -> List[str]:
+    def load_cache(self) -> list[str]:
         """Load image cache from file"""
         try:
             if os.path.exists(self.cache_file):
@@ -103,8 +102,7 @@ class ImageCache:
                 return True
             else:
                 print(result.stderr)
-                print (result.stdout)
-
+                print(result.stdout)
 
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
             pass
@@ -142,7 +140,7 @@ class ImageCache:
         if uncached_images:
             import concurrent.futures
 
-            def verify_single_image(img: str) -> Tuple[str, bool, str]:
+            def verify_single_image(img: str) -> tuple[str, bool, str]:
                 """Verify a single image using ImageCache"""
                 if self.verify_image_pullable(img):
                     return (img, True, "")

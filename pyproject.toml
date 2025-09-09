@@ -7,7 +7,7 @@ name = "roxie"
 version = "1.0.0"
 description = "Advanced Cluster Security Deployment Tool"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = [
     "rich",
     "pyyaml",
@@ -18,7 +18,7 @@ roxie = "roxie.main:main"
 
 [tool.ruff]
 line-length = 120
-target-version = "py38"
+target-version = "py311"
 
 [tool.ruff.lint]
 # Enable specific rule sets
@@ -58,7 +58,7 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 warn_redundant_casts = true

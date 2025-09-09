@@ -8,13 +8,12 @@ for both Helm-based and operator-based deployments.
 import base64
 import math
 import os
-import random
 import secrets
 import string
 import subprocess
 import tempfile
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 from rich.console import Console
@@ -38,7 +37,7 @@ from logger import Logger
 class ACSDeployer:
     """Deploys Advanced Cluster Security (ACS) using Kubernetes and Helm"""
 
-    def __init__(self, console: Optional[Any] = None, cache_enabled: bool = True):
+    def __init__(self, console: Any | None = None, cache_enabled: bool = True):
         """Initialize ACS Deployer with configuration"""
         self.logger = Logger()
         self.start_time = time.time()
@@ -171,7 +170,7 @@ class ACSDeployer:
             # Log the specific error for debugging
             error_msg = str(e)
             if hasattr(e, "stderr") and e.stderr:
-                stderr_val = e.stderr.decode() if isinstance(e.stderr, (bytes, bytearray)) else str(e.stderr)
+                stderr_val = e.stderr.decode() if isinstance(e.stderr, bytes | bytearray) else str(e.stderr)
                 error_msg += f" (stderr: {stderr_val.strip()})"
 
             # Fallback to a default value if make tag fails
@@ -235,8 +234,20 @@ class ACSDeployer:
             for _i in range(30):
                 try:
                     result = subprocess.run(
-                        [self.kubectl, "-n", namespace, "get", "service", "central-loadbalancer", "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}"],
-                        capture_output=True, text=True, check=True)
+                        [
+                            self.kubectl,
+                            "-n",
+                            namespace,
+                            "get",
+                            "service",
+                            "central-loadbalancer",
+                            "-o",
+                            "jsonpath={.status.loadBalancer.ingress[0].ip}",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
 
                     lb_ip = result.stdout.strip()
                     if lb_ip and lb_ip != "<none>":
@@ -255,8 +266,7 @@ class ACSDeployer:
                     time.sleep(1)
 
             progress.stop()
-            self.logger.error("Timeout waiting for LoadBalancer IP after 5 minutes")
-            raise RoxieError(f"Timeout waiting for LoadBalancer IP: {e}") # FIXME: e
+            raise RoxieError("Timeout waiting for LoadBalancer IP")
 
     def get_current_context(self) -> str:
         """Get current kubectl context"""
@@ -269,7 +279,7 @@ class ACSDeployer:
             self.logger.error(f"Failed to get current context: {str(e)}")
             raise
 
-    def initiate_namespace_deletion(self, namespaces: List[str], wait: bool = False):
+    def initiate_namespace_deletion(self, namespaces: list[str], wait: bool = False):
         """Initiate deletion of one or more namespaces"""
         for namespace in namespaces:
             cmd = [self.kubectl, "delete", "namespace", namespace, "--force", "--grace-period=0"]
@@ -292,7 +302,7 @@ class ACSDeployer:
                 # Always ignore other exceptions (process creation failures, etc.)
                 pass
 
-    def wait_for_namespaces_deletion(self, namespaces: List[str], timeout_seconds: int = 300):
+    def wait_for_namespaces_deletion(self, namespaces: list[str], timeout_seconds: int = 300):
         """Wait for one or more namespaces to be completely deleted"""
         if not namespaces:
             return
@@ -341,7 +351,6 @@ class ACSDeployer:
                     if len(namespaces) == 1:
                         # Single namespace - show terminating status
                         if terminating_count > 0:
-                            component_name = namespaces[0].replace("stackrox-", "").replace("-", " ")
                             progress.update(
                                 task, description=f"Waiting for {namespaces} namespace to be deleted (terminating)"
                             )
@@ -532,11 +541,16 @@ class ACSDeployer:
                     error_output = ""
 
                 error_output_lc = (error_output or "").lower()
-                should_retry = isinstance(e, subprocess.TimeoutExpired) or any(substr in error_output_lc for substr in retryable_error_substrings)
+                should_retry = isinstance(e, subprocess.TimeoutExpired) or any(
+                    substr in error_output_lc for substr in retryable_error_substrings
+                )
 
                 if should_retry and attempt_number < max_attempts:
                     backoff_seconds = 2 ** (attempt_number - 1)
-                    jitter_seconds = random.uniform(0, 0.25)
+                    # Use secrets for jitter to avoid S311 and ensure non-predictable jitter
+                    # Uniform [0, 0.25): derive from integer range to avoid floating RNG
+                    jitter_quarters = secrets.randbelow(250)  # 0..249
+                    jitter_seconds = jitter_quarters / 1000.0
                     total_sleep = backoff_seconds + jitter_seconds
                     self.logger.print_with_timestamp(
                         f"Transient network error from roxctl (attempt {attempt_number}/{max_attempts}). Retrying in {total_sleep:.2f}s...",
@@ -639,7 +653,7 @@ class ACSDeployer:
             self.logger.error(f"Failed to ensure namespace exists: {str(e)}")
             raise
 
-    def execute_teardown_steps(self, teardown_steps: List[Dict[str, Any]], namespace: str):
+    def execute_teardown_steps(self, teardown_steps: list[dict[str, Any]], namespace: str):
         """Execute teardown steps with proper waiting and error handling"""
         success_count = 0
 
@@ -707,8 +721,18 @@ class ACSDeployer:
                 try:
                     # Check if central deployment exists and is ready
                     result = subprocess.run(
-                        [ self.kubectl, "get", "deployment", deployment, "-n", namespace, "-o", "jsonpath={.status.readyReplicas}" ],
-                        capture_output=True, text=True,
+                        [
+                            self.kubectl,
+                            "get",
+                            "deployment",
+                            deployment,
+                            "-n",
+                            namespace,
+                            "-o",
+                            "jsonpath={.status.readyReplicas}",
+                        ],
+                        capture_output=True,
+                        text=True,
                     )
 
                     if result.returncode == 0 and result.stdout.strip():
@@ -768,10 +792,6 @@ class ACSDeployer:
                 os.write(fd, decoded_bytes)
             finally:
                 os.close(fd)
-            try:
-                os.chmod(path, 0o600)
-            except Exception:
-                pass
 
             # Store on the instance for downstream consumers (e.g., subshell)
             self.ca_cert_file = path  # type: ignore[attr-defined]

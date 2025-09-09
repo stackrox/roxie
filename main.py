@@ -3,6 +3,7 @@
 import argparse
 import os
 import subprocess
+import sys
 from subprocess import CalledProcessError
 
 from rich.console import Console
@@ -58,14 +59,7 @@ def main() -> int:
     teardown_parser.add_argument("--operator", action="store_true", help="Force teardown of operator deployment")
     teardown_parser.add_argument("--helm", action="store_true", help="Force teardown of Helm deployment")
 
-    # upgrade-operator subcommand
-    upgrade_operator_parser = subparsers.add_parser("upgrade-operator", help="Upgrade the ACS operator")
-
-    # deploy-operator subcommand
-    deploy_operator_parser = subparsers.add_parser("deploy-operator", help="Deploy the ACS operator")
-
-    # Parse known args to handle roxctl/roxcurl pass-through arguments and helm args after --
-    args, unknown_args = parser.parse_known_args()
+    args, _ = parser.parse_known_args()
 
     if not args.command:
         parser.print_help()
@@ -90,7 +84,9 @@ def main() -> int:
 
             if args.component == "central" or args.component == "both":
                 if "ROXIE_SHELL" in env:
-                    raise RoxieError("Already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again.")
+                    raise RoxieError(
+                        "Already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again."
+                    )
 
             deployer.deploy(args.component)
 
@@ -113,8 +109,8 @@ def main() -> int:
 
                 if getattr(deployer, "central_endpoint", ""):
                     env["API_ENDPOINT"] = deployer.central_endpoint
-                    env["ROX_ENDPOINT"] = deployer.central_endpoint # For roxctl
-                    env["ROX_BASE_URL"] = f"https://{deployer.central_endpoint}" # For roxcurl
+                    env["ROX_ENDPOINT"] = deployer.central_endpoint  # For roxctl
+                    env["ROX_BASE_URL"] = f"https://{deployer.central_endpoint}"  # For roxcurl
                 if getattr(deployer, "central_password", ""):
                     env["ROX_ADMIN_PASSWORD"] = deployer.central_password
                 ca_file = getattr(deployer, "ca_cert_file", "")
@@ -135,8 +131,6 @@ def main() -> int:
                         )
         elif args.command == "teardown":
             deployer.teardown(args.component)
-        elif args.command == "upgrade-operator":
-            deployer.upgrade_operator()
         elif args.command == "deploy-operator":
             deployer.deploy_operator()
         else:

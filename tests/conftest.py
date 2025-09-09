@@ -17,5 +17,3 @@ def pytest_runtest_setup(item):
 def pytest_runtest_teardown(item, nextitem):
     console.rule(f"[bold magenta]END[/bold magenta] [dim]{_ts()}[/dim] {item.nodeid}", style="magenta")
     console.print()
-
-

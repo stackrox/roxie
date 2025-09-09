@@ -1,6 +1,5 @@
 import subprocess
 import tempfile
-from typing import List, Optional
 
 from rich.panel import Panel
 
@@ -10,16 +9,14 @@ from deployer import ACSDeployer
 class ACSDeployerHelm(ACSDeployer):
     """Helm-specific deployer that implements Helm deployment/teardown."""
 
-    def deploy(self, component: str = "both", helm_args: Optional[List[str]] = None, input_yaml: str = ""):
+    def deploy(self, component: str = "both", helm_args: list[str] | None = None, input_yaml: str = ""):
         self.logger.print_with_timestamp("Initiating Helm-based deployment of ACS", style="bold cyan")
         self.deploy_component(component, helm_args, input_yaml)
 
     def teardown(self, component: str = "both"):
         self.teardown_component(component)
 
-    def deploy_component(
-        self, component: str = "both", helm_args: Optional[List[str]] = None, input_yaml: str = ""
-    ):
+    def deploy_component(self, component: str = "both", helm_args: list[str] | None = None, input_yaml: str = ""):
         if helm_args is None:
             helm_args = []
 
@@ -34,7 +31,7 @@ class ACSDeployerHelm(ACSDeployer):
             self.logger.error("Error: central or secured-cluster?")
             raise ValueError("FIXME")
 
-    def deploy_central(self, helm_args: List[str], input_yaml: str = ""):
+    def deploy_central(self, helm_args: list[str], input_yaml: str = ""):
         with tempfile.TemporaryDirectory() as central_chart_dir:
             default_settings = f"""
 central:
@@ -131,10 +128,18 @@ scannerV4:
                 input_f.flush()
 
                 helm_template_cmd = [
-                    "helm", "template", "-n", self.central_namespace, "stackrox-central-services", central_chart_dir,
-                    "-f", default_f.name,
-                    "-f", image_f.name,
-                    "-f", input_f.name,
+                    "helm",
+                    "template",
+                    "-n",
+                    self.central_namespace,
+                    "stackrox-central-services",
+                    central_chart_dir,
+                    "-f",
+                    default_f.name,
+                    "-f",
+                    image_f.name,
+                    "-f",
+                    input_f.name,
                 ] + helm_args
 
                 template_result = subprocess.run(helm_template_cmd, capture_output=True, text=True, check=True)
@@ -152,7 +157,12 @@ scannerV4:
                 "securedclusters.platform.stackrox.io",
                 "securitypolicies.config.stackrox.io",
             ]
-            subprocess.run([self.kubectl, "delete", "crd", "--ignore-not-found=true"] + crds, check=True, capture_output=True, text=True)
+            subprocess.run(
+                [self.kubectl, "delete", "crd", "--ignore-not-found=true"] + crds,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
             self.ensure_namespace_exists(self.central_namespace)
             self.prepare_namespace(self.central_namespace)
 
@@ -169,10 +179,18 @@ scannerV4:
                 input_f.flush()
 
                 install_cmd = [
-                    "helm", "install", "-n", self.central_namespace, "stackrox-central-services", central_chart_dir,
-                    "-f", default_f.name,
-                    "-f", image_f.name,
-                    "-f", input_f.name,
+                    "helm",
+                    "install",
+                    "-n",
+                    self.central_namespace,
+                    "stackrox-central-services",
+                    central_chart_dir,
+                    "-f",
+                    default_f.name,
+                    "-f",
+                    image_f.name,
+                    "-f",
+                    input_f.name,
                 ] + helm_args
 
                 subprocess.run(install_cmd, check=True, capture_output=True, text=True)
@@ -202,7 +220,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             with open(self.central_env_file, "w") as f:
                 f.write(env_content)
 
-    def deploy_secured_cluster(self, helm_args: List[str], input_yaml: str = ""):
+    def deploy_secured_cluster(self, helm_args: list[str], input_yaml: str = ""):
         main_image_tag = self.main_image_tag
         with tempfile.TemporaryDirectory() as chart_dir:
             import random
@@ -244,7 +262,16 @@ scannerV4DB:
             crs_content = self.generate_crs(cluster_name)
 
             subprocess.run(
-                [ "roxctl", "helm", "output", "secured-cluster-services", "--remove", "--debug", "--output-dir", chart_dir ],
+                [
+                    "roxctl",
+                    "helm",
+                    "output",
+                    "secured-cluster-services",
+                    "--remove",
+                    "--debug",
+                    "--output-dir",
+                    chart_dir,
+                ],
                 check=True,
                 capture_output=True,
             )
@@ -270,11 +297,20 @@ scannerV4DB:
                 input_f.flush()
 
                 install_cmd = [
-                    "helm", "install", "-n", self.secured_cluster_namespace, "stackrox-secured-cluster-services", chart_dir,
-                    "--set-file", f"crs.file={crs_f.name}",
-                    "-f", default_f.name,
-                    "-f", image_f.name,
-                    "-f", input_f.name,
+                    "helm",
+                    "install",
+                    "-n",
+                    self.secured_cluster_namespace,
+                    "stackrox-secured-cluster-services",
+                    chart_dir,
+                    "--set-file",
+                    f"crs.file={crs_f.name}",
+                    "-f",
+                    default_f.name,
+                    "-f",
+                    image_f.name,
+                    "-f",
+                    input_f.name,
                 ] + helm_args
 
                 try:

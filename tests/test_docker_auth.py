@@ -21,4 +21,3 @@ def test_create_pull_secret_yaml_from_env(monkeypatch):
     decoded = base64.b64decode(encoded).decode()
     data = json.loads(decoded)
     assert "auths" in data
-

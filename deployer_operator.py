@@ -2,7 +2,7 @@ import os
 import random
 import subprocess
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 from rich.panel import Panel
@@ -18,17 +18,13 @@ class ACSDeployerOperator(ACSDeployer):
     def teardown(self, component: str = "both"):
         self.teardown_operator_custom_resources(component)
 
-    def apply_crds_to_cluster(self, crd_files: List[str]):
+    def apply_crds_to_cluster(self, crd_files: list[str]):
         """Apply CRD files to the cluster using kubectl"""
         self.logger.print_with_timestamp(f"Applying {len(crd_files)} CRD(s) to cluster", style="bold cyan")
 
-        applied_count = 0
         for crd_file in crd_files:
-            crd_filename = os.path.basename(crd_file)
-
-            # Apply the CRD using kubectl
             subprocess.run([self.kubectl, "apply", "-f", crd_file], capture_output=True, text=True, check=True)
-            self.logger.print_with_timestamp(f"✓ Successfully applied {applied_count} CRD(s)", style="bold green")
+            self.logger.print_with_timestamp(f"✓ Successfully applied CRD {crd_file}", style="bold green")
 
     def deploy_rhacs_operator(self):
         operator_tag_for_image = self.operator_tag
@@ -63,9 +59,7 @@ class ACSDeployerOperator(ACSDeployer):
 
                 # Then remove the operator (including CRDs)
                 self.teardown_rhacs_operator()
-                self.logger.print_with_timestamp(
-                    "Cleaned up existing operator deployment", style="bold yellow"
-                )
+                self.logger.print_with_timestamp("Cleaned up existing operator deployment", style="bold yellow")
                 self.deploy_rhacs_operator()
         else:
             # No operator present; just deploy it
@@ -113,47 +107,19 @@ class ACSDeployerOperator(ACSDeployer):
             "metadata": {
                 "name": "stackrox-central-services",
                 "namespace": self.central_namespace_operator,
-                "labels": {
-                    "app": "stackrox-central"
-                },
+                "labels": {"app": "stackrox-central"},
             },
             "spec": {
                 "central": {
-                    "adminPasswordSecret": {
-                        "name": "admin-password"
-                    },
-                    "exposure": {
-                        "loadBalancer": {
-                            "enabled": True
-                        }
-                    },
-                    "telemetry": {
-                        "enabled": False
-                    }
+                    "adminPasswordSecret": {"name": "admin-password"},
+                    "exposure": {"loadBalancer": {"enabled": True}},
+                    "telemetry": {"enabled": False},
                 },
-                "scanner": {
-                    "analyzer": {
-                        "scaling": {
-                            "autoScaling": "Enabled"
-                        }
-                    }
-                },
+                "scanner": {"analyzer": {"scaling": {"autoScaling": "Enabled"}}},
                 "scannerV4": {
-                    "indexer": {
-                        "scaling": {
-                            "autoScaling": "Disabled",
-                            "minReplicas": 1,
-                            "replicas": 1
-                        }
-                    },
-                    "matcher": {
-                        "scaling": {
-                            "autoScaling": "Disabled",
-                            "minReplicas": 1,
-                            "replicas": 1
-                        }
-                    }
-                }
+                    "indexer": {"scaling": {"autoScaling": "Disabled", "minReplicas": 1, "replicas": 1}},
+                    "matcher": {"scaling": {"autoScaling": "Disabled", "minReplicas": 1, "replicas": 1}},
+                },
             },
         }
 
@@ -265,7 +231,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             )
             return
 
-        teardown_steps: List[Dict[str, Any]] = [
+        teardown_steps: list[dict[str, Any]] = [
             {
                 "description": f"Deleting Central CR in {namespace}",
                 "command": [
@@ -324,7 +290,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
                 f"Namespace '{namespace}' does not exist - nothing to teardown", style="dim yellow"
             )
 
-        teardown_steps: List[Dict[str, Any]] = [
+        teardown_steps: list[dict[str, Any]] = [
             {
                 "description": f"Deleting SecuredCluster CR in {namespace}",
                 "command": [
@@ -504,7 +470,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             "securitypolicies.config.stackrox.io",
         ]
 
-        missing: List[str] = []
+        missing: list[str] = []
         for crd in required_crds:
             result = subprocess.run([self.kubectl, "get", "crd", crd], capture_output=True, text=True)
             if result.returncode != 0:
@@ -524,7 +490,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             # CRDs exist; proceed
             pass
 
-    def identify_crd_files(self, bundle_dir: str) -> List[str]:
+    def identify_crd_files(self, bundle_dir: str) -> list[str]:
         """Identify CRD files in the operator bundle directory"""
         crd_files = []
 
@@ -566,7 +532,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
 
         return crd_files
 
-    def parse_csv_deployment_spec(self, csv_file: str) -> Dict[str, Any]:
+    def parse_csv_deployment_spec(self, csv_file: str) -> dict[str, Any]:
         """Parse ClusterServiceVersion to extract deployment specifications"""
         try:
             with open(csv_file) as f:
@@ -1051,7 +1017,8 @@ metadata:
             except subprocess.CalledProcessError as e:
                 # Log but continue with other cleanup steps
                 self.logger.print_with_timestamp(
-                    f"⚠️  Failed: {step['description']} (continuing...) - {(e.stderr or str(e)).strip()}", style="dim yellow"
+                    f"⚠️  Failed: {step['description']} (continuing...) - {(e.stderr or str(e)).strip()}",
+                    style="dim yellow",
                 )
                 # continue to next step
                 continue
@@ -1073,7 +1040,7 @@ metadata:
             "⚠️  Timeout waiting for namespace deletion, proceeding anyway...", style="bold yellow"
         )
 
-    def deploy_operator_from_csv(self, bundle_dir: Optional[str] = None):
+    def deploy_operator_from_csv(self, bundle_dir: str | None = None):
         """Deploy the operator using CSV extraction and conversion"""
 
         namespace = "rhacs-operator-system"
@@ -1134,7 +1101,6 @@ metadata:
         self.apply_bundle_service_resources(bundle_dir, namespace)
         self.wait_for_operator_ready(namespace)
         self.logger.print_with_timestamp("🎉 Operator deployment completed successfully!", style="bold green")
-
 
     def wait_for_operator_cleanup(self, namespace: str, timeout: int = 180):
         """Wait for operator to clean up managed resources in namespace"""

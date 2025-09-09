@@ -4,7 +4,6 @@ import base64
 import json
 import os
 import subprocess
-from typing import Dict, Optional
 
 from rich.console import Console
 
@@ -14,12 +13,12 @@ from errors import RoxieError
 class DockerAuth:
     """Handles Docker authentication and pull secret management"""
 
-    def __init__(self, console: Optional[Console] = None, cache_enabled: bool = True):
+    def __init__(self, console: Console | None = None, cache_enabled: bool = True):
         self.console = console or Console()
         self.cache_enabled = cache_enabled
-        self._auth_cache: Dict[str, str] = {}
+        self._auth_cache: dict[str, str] = {}
 
-    def get_docker_auth_string(self, username: Optional[str] = None, password: Optional[str] = None) -> str:
+    def get_docker_auth_string(self, username: str | None = None, password: str | None = None) -> str:
         """Generate Docker authentication string for image pull secrets"""
         try:
             # Try environment variables first
