@@ -45,6 +45,7 @@
             # Additional useful tools for development
             git
             which
+            tokei
           ];
           
           shellHook = ''

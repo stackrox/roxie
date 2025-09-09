@@ -92,4 +92,9 @@ validate: ## Validate configuration files
 
 # Full development workflow
 .PHONY: all
-all: check validate ## Run all checks and validations 
+all: check validate ## Run all checks and validations
+
+# Display project code statistics
+.PHONY: stats
+stats:
+	tokei
