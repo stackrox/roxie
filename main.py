@@ -65,11 +65,6 @@ def main() -> int:
     # deploy-operator subcommand
     deploy_operator_parser = subparsers.add_parser("deploy-operator", help="Deploy the ACS operator")
 
-    # # Roxctl subcommand
-    # subparsers.add_parser('roxctl', help='Run roxctl commands')
-    # Roxcurl subcommand
-    # subparsers.add_parser('roxcurl', help='Run roxcurl commands')
-
     # Parse known args to handle roxctl/roxcurl pass-through arguments and helm args after --
     args, unknown_args = parser.parse_known_args()
 
