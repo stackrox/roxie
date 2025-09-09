@@ -166,6 +166,11 @@ class ACSDeployerOperator(ACSDeployer):
                 "clusterName": self.cluster_name,
                 "centralEndpoint": self.central_endpoint,
                 "imagePullSecrets": [{"name": "stackrox"}],
+                "admissionControl": {"replicas": 1},
+                "scanner": {"analyzer": {"scaling": {"autoScaling": "Enabled", "replicas": 1}}},
+                "scannerV4": {
+                    "indexer": {"scaling": {"autoScaling": "Disabled", "replicas": 1}},
+                },
             },
         }
 
