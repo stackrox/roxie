@@ -92,6 +92,12 @@ def main() -> int:
                 deployer.central_env_file = args.envrc
 
         if args.command == "deploy":
+            env = os.environ.copy()
+
+            if args.component == "central" or args.component == "both":
+                if "ROXIE_SHELL" in env:
+                    raise RoxieError("Already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again.")
+
             deployer.deploy(args.component)
 
             # Spawn subshell only for central/both when --envrc is not used
@@ -102,7 +108,6 @@ def main() -> int:
                 )
                 console.print(banner, style="bold cyan")
 
-                env = os.environ.copy()
                 if getattr(deployer, "central_endpoint", ""):
                     env["API_ENDPOINT"] = deployer.central_endpoint
                     env["ROX_ENDPOINT"] = deployer.central_endpoint # For roxctl
@@ -111,6 +116,7 @@ def main() -> int:
                 ca_file = getattr(deployer, "ca_cert_file", "")
                 if ca_file:
                     env["ROX_CA_CERT_FILE"] = ca_file
+                env["ROXIE_SHELL"] = "1"
 
                 shell = getattr(args, "shell")
                 if shell is None:
