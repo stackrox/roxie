@@ -4,12 +4,20 @@
 # Fast path when already in the Nix dev environment
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+if [[ -n "${ROXIE_DEV_SHELL:-}" ]]; then
+    echo "🔄 Already in roxie development environment..."
+    exit 0
+fi
+
 echo "🔄 Entering roxie development environment..."
 
 if command -v nix >/dev/null 2>&1; then
-    export ROXIE_USER_SHELL="${SHELL:-/bin/sh}"
+    ROXIE_USER_SHELL="${SHELL:-/bin/sh}"
     exec nix --extra-experimental-features 'nix-command flakes' develop "${REPO_ROOT}" -c \
-      env SHELL="$ROXIE_USER_SHELL" \
+      env \
+        SHELL="$ROXIE_USER_SHELL" \
+        ROXIE_USER_SHELL="${ROXIE_USER_SHELL}" \
+        ROXIE_DEV_SHELL="1" \
       "$ROXIE_USER_SHELL"
 else
     echo "❌ Nix is not installed. Please install Nix first:"
