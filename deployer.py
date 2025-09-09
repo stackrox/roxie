@@ -22,9 +22,7 @@ from rich.progress import (
     BarColumn,
     Progress,
     SpinnerColumn,
-    TaskProgressColumn,
     TextColumn,
-    TimeElapsedColumn,
 )
 
 from docker_auth import DockerAuth
@@ -192,9 +190,7 @@ class ACSDeployer:
             TextColumn("[progress.description]{task.description}"),
         ]
         if include_bar:
-            columns.extend(
-                [BarColumn(complete_style="green", finished_style="green"), TaskProgressColumn(), TimeElapsedColumn()]
-            )
+            columns.extend([BarColumn(complete_style="green", finished_style="green")])
         return Progress(*columns, console=self.console, **kwargs)
 
     def log(self, message: str) -> None:
