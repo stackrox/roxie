@@ -97,26 +97,33 @@ def main() -> int:
 
             # Spawn subshell only for central/both when --envrc is not used
             if args.component in ("central", "both") and not envrc_provided:
+                shell = getattr(args, "shell")
+                if shell is None:
+                    shell = os.environ.get("ROXIE_USER_SHELL")
+                deployer.logger.print_with_timestamp(f"Spawning sub-shell: {shell}", style="bold cyan")
                 banner = (
                     "\n[roxie] Entering a subshell with ACS environment variables set.\n"
                     "[roxie] Exit this shell to trigger automatic teardown.\n"
+                    "\n"
+                    "[roxie] Environment is set up for talking to ACS Central. Examples:\n"
+                    "\n"
+                    "[roxie]   * roxctl central whoami\n"
+                    "[roxie]   * roxcurl /v1/clusters\n"
                 )
                 console.print(banner, style="bold cyan")
 
                 if getattr(deployer, "central_endpoint", ""):
                     env["API_ENDPOINT"] = deployer.central_endpoint
                     env["ROX_ENDPOINT"] = deployer.central_endpoint # For roxctl
+                    env["ROX_BASE_URL"] = f"https://{deployer.central_endpoint}" # For roxcurl
                 if getattr(deployer, "central_password", ""):
                     env["ROX_ADMIN_PASSWORD"] = deployer.central_password
                 ca_file = getattr(deployer, "ca_cert_file", "")
                 if ca_file:
                     env["ROX_CA_CERT_FILE"] = ca_file
                 env["ROXIE_SHELL"] = "1"
+                env["name"] = f"acs@{deployer.kube_context}"
 
-                shell = getattr(args, "shell")
-                if shell is None:
-                    shell = os.environ.get("ROXIE_USER_SHELL")
-                deployer.logger.print_with_timestamp(f"Spawning sub-shell: {shell}", style="bold cyan")
                 try:
                     subprocess.run([shell, "-i"], check=False, env=env)
                 finally:
