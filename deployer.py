@@ -31,6 +31,7 @@ from helpers import TimestampColumn
 from image_cache import ImageCache
 from logger import Logger
 
+default_main_image_tag = "4.8.2"
 
 class ACSDeployer:
     """Deploys Advanced Cluster Security (ACS) using Kubernetes and Helm"""
@@ -62,16 +63,17 @@ class ACSDeployer:
     def lookup_latest_tag_from_stackrox_git_root(self) -> str:
         """Lookup latest tag from stackrox git root"""
         stackrox_git_root = os.environ.get("STACKROX_GIT_ROOT", "").strip()
-        if not stackrox_git_root:
-            raise RoxieError("Main image tag not found and STACKROX_GIT_ROOT environment variable is not set")
-        return self.get_latest_commit_tag_from_dir(stackrox_git_root)
+        if stackrox_git_root:
+            return self.get_latest_commit_tag_from_dir(stackrox_git_root)
+        return None
 
     def lookup_main_image_tag(self) -> str:
         """Lookup main image tag from the environment"""
         main_image_tag = os.environ.get("MAIN_IMAGE_TAG", "").strip()
         if not main_image_tag:
             main_image_tag = self.lookup_latest_tag_from_stackrox_git_root()
-        return main_image_tag
+        if not main_image_tag:
+            return default_main_image_tag
 
     def get_timestamp(self) -> str:
         """Get relative timestamp since start"""
