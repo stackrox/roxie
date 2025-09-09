@@ -98,7 +98,6 @@ def main() -> int:
                 deployer.logger.print_with_timestamp(f"Spawning sub-shell: {shell}", style="bold cyan")
                 banner = (
                     "\n[roxie] Entering a subshell with ACS environment variables set.\n"
-                    "[roxie] Exit this shell to trigger automatic teardown.\n"
                     "\n"
                     "[roxie] Environment is set up for talking to ACS Central. Examples:\n"
                     "\n"
@@ -118,17 +117,7 @@ def main() -> int:
                     env["ROX_CA_CERT_FILE"] = ca_file
                 env["ROXIE_SHELL"] = "1"
                 env["name"] = f"acs@{deployer.kube_context}"
-
-                try:
-                    subprocess.run([shell, "-i"], check=False, env=env)
-                finally:
-                    try:
-                        deployer.teardown(args.component)
-                    except Exception:
-                        console.print(
-                            "[roxie] Teardown after subshell exit encountered errors",
-                            style="bold yellow",
-                        )
+                subprocess.run([shell, "-i"], check=False, env=env)
         elif args.command == "teardown":
             deployer.teardown(args.component)
         elif args.command == "deploy-operator":

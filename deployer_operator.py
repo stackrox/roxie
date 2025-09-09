@@ -116,10 +116,10 @@ class ACSDeployerOperator(ACSDeployer):
                     "exposure": {"loadBalancer": {"enabled": True}},
                     "telemetry": {"enabled": False},
                 },
-                "scanner": {"analyzer": {"scaling": {"autoScaling": "Enabled"}}},
+                "scanner": {"analyzer": {"scaling": {"autoScaling": "Enabled", "replicas": 1}}},
                 "scannerV4": {
-                    "indexer": {"scaling": {"autoScaling": "Disabled", "minReplicas": 1, "replicas": 1}},
-                    "matcher": {"scaling": {"autoScaling": "Disabled", "minReplicas": 1, "replicas": 1}},
+                    "indexer": {"scaling": {"autoScaling": "Disabled", "replicas": 1}},
+                    "matcher": {"scaling": {"autoScaling": "Disabled", "replicas": 1}},
                 },
             },
         }
