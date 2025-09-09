@@ -180,9 +180,9 @@ class ACSDeployer:
         """Print message with timestamp prefix"""
         timestamp = self.get_timestamp()
         if style:
-            self.console.print(f"[dim]{timestamp}[/dim] {message}", style=style)
+            self.console.print(f"[green]{timestamp}[/green] {message}", style=style)
         else:
-            self.console.print(f"[dim]{timestamp}[/dim] {message}")
+            self.console.print(f"[green]{timestamp}[/green] {message}")
 
     def create_progress_with_timestamp(self, include_bar: bool = False, **kwargs) -> Progress:
         """Create a Progress instance with live timestamp column"""
@@ -200,7 +200,7 @@ class ACSDeployer:
     def log(self, message: str) -> None:
         """Print log message with green styling"""
         timestamp = self.get_timestamp()
-        self.console.print(f"[dim]{timestamp}[/dim] {message}", style="bold green")
+        self.console.print(f"[green]{timestamp}[/green] {message}", style="bold green")
 
     def prepare_namespace(self, namespace: str):
         """Prepare Kubernetes namespace with required resources"""

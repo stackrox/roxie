@@ -5,14 +5,14 @@ from rich.console import Console
 
 class Logger:
     def __init__(self):
-        self.console = Console()
+        self.console = Console(highlight=False)
         self.start_time = time.time()
 
     def log(self, message: str):
         self.console.print(message)
 
     def print_with_timestamp(self, message: str, style: str = "dim"):
-        self.console.print(f"[dim]{self.get_timestamp()}[/dim] {message}")
+        self.console.print(f"[green]{self.get_timestamp()}[/green] {message}")
 
     def get_timestamp(self) -> str:
         """Get relative timestamp since start"""
@@ -24,10 +24,10 @@ class Logger:
     def info(self, message: str) -> None:
         """Print info message with pink styling"""
         timestamp = self.get_timestamp()
-        self.console.print(f"[dim]{timestamp}[/dim] {message}", style="bold magenta")
+        self.console.print(f"[green]{timestamp}[/green] {message}", style="bold magenta")
 
     def error(self, message: str) -> None:
         """Print error message with red styling"""
         timestamp = self.get_timestamp()
         error_console = Console(stderr=True)
-        error_console.print(f"[dim]{timestamp}[/dim] {message}", style="bold red")
+        error_console.print(f"[green]{timestamp}[/green] {message}", style="bold red")
