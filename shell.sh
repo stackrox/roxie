@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Enter the roxie Nix development environment
 
+# Fast path when already in the Nix dev environment
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "🔄 Entering roxie development environment..."
 
 if command -v nix >/dev/null 2>&1; then
-    exec nix --extra-experimental-features 'nix-command flakes' develop
+    export ROXIE_USER_SHELL="${SHELL:-/bin/sh}"
+    exec nix --extra-experimental-features 'nix-command flakes' develop "${REPO_ROOT}" -c \
+      env SHELL="$ROXIE_USER_SHELL" \
+      "$ROXIE_USER_SHELL"
 else
     echo "❌ Nix is not installed. Please install Nix first:"
     echo "   curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install"
