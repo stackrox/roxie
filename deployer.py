@@ -464,43 +464,124 @@ class ACSDeployer:
             self.logger.error(f"Failed to teardown namespaces: {str(e)}")
             raise
 
-    def teardown_component(self, component: str = "both"):
-        """Teardown specific component or all components (auto-detects Helm vs Operator)"""
+    def teardown(self, component: str = "both"):
+        self.logger.print_with_timestamp("🗑️  Tearing down operator-managed resources", style="bold cyan")
+        if component == "central":
+            self.teardown_central()
+        elif component == "secured-cluster":
+            self.teardown_secured_cluster()
+        elif component == "both":
+            self.teardown_secured_cluster()
+            self.teardown_central()
+        else:
+            raise RoxieError(f"Unknown component for operator teardown: {component}")
+
+    def teardown_central(self):
+        namespace = self.central_namespace_operator
+        self.logger.print_with_timestamp(
+            f"🗑️  Tearing down Central operator resources in: {namespace}", style="bold cyan"
+        )
+
+        result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
+        if result.returncode != 0:
+            self.logger.print_with_timestamp(
+                f"Namespace '{namespace}' does not exist - nothing to teardown", style="dim yellow"
+            )
+            return
+
+        # Try to delete Central CR.
+        subprocess.run(
+            [
+                self.kubectl,
+                "-n",
+                namespace,
+                "delete",
+                "central",
+                "--all",
+                "--ignore-not-found=true",
+                "--timeout=120s",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.teardown_namespace(namespace)
+
+    def teardown_secured_cluster(self):
+        namespace = self.secured_cluster_namespace_operator
+        self.logger.print_with_timestamp(
+            f"🗑️  Tearing down SecuredCluster operator resources in: {namespace}", style="bold cyan"
+        )
+
+        result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
+        if result.returncode != 0:
+            self.logger.print_with_timestamp(
+                f"Namespace '{namespace}' does not exist - nothing to teardown", style="dim yellow"
+            )
+            return
+
+        # Try to delete SecuredCluster CR.
+        subprocess.run(
+            [
+                self.kubectl,
+                "delete",
+                "securedcluster",
+                "--all",
+                "-n",
+                namespace,
+                "--ignore-not-found=true",
+                "--timeout=120s",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.teardown_namespace(namespace)
+ 
+    def teardown_namespace(self, namespace: str):
+        # Force delete workloads
         try:
-            # Check if this is an operator deployment
-            has_operator = self.has_operator_deployment(component)
-
-            if has_operator:
-                self.logger.print_with_timestamp("🔍 Detected operator deployment", style="bold cyan")
-                self.teardown_operator_custom_resources(component)
-            else:
-                self.logger.print_with_timestamp("🔍 Detected Helm deployment for", style="bold cyan")
-                # Original Helm teardown logic
-                if component == "central":
-                    self.teardown_single_namespace(self.central_namespace, "central")
-                elif component == "secured-cluster":
-                    self.teardown_single_namespace(self.secured_cluster_namespace, "secured cluster")
-                elif component in ["both"]:
-                    self.teardown_all_async()
-                else:
-                    raise ValueError(
-                        f"Error: component must be 'central', 'secured-cluster', or 'both', got '{component}'"
-                    )
-
+            subprocess.run(
+                [
+                    self.kubectl,
+                    "-n",
+                    namespace,
+                    "delete",
+                    "pods,deployments,daemonsets",
+                    "--all",
+                    "--force",
+                    "--grace-period=0",
+                    "--ignore-not-found=true",
+                    "--timeout=60s",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
         except Exception as e:
-            self.logger.error(f"Failed to teardown {component}: {str(e)}")
-            raise
+            self.logger.print_with_timestamp(f"Warning: failed force-deleting workloads: {e}", style="dim yellow")
 
-    def teardown_single_namespace(self, namespace: str, component_name: str):
-        """Teardown a single namespace and wait for it to be completely deleted"""
-        try:
-            self.initiate_namespace_deletion([namespace], wait=False)
-            self.logger.print_with_timestamp(f"✓ Initiating teardown of {component_name}", style="bold green")
-            self.wait_for_namespaces_deletion([namespace], timeout_seconds=300)
+        # Delete other namespaced resources
+        for args, label in [
+            (["all", "--all"], "all resources"),
+            (["secrets,configmaps", "--all"], "secrets/configmaps"),
+            (["pvc", "--all"], "PVCs"),
+        ]:
+            try:
+                subprocess.run(
+                    [self.kubectl, "-n", namespace, "delete", *args, "--ignore-not-found=true", "--timeout=120s"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            except Exception as e:
+                self.logger.print_with_timestamp(
+                    f"Warning: failed deleting {label} in {namespace}: {e}", style="dim yellow"
+                )
 
-        except Exception as e:
-            self.logger.error(f"Failed to teardown {component_name} namespace: {str(e)}")
-            raise
+        # Delete the namespace asynchronously and wait until gone.
+        self.initiate_namespace_deletion([namespace], wait=False)
+        self.wait_for_namespaces_deletion([namespace], timeout_seconds=600)
 
     def apply_admin_password_secret(self, name: str):
         secret = {

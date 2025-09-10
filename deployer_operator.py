@@ -16,7 +16,16 @@ class ACSDeployerOperator(ACSDeployer):
     """Operator-specific deployer that implements Operator deployment/teardown."""
 
     def teardown(self, component: str = "both"):
-        self.teardown_operator_custom_resources(component)
+        self.logger.print_with_timestamp("🗑️  Tearing down operator-managed resources", style="bold cyan")
+        if component == "central":
+            self.teardown_central()
+        elif component == "secured-cluster":
+            self.teardown_secured_cluster()
+        elif component == "both":
+            self.teardown_secured_cluster()
+            self.teardown_central()
+        else:
+            raise RoxieError(f"Unknown component for operator teardown: {component}")
 
     def apply_crds_to_cluster(self, crd_files: list[str]):
         """Apply CRD files to the cluster using kubectl"""
@@ -52,7 +61,7 @@ class ACSDeployerOperator(ACSDeployer):
                     style="bold yellow",
                 )
                 try:
-                    self.teardown_operator_custom_resources("both")
+                    self.teardown("both")
                 except Exception as e:
                     self.logger.print_with_timestamp(
                         f"Warning: teardown of existing components encountered issues: {e}", style="bold yellow"
@@ -70,7 +79,7 @@ class ACSDeployerOperator(ACSDeployer):
         self.logger.print_with_timestamp("✓ Operator-based deployment completed successfully!", style="bold green")
 
     def deploy_central(self):
-        self.teardown_all_async()
+        self.teardown()
         self.ensure_namespace_exists(self.central_namespace_operator)
         self.prepare_namespace(self.central_namespace_operator)
         # Ensure CRDs are present before creating Central CR
@@ -79,8 +88,7 @@ class ACSDeployerOperator(ACSDeployer):
         self.show_central_success_panel()
 
     def deploy_secured_cluster(self):
-        self.teardown_single_namespace(self.secured_cluster_namespace_operator, "secured cluster")
-        self.teardown_single_namespace(self.secured_cluster_namespace, "secured cluster")
+        self.teardown("secured-cluster")
         self.ensure_namespace_exists(self.secured_cluster_namespace_operator)
         self.prepare_namespace(self.secured_cluster_namespace_operator)
         self.create_secured_cluster_cr("")
@@ -211,65 +219,9 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
         with open(self.central_env_file, "w") as f:
             f.write(env_content)
 
-    def teardown_namespace(self, namespace: str):
-        # Force delete workloads
-        try:
-            subprocess.run(
-                [
-                    self.kubectl,
-                    "-n",
-                    namespace,
-                    "delete",
-                    "pods,deployments,daemonsets",
-                    "--all",
-                    "--force",
-                    "--grace-period=0",
-                    "--ignore-not-found=true",
-                    "--timeout=60s",
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-        except Exception as e:
-            self.logger.print_with_timestamp(f"Warning: failed force-deleting workloads: {e}", style="dim yellow")
 
-        # Delete other namespaced resources
-        for args, label in [
-            (["all", "--all"], "all resources"),
-            (["secrets,configmaps", "--all"], "secrets/configmaps"),
-            (["pvc", "--all"], "PVCs"),
-        ]:
-            try:
-                subprocess.run(
-                    [self.kubectl, "-n", namespace, "delete", *args, "--ignore-not-found=true", "--timeout=120s"],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
-            except Exception as e:
-                self.logger.print_with_timestamp(
-                    f"Warning: failed deleting {label} in {namespace}: {e}", style="dim yellow"
-                )
 
-        # Delete the namespace (async) and wait until gone
-        self.initiate_namespace_deletion([namespace], wait=False)
-        self.wait_for_namespaces_deletion([namespace], timeout_seconds=600)
-
-    # Inline operator-specific teardown methods
-    def teardown_operator_custom_resources(self, component: str):
-        self.logger.print_with_timestamp("🗑️  Tearing down operator-managed resources", style="bold cyan")
-        if component == "central":
-            self.teardown_central_operator_resources()
-        elif component == "secured-cluster":
-            self.teardown_secured_cluster_operator_resources()
-        elif component == "both":
-            self.teardown_secured_cluster_operator_resources()
-            self.teardown_central_operator_resources()
-        else:
-            raise RoxieError(f"Unknown component for operator teardown: {component}")
-
-    def teardown_central_operator_resources(self):
+    def teardown_central(self):
         namespace = self.central_namespace_operator
         self.logger.print_with_timestamp(
             f"🗑️  Tearing down Central operator resources in: {namespace}", style="bold cyan"
@@ -282,7 +234,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             )
             return
 
-        # 1) Delete Central CR
+        # Delete Central CR.
         subprocess.run(
             [
                 self.kubectl,
@@ -298,10 +250,9 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             capture_output=True,
             text=True,
         )
-
         self.teardown_namespace(namespace)
 
-    def teardown_secured_cluster_operator_resources(self):
+    def teardown_secured_cluster(self):
         namespace = self.secured_cluster_namespace_operator
         self.logger.print_with_timestamp(
             f"🗑️  Tearing down SecuredCluster operator resources in: {namespace}", style="bold cyan"
@@ -314,7 +265,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             )
             return
 
-        # Delete SecuredCluster CR(s)
+        # Delete SecuredCluster CR.
         subprocess.run(
             [
                 self.kubectl,
@@ -1010,12 +961,10 @@ metadata:
                 )
                 success_count += 1
             except subprocess.CalledProcessError as e:
-                # Log but continue with other cleanup steps
                 self.logger.print_with_timestamp(
                     f"⚠️  Failed: {step['description']} (continuing...) - {(e.stderr or str(e)).strip()}",
                     style="dim yellow",
                 )
-                # continue to next step
                 continue
 
         # Wait for namespace deletion
@@ -1144,57 +1093,3 @@ metadata:
         """Deploy the ACS operator"""
         self.logger.print_with_timestamp("🔄 Deploying ACS operator...", style="bold cyan")
         self.deploy_rhacs_operator()
-
-    # def check_and_cleanup_existing_operator_deployments(self, component: str) -> bool:
-    #     """Check for existing operator deployments and clean them up if found"""
-    #     try:
-    #         # Define operator namespaces to check
-    #         central_op_namespace = self.central_namespace_operator
-    #         secured_cluster_op_namespace = self.secured_cluster_namespace_operator
-
-    #         # Check which namespaces exist
-    #         existing_namespaces = []
-
-    #         # Check central operator namespace
-    #         central_exists = False
-    #         result = subprocess.run(
-    #             [self.kubectl, "get", "namespace", central_op_namespace], capture_output=True, text=True
-    #         )
-    #         if result.returncode == 0:
-    #             existing_namespaces.append(central_op_namespace)
-    #             central_exists = True
-
-    #         # Check secured cluster operator namespace
-    #         result = subprocess.run(
-    #             [self.kubectl, "get", "namespace", secured_cluster_op_namespace], capture_output=True, text=True
-    #         )
-    #         if result.returncode == 0:
-    #             existing_namespaces.append(secured_cluster_op_namespace)
-
-    #         # If stackrox-central-op exists, always clean up both namespaces
-    #         # This matches the user requirement and ensures clean state
-    #         if central_exists or existing_namespaces:
-    #             self.logger.print_with_timestamp(
-    #                 f"Found existing operator deployments in: {', '.join(existing_namespaces)}", style="bold yellow"
-    #             )
-    #             self.logger.print_with_timestamp("Initiating cleanup of existing operator deployments...", style="bold yellow")
-
-    #             # Always clean up both central and secured cluster operator namespaces
-    #             # This ensures a clean slate for the new deployment, especially since
-    #             # secured-cluster depends on central and we want consistent state
-    #             try:
-    #                 self.teardown_operator_custom_resources("both")
-    #                 return True
-    #             except Exception as e:
-    #                 self.logger.error(f"Failed to cleanup existing operator deployments: {str(e)}")
-    #                 # Continue with deployment anyway, but warn user
-    #                 self.logger.print_with_timestamp(
-    #                     "Continuing with deployment despite cleanup failure...", style="bold yellow"
-    #                 )
-    #                 return False
-
-    #         return False
-
-    #     except Exception as e:
-    #         self.logger.error(f"Error checking for existing operator deployments: {str(e)}")
-    #         return False
