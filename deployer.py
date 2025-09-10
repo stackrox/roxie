@@ -612,6 +612,7 @@ class ACSDeployer:
             "eof",
             "bad gateway",
             "service unavailable",
+            "context deadline exceeded"
         ]
 
         max_attempts = 3
