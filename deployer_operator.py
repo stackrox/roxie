@@ -15,17 +15,7 @@ from errors import RoxieError
 class ACSDeployerOperator(ACSDeployer):
     """Operator-specific deployer that implements Operator deployment/teardown."""
 
-    def teardown(self, component: str = "both"):
-        self.logger.print_with_timestamp("🗑️  Tearing down operator-managed resources", style="bold cyan")
-        if component == "central":
-            self.teardown_central()
-        elif component == "secured-cluster":
-            self.teardown_secured_cluster()
-        elif component == "both":
-            self.teardown_secured_cluster()
-            self.teardown_central()
-        else:
-            raise RoxieError(f"Unknown component for operator teardown: {component}")
+
 
     def apply_crds_to_cluster(self, crd_files: list[str]):
         """Apply CRD files to the cluster using kubectl"""
@@ -80,8 +70,8 @@ class ACSDeployerOperator(ACSDeployer):
 
     def deploy_central(self):
         self.teardown()
-        self.ensure_namespace_exists(self.central_namespace_operator)
-        self.prepare_namespace(self.central_namespace_operator)
+        self.ensure_namespace_exists(self.central_namespace)
+        self.prepare_namespace(self.central_namespace)
         # Ensure CRDs are present before creating Central CR
         self.ensure_crds_installed()
         self.create_central_cr()
@@ -89,8 +79,8 @@ class ACSDeployerOperator(ACSDeployer):
 
     def deploy_secured_cluster(self):
         self.teardown("secured-cluster")
-        self.ensure_namespace_exists(self.secured_cluster_namespace_operator)
-        self.prepare_namespace(self.secured_cluster_namespace_operator)
+        self.ensure_namespace_exists(self.secured_cluster_namespace)
+        self.prepare_namespace(self.secured_cluster_namespace)
         self.create_secured_cluster_cr("")
 
     def deploy_component(self, component: str):
@@ -115,7 +105,7 @@ class ACSDeployerOperator(ACSDeployer):
             "kind": "Central",
             "metadata": {
                 "name": "stackrox-central-services",
-                "namespace": self.central_namespace_operator,
+                "namespace": self.central_namespace,
                 "labels": {"app": "stackrox-central"},
             },
             "spec": {
@@ -132,7 +122,6 @@ class ACSDeployerOperator(ACSDeployer):
             },
         }
 
-        # f"Creating Central Custom Resource in namespace: {self.central_namespace_operator}",
         subprocess.run(
             [self.kubectl, "apply", "-f", "-"],
             input=yaml.dump(central_cr),
@@ -140,11 +129,11 @@ class ACSDeployerOperator(ACSDeployer):
             capture_output=True,
             text=True,
         )
-        self.wait_for_ready_deployment(self.central_namespace_operator, "central")
-        self.wait_for_central_endpoint(self.central_namespace_operator)
+        self.wait_for_ready_deployment(self.central_namespace, "central")
+        self.wait_for_central_endpoint(self.central_namespace)
         # Fetch Central CA certificate and persist to temp file
         try:
-            self.fetch_central_ca_cert(self.central_namespace_operator)
+            self.fetch_central_ca_cert(self.central_namespace)
         except Exception as e:
             self.logger.print_with_timestamp(f"Warning: failed to fetch central CA: {e}", style="bold yellow")
 
@@ -154,12 +143,12 @@ class ACSDeployerOperator(ACSDeployer):
             cluster_name = f"sensor-{random.randint(1000, 9999)}"  # noqa: S311
         self.cluster_name = cluster_name
         crs_content = self.generate_crs(cluster_name)
-        self.apply_yaml_to_namespace(self.secured_cluster_namespace_operator, crs_content)
+        self.apply_yaml_to_namespace(self.secured_cluster_namespace, crs_content)
 
         # Determine central endpoint
         if not self.central_endpoint:
             # Try to get Central endpoint from service/LoadBalancer
-            self.central_endpoint = self.get_central_endpoint(self.central_namespace_operator)
+            self.central_endpoint = self.get_central_endpoint(self.central_namespace)
 
         # Create SecuredCluster CR specification
         secured_cluster_cr = {
@@ -167,7 +156,7 @@ class ACSDeployerOperator(ACSDeployer):
             "kind": "SecuredCluster",
             "metadata": {
                 "name": "stackrox-secured-cluster-services",
-                "namespace": self.secured_cluster_namespace_operator,
+                "namespace": self.secured_cluster_namespace,
                 "labels": {"app": "stackrox-secured-cluster"},
             },
             "spec": {
@@ -190,7 +179,7 @@ class ACSDeployerOperator(ACSDeployer):
             text=True,
         )
 
-        self.wait_for_ready_deployment(self.central_namespace_operator, "central")
+        self.wait_for_ready_deployment(self.central_namespace, "central")
         self.logger.print_with_timestamp("📋 SecuredCluster CR details:", style="bold cyan")
         self.logger.print_with_timestamp(f"  • Cluster Name: {cluster_name}", style="dim cyan")
         self.logger.print_with_timestamp(f"  • Central Endpoint: {self.central_endpoint}", style="dim cyan")
@@ -203,7 +192,7 @@ class ACSDeployerOperator(ACSDeployer):
             f"[bold green]✓ Central Deployment Complete[/bold green]\n\n"
             f"[bold]API Endpoint:     [/bold] {self.central_endpoint}\n"
             f"[bold]Admin Password:   [/bold] {self.central_password}\n"
-            f"[bold]Namespace:        [/bold] {self.central_namespace_operator}\n"
+            f"[bold]Namespace:        [/bold] {self.central_namespace}\n"
             f"[bold]Deployment Mode:  [/bold] Operator\n"
             f"[bold]Log File:         [/bold] {self.log_file}",
             title="[bold green]Central Deployment Success[/bold green]",
@@ -219,78 +208,14 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
         with open(self.central_env_file, "w") as f:
             f.write(env_content)
 
-
-
-    def teardown_central(self):
-        namespace = self.central_namespace_operator
-        self.logger.print_with_timestamp(
-            f"🗑️  Tearing down Central operator resources in: {namespace}", style="bold cyan"
-        )
-
-        result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
-        if result.returncode != 0:
-            self.logger.print_with_timestamp(
-                f"Namespace '{namespace}' does not exist - nothing to teardown", style="dim yellow"
-            )
-            return
-
-        # Delete Central CR.
-        subprocess.run(
-            [
-                self.kubectl,
-                "-n",
-                namespace,
-                "delete",
-                "central",
-                "--all",
-                "--ignore-not-found=true",
-                "--timeout=120s",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.teardown_namespace(namespace)
-
-    def teardown_secured_cluster(self):
-        namespace = self.secured_cluster_namespace_operator
-        self.logger.print_with_timestamp(
-            f"🗑️  Tearing down SecuredCluster operator resources in: {namespace}", style="bold cyan"
-        )
-
-        result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
-        if result.returncode != 0:
-            self.logger.print_with_timestamp(
-                f"Namespace '{namespace}' does not exist - nothing to teardown", style="dim yellow"
-            )
-            return
-
-        # Delete SecuredCluster CR.
-        subprocess.run(
-            [
-                self.kubectl,
-                "delete",
-                "securedcluster",
-                "--all",
-                "-n",
-                namespace,
-                "--ignore-not-found=true",
-                "--timeout=120s",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.teardown_namespace(namespace)
-
     def has_operator_deployment(self, component: str) -> bool:
         """Check if operator deployment exists for the given component"""
         try:
             if component == "central":
-                namespace = self.central_namespace_operator
+                namespace = self.central_namespace
                 cr_type = "central"
             elif component == "secured-cluster":
-                namespace = self.secured_cluster_namespace_operator
+                namespace = self.secured_cluster_namespace
                 cr_type = "securedcluster"
             elif component in ["all", "both"]:
                 # Check both
@@ -427,7 +352,10 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             operator_tag_for_image = self.operator_tag
             bundle_image = f"quay.io/rhacs-eng/stackrox-operator-bundle:{operator_tag_for_image}"
             self.logger.print_with_timestamp(
-                f"Missing CRDs detected ({', '.join(missing)}); fetching bundle {bundle_image}", style="bold yellow"
+                f"Missing CRDs detected ({', '.join(missing)})", style="bold yellow"
+            )
+            self.logger.print_with_timestamp(
+                f"Fetching bundle {bundle_image}", style="bold yellow"
             )
             bundle_dir = self.download_and_extract_operator_bundle(bundle_image)
             crd_files = self.identify_crd_files(bundle_dir)

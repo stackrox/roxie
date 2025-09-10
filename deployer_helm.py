@@ -209,7 +209,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
                 f"[bold]Cluster Name:     [/bold] {cluster_name}\n"
                 f"[bold]Namespace:        [/bold] {self.secured_cluster_namespace}\n"
                 f"[bold]Central Endpoint: [/bold] central.{self.central_namespace}.svc:443\n"
-                f"[bold]Image Tag:        [/bold] {main_image_tag or 'default'}\n",
+                f"[bold]Image Tag:        [/bold] {main_image_tag or 'default'}",
                 title="[bold cyan]ACS Secured Cluster Deployment Plan[/bold cyan]",
                 border_style="cyan",
             )

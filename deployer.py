@@ -45,11 +45,12 @@ class ACSDeployer:
         self.image_cache = ImageCache(self.logger)
         self.central_env_file = os.environ.get("ROXIE_ENVRC", os.path.expanduser("~/.envrc.roxie"))
         self.central_password = os.environ.get("ROX_ADMIN_PASSWORD") or self.generate_password()
+        self.rox_ca_cert_file = os.environ.get("ROX_CA_CERT_FILE", None)
         self.kubectl = os.environ.get("ORCH_CMD", "kubectl")
-        self.central_namespace = "acs-central-helm"
-        self.secured_cluster_namespace = "acs-sensor-helm"
-        self.central_namespace_operator = "acs-central"
-        self.secured_cluster_namespace_operator = "acs-sensor"
+        self.central_namespace = "acs-central"
+        self.secured_cluster_namespace = "acs-sensor"
+        self.central_namespace = "acs-central"
+        self.secured_cluster_namespace = "acs-sensor"
         self.main_image_tag = self.lookup_main_image_tag()
         self.operator_tag = self.convert_main_tag_to_operator_tag(self.main_image_tag)
         self.central_endpoint = os.environ.get("API_ENDPOINT", "")
@@ -443,8 +444,8 @@ class ACSDeployer:
                 [
                     self.central_namespace,
                     self.secured_cluster_namespace,
-                    self.central_namespace_operator,
-                    self.secured_cluster_namespace_operator,
+                    self.central_namespace,
+                    self.secured_cluster_namespace,
                 ],
                 wait=False,
             )
@@ -454,8 +455,8 @@ class ACSDeployer:
                 [
                     self.central_namespace,
                     self.secured_cluster_namespace,
-                    self.central_namespace_operator,
-                    self.secured_cluster_namespace_operator,
+                    self.central_namespace,
+                    self.secured_cluster_namespace,
                 ],
                 timeout_seconds=600,
             )
@@ -465,7 +466,6 @@ class ACSDeployer:
             raise
 
     def teardown(self, component: str = "both"):
-        self.logger.print_with_timestamp("🗑️  Tearing down operator-managed resources", style="bold cyan")
         if component == "central":
             self.teardown_central()
         elif component == "secured-cluster":
@@ -477,9 +477,9 @@ class ACSDeployer:
             raise RoxieError(f"Unknown component for operator teardown: {component}")
 
     def teardown_central(self):
-        namespace = self.central_namespace_operator
+        namespace = self.central_namespace
         self.logger.print_with_timestamp(
-            f"🗑️  Tearing down Central operator resources in: {namespace}", style="bold cyan"
+            f"🗑️  Tearing down resources in: {namespace}", style="bold cyan"
         )
 
         result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
@@ -508,9 +508,9 @@ class ACSDeployer:
         self.teardown_namespace(namespace)
 
     def teardown_secured_cluster(self):
-        namespace = self.secured_cluster_namespace_operator
+        namespace = self.secured_cluster_namespace
         self.logger.print_with_timestamp(
-            f"🗑️  Tearing down SecuredCluster operator resources in: {namespace}", style="bold cyan"
+            f"🗑️  Tearing down resources in: {namespace}", style="bold cyan"
         )
 
         result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
@@ -587,7 +587,7 @@ class ACSDeployer:
         secret = {
             "apiVersion": "v1",
             "kind": "Secret",
-            "metadata": {"namespace": self.central_namespace_operator, "name": name},
+            "metadata": {"namespace": self.central_namespace, "name": name},
             "stringData": {"password": self.central_password},
         }
         subprocess.run(
@@ -615,10 +615,12 @@ class ACSDeployer:
         max_attempts = 3
         for attempt_number in range(1, max_attempts + 1):
             try:
+                env = {**os.environ, "ROX_ADMIN_PASSWORD": self.central_password}
+                if self.rox_ca_cert_file:
+                    env["ROX_CA_CERT_FILE"] = self.rox_ca_cert_file
                 result = subprocess.run(
                     [
                         "roxctl",
-                        "--insecure-skip-tls-verify",
                         "-e",
                         self.central_endpoint,
                         "central",
@@ -630,7 +632,7 @@ class ACSDeployer:
                     capture_output=True,
                     text=True,
                     check=True,
-                    env={**os.environ, "ROX_ADMIN_PASSWORD": self.central_password},
+                    env=env,
                 )
                 return result.stdout.strip()
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
@@ -687,7 +689,7 @@ class ACSDeployer:
         """Show success panel and write environment file for operator SecuredCluster deployment"""
         success_panel = Panel.fit(
             f"[bold green]✓ Secured Cluster Deployment Complete[/bold green]\n\n"
-            f"[bold]Namespace:        [/bold] {self.secured_cluster_namespace_operator}\n"
+            f"[bold]Namespace:        [/bold] {self.secured_cluster_namespace}\n"
             f"[bold]Cluster Name:     [/bold] {self.cluster_name}\n"
             f"[bold]Deployment Mode:  [/bold] Operator\n"
             f"[bold]Central Endpoint: [/bold] {self.central_endpoint}\n"
@@ -897,8 +899,7 @@ class ACSDeployer:
             finally:
                 os.close(fd)
 
-            # Store on the instance for downstream consumers (e.g., subshell)
-            self.ca_cert_file = path  # type: ignore[attr-defined]
+            self.rox_ca_cert_file = path  # type: ignore[attr-defined]
             return path
 
         except subprocess.CalledProcessError as e:

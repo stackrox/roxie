@@ -10,7 +10,9 @@ Roxie is a fast, developer-friendly CLI to deploy and manage Red Hat Advanced Cl
 - No fiddling with init bundles or CRS: roxie generates and handles these bits for you.
 - Operator by default: deploys the ACS Operator without requiring OpenShift/OLM. Helm is also supported.
 - Ability to replace operator versions (up- and downgrading).
-- Automated ACS teardowns.
+- Automated fast ACS teardowns.
+- Handles Quay image pull secrets automatically.
+- Verifies image existence before attempting deployment.
 - Helm charts supported: use `--helm` to deploy Central and Secured Cluster via Helm.
 - Reproducible environment with Nix: portable, pinned dependencies; no host pollution.
 
