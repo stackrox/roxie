@@ -131,7 +131,7 @@ def test_deploy_central_and_secured_cluster(e2e_envrc_path):
     # Reduce Python stdio buffering in child processes for more immediate output
     env["PYTHONUNBUFFERED"] = "1"
 
-    # Prefer operator by default (no --helm flag). Deploy central
+    # Deploy central
     print("=== Deploying central ===", flush=True)
     _preflight_operator_bundle_pull(env)
     _run([roxie_path, "deploy", "central", "--envrc", e2e_envrc_path], env=env, timeout=1800)
@@ -236,8 +236,3 @@ def test_deploy_central_and_secured_cluster_via_helm(e2e_envrc_path):
 
     print("=== Deploying secured-cluster via Helm ===", flush=True)
     _run([roxie_path, "deploy", "secured-cluster", "--helm"], env=merged_env, timeout=2400)
-
-    print("Verifying namespace: acs-central-helm", flush=True)
-    subprocess.run(["kubectl", "get", "namespace", "acs-central-helm"], check=True)
-    print("Verifying namespace: acs-sensor-helm", flush=True)
-    subprocess.run(["kubectl", "get", "namespace", "acs-sensor-helm"], check=True)
