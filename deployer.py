@@ -71,10 +71,12 @@ class ACSDeployer:
     def lookup_main_image_tag(self) -> str:
         """Lookup main image tag from the environment"""
         main_image_tag = os.environ.get("MAIN_IMAGE_TAG", "").strip()
-        if not main_image_tag:
-            main_image_tag = self.lookup_latest_tag_from_stackrox_git_root()
-        if not main_image_tag:
-            return default_main_image_tag
+        if main_image_tag:
+            return main_image_tag
+        main_image_tag = self.lookup_latest_tag_from_stackrox_git_root()
+        if main_image_tag:
+            return main_image_tag
+        return default_main_image_tag
 
     def get_timestamp(self) -> str:
         """Get relative timestamp since start"""
