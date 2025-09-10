@@ -537,7 +537,7 @@ class ACSDeployer:
             text=True,
         )
         self.teardown_namespace(namespace)
- 
+
     def teardown_namespace(self, namespace: str):
         # Force delete workloads
         try:

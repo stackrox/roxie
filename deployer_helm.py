@@ -1,6 +1,5 @@
 import subprocess
 import tempfile
-from typing import List, Optional
 
 from rich.panel import Panel
 
@@ -10,12 +9,12 @@ from deployer import ACSDeployer
 class ACSDeployerHelm(ACSDeployer):
     """Helm-specific deployer that implements Helm deployment/teardown."""
 
-    def deploy(self, component: str = "both", helm_args: Optional[List[str]] = None, input_yaml: str = ""):
+    def deploy(self, component: str = "both", helm_args: list[str] | None = None, input_yaml: str = ""):
         self.logger.print_with_timestamp("Initiating Helm-based deployment of ACS", style="bold cyan")
         self.deploy_component(component, helm_args, input_yaml)
 
     def deploy_component(
-        self, component: str = "both", helm_args: Optional[List[str]] = None, input_yaml: str = ""
+        self, component: str = "both", helm_args: list[str] | None = None, input_yaml: str = ""
     ):
         if helm_args is None:
             helm_args = []
@@ -31,7 +30,7 @@ class ACSDeployerHelm(ACSDeployer):
             self.logger.error("Error: central or secured-cluster?")
             raise ValueError("FIXME")
 
-    def deploy_central(self, helm_args: List[str], input_yaml: str = ""):
+    def deploy_central(self, helm_args: list[str], input_yaml: str = ""):
         with tempfile.TemporaryDirectory() as central_chart_dir:
             default_settings = f"""
 central:
@@ -199,7 +198,7 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             with open(self.central_env_file, "w") as f:
                 f.write(env_content)
 
-    def deploy_secured_cluster(self, helm_args: List[str], input_yaml: str = ""):
+    def deploy_secured_cluster(self, helm_args: list[str], input_yaml: str = ""):
         main_image_tag = self.main_image_tag
         with tempfile.TemporaryDirectory() as chart_dir:
             import random
