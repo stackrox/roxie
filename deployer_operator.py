@@ -200,14 +200,6 @@ class ACSDeployerOperator(ACSDeployer):
         )
         self.console.print(success_panel)
 
-        env_content = f"""
-export API_ENDPOINT="{self.central_endpoint}"
-export ROX_ADMIN_PASSWORD="{self.central_password}"
-"""
-
-        with open(self.central_env_file, "w") as f:
-            f.write(env_content)
-
     def has_operator_deployment(self, component: str) -> bool:
         """Check if operator deployment exists for the given component"""
         try:
@@ -487,7 +479,7 @@ metadata:
         except Exception as e:
             raise RoxieError("Failed to create ServiceAccount") from e
 
-    def create_cluster_role_from_csv(self, deployment_spec: dict):
+    def create_cluster_role_from_csv(self, deployment_spec: dict[str, Any]):
         """Create ClusterRole from CSV cluster permissions"""
         cluster_permissions = deployment_spec.get("cluster_permissions", [])
         if not cluster_permissions:
@@ -533,7 +525,7 @@ metadata:
             check=True,
         )
 
-    def create_deployment_from_csv(self, namespace: str, deployment_spec: dict):
+    def create_deployment_from_csv(self, namespace: str, deployment_spec: dict[str, Any]):
         """Create Deployment from CSV deployment specification"""
         deployments = deployment_spec.get("deployments", [])
 
@@ -973,49 +965,6 @@ metadata:
         self.apply_bundle_service_resources(bundle_dir, namespace)
         self.wait_for_operator_ready(namespace)
         self.logger.print_with_timestamp("🎉 Operator deployment completed successfully!", style="bold green")
-
-    def wait_for_operator_cleanup(self, namespace: str, timeout: int = 180):
-        """Wait for operator to clean up managed resources in namespace"""
-
-        with self.create_progress_with_timestamp(include_bar=False, transient=True) as progress:
-            task_id = progress.add_task(f"Waiting for operator cleanup in [bold]{namespace}[/bold]", total=None)
-
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                # Check for remaining pods (excluding completed jobs)
-                result = subprocess.run(
-                    [
-                        self.kubectl,
-                        "get",
-                        "pods",
-                        "-n",
-                        namespace,
-                        "--field-selector=status.phase!=Succeeded",
-                        "-o",
-                        "name",
-                    ],
-                    capture_output=True,
-                    text=True,
-                )
-
-                if result.returncode == 0:
-                    pods = [p for p in result.stdout.strip().split("\n") if p.strip()]
-                    if not pods or (len(pods) == 1 and not pods[0].strip()):
-                        progress.stop()
-                        self.logger.print_with_timestamp(
-                            f"✓ Operator cleanup completed in {namespace}", style="bold green"
-                        )
-                        return True
-
-                progress.update(task_id, advance=1)
-                time.sleep(1)
-
-        self.logger.print_with_timestamp(f"⚠️  Timeout waiting for operator cleanup in {namespace}", style="bold yellow")
-
-    def upgrade_operator(self):
-        """Upgrade the operator to the latest version"""
-        self.logger.print_with_timestamp("🔄 Upgrading operator to the latest version...", style="bold cyan")
-        self.deploy_rhacs_operator()
 
     def deploy_operator(self):
         """Deploy the ACS operator"""

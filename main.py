@@ -8,6 +8,7 @@ from subprocess import CalledProcessError
 
 from rich.console import Console
 
+from deployer import ACSDeployer
 from deployer_helm import ACSDeployerHelm
 from deployer_operator import ACSDeployerOperator
 from errors import RoxieError
@@ -68,6 +69,7 @@ def main() -> int:
     console = Console()
 
     try:
+        deployer: ACSDeployer
         if getattr(args, "helm", False):
             deployer = ACSDeployerHelm(console=console)
         else:
@@ -91,37 +93,47 @@ def main() -> int:
             deployer.deploy(args.component)
 
             # Spawn subshell only for central/both when --envrc is not used
-            if args.component in ("central", "both") and not envrc_provided:
-                shell = args.shell
-                if shell is None:
-                    shell = os.environ.get("ROXIE_USER_SHELL")
-                deployer.logger.print_with_timestamp(f"Spawning sub-shell: {shell}", style="bold cyan")
-                banner = (
-                    "\n[roxie] Entering a subshell with ACS environment variables set.\n"
-                    "\n"
-                    "[roxie] Environment is set up for talking to ACS Central. Examples:\n"
-                    "\n"
-                    "[roxie]   * roxctl central whoami\n"
-                    "[roxie]   * roxcurl /v1/clusters\n"
-                )
-                console.print(banner, style="bold cyan")
+            if args.component in ("central", "both"):
+                if envrc_provided:
+                    env_content = f"""
+export API_ENDPOINT="{deployer.central_endpoint}"
+export ROX_ENDPOINT="{deployer.central_endpoint}"
+export ROX_BASE_URL="https://{deployer.central_endpoint}"
+export ROX_ADMIN_PASSWORD="{deployer.central_password}"
+export ROX_CA_CERT_FILE="{deployer.rox_ca_cert_file}"
+"""
+                    with open(deployer.central_env_file, "w") as f:
+                        f.write(env_content)
+                else:
+                    shell = args.shell
+                    if shell is None:
+                        shell = os.environ.get("ROXIE_USER_SHELL")
+                    deployer.logger.print_with_timestamp(f"Spawning sub-shell: {shell}", style="bold cyan")
+                    banner = (
+                        "\n[roxie] Entering a subshell with ACS environment variables set.\n"
+                        "\n"
+                        "[roxie] Environment is set up for talking to ACS Central. Examples:\n"
+                        "\n"
+                        "[roxie]   * roxctl central whoami\n"
+                        "[roxie]   * roxcurl /v1/clusters\n"
+                    )
+                    console.print(banner, style="bold cyan")
 
-                if getattr(deployer, "central_endpoint", ""):
-                    env["API_ENDPOINT"] = deployer.central_endpoint
-                    env["ROX_ENDPOINT"] = deployer.central_endpoint  # For roxctl
-                    env["ROX_BASE_URL"] = f"https://{deployer.central_endpoint}"  # For roxcurl
-                if getattr(deployer, "central_password", ""):
-                    env["ROX_ADMIN_PASSWORD"] = deployer.central_password
-                ca_file = getattr(deployer, "rox_ca_cert_file", "")
-                if ca_file:
-                    env["ROX_CA_CERT_FILE"] = ca_file
-                env["ROXIE_SHELL"] = "1"
-                env["name"] = f"acs@{deployer.kube_context}"
-                subprocess.run([shell, "-i"], check=False, env=env)
+                    if getattr(deployer, "central_endpoint", ""):
+                        env["API_ENDPOINT"] = deployer.central_endpoint
+                        env["ROX_ENDPOINT"] = deployer.central_endpoint  # For roxctl
+                        env["ROX_BASE_URL"] = f"https://{deployer.central_endpoint}"  # For roxcurl
+                    if getattr(deployer, "central_password", ""):
+                        env["ROX_ADMIN_PASSWORD"] = deployer.central_password
+                    ca_file = getattr(deployer, "rox_ca_cert_file", "")
+                    if ca_file:
+                        env["ROX_CA_CERT_FILE"] = ca_file
+                    env["ROXIE_SHELL"] = "1"
+                    env["name"] = f"acs@{deployer.kube_context}"
+                    subprocess.run([shell, "-i"], check=False, env=env)
+
         elif args.command == "teardown":
             deployer.teardown(args.component)
-        elif args.command == "deploy-operator":
-            deployer.deploy_operator()
         else:
             raise RoxieError(f"Unknown command: {args.command}")
 

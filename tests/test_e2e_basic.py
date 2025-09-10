@@ -8,11 +8,7 @@ import pytest
 from dotenv import dotenv_values
 
 # Light import to reuse tag conversion logic for preflight
-try:
-    from deployer import ACSDeployer  # type: ignore
-except Exception:  # noqa: BLE001
-    ACSDeployer = None  # type: ignore
-
+from deployer import ACSDeployer
 
 pytestmark = pytest.mark.e2e
 
@@ -79,20 +75,12 @@ def _run(cmd: list[str], env: dict[str, str] | None = None, timeout: int = 900) 
 
 def _preflight_operator_bundle_pull(env: dict[str, str]) -> None:
     # Use skopeo to verify image availability (silent on success)
-    skopeo = shutil.which("skopeo")
-    if not skopeo:
-        msg = "skopeo not found; skipping e2e"
-        print(msg, flush=True)
-        pytest.skip(msg)
+    # skopeo is guaranteed to be available in the Nix environment
+    skopeo = "skopeo"
 
-    # Compute operator tag using deployer logic if available
-    operator_tag = None
-    if ACSDeployer is not None:
-        try:
-            d = ACSDeployer()  # type: ignore[call-arg]
-            operator_tag = getattr(d, "operator_tag", None)
-        except Exception:
-            operator_tag = None
+    # Compute operator tag using deployer logic
+    d = ACSDeployer(cache_enabled=False)
+    operator_tag = getattr(d, "operator_tag", None)
 
     if not operator_tag:
         # Fallback: expect override

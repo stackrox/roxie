@@ -22,7 +22,7 @@ class ACSDeployerHelm(ACSDeployer):
         if component == "central":
             self.deploy_central(helm_args, input_yaml)
         elif component == "secured-cluster":
-            self.deploy_secured_clusterhelm(helm_args, input_yaml)
+            self.deploy_secured_cluster(helm_args, input_yaml)
         elif component in ["both"]:
             self.deploy_central(helm_args, input_yaml)
             self.deploy_secured_cluster(helm_args, input_yaml)
@@ -190,13 +190,6 @@ scannerV4:
                 border_style="green",
             )
             self.console.print(success_panel)
-
-            env_content = f"""
-export API_ENDPOINT="{self.central_endpoint}"
-export ROX_ADMIN_PASSWORD="{self.central_password}"
-"""
-            with open(self.central_env_file, "w") as f:
-                f.write(env_content)
 
     def deploy_secured_cluster(self, helm_args: list[str], input_yaml: str = ""):
         main_image_tag = self.main_image_tag

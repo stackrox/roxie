@@ -116,7 +116,7 @@ class ImageCache:
 
         # Skip verification if environment variable is set
         if os.environ.get("SKIP_IMAGE_VERIFICATION", "").lower() in ("true", "1", "yes"):
-            self.log(f"Skipping image verification for {len(images)} images (SKIP_IMAGE_VERIFICATION=true)")
+            self.logger.print_with_timestamp(f"Skipping image verification for {len(images)} images (SKIP_IMAGE_VERIFICATION=true)")
             return True
 
         # Separate cached and uncached images

@@ -56,16 +56,21 @@ class ACSDeployer:
         self.central_endpoint = os.environ.get("API_ENDPOINT", "")
         self.log_file = os.environ.get("LOG_FILE", self.create_temp_log())
         self.roxctl_version = self.get_roxctl_version()
+        self.cluster_name = ""  # Will be set during secured cluster deployment
         self.logger.print_with_timestamp("🚀 ACS Deployer initialized", style="bold green")
         self.kube_context = self.get_current_context()
 
         self.logger.print_with_timestamp(f"Kubernetes context: {self.kube_context}", style="bold cyan")
 
-    def lookup_latest_tag_from_stackrox_git_root(self) -> str:
+    def deploy(self, component: str = "both") -> None:
+        """Deploy ACS components - should be implemented by subclasses"""
+        raise NotImplementedError("deploy method must be implemented by subclasses")
+
+    def lookup_latest_tag_from_stackrox_git_root(self) -> str | None:
         """Lookup latest tag from stackrox git root"""
         stackrox_git_root = os.environ.get("STACKROX_GIT_ROOT", "").strip()
         if stackrox_git_root:
-            return self.get_latest_commit_tag_from_dir(stackrox_git_root)
+            return self.get_latest_commit_tag_from_dir()
         return None
 
     def lookup_main_image_tag(self) -> str:
@@ -73,9 +78,9 @@ class ACSDeployer:
         main_image_tag = os.environ.get("MAIN_IMAGE_TAG", "").strip()
         if main_image_tag:
             return main_image_tag
-        main_image_tag = self.lookup_latest_tag_from_stackrox_git_root()
-        if main_image_tag:
-            return main_image_tag
+        latest_main_image_tag = self.lookup_latest_tag_from_stackrox_git_root()
+        if latest_main_image_tag:
+            return latest_main_image_tag
         return default_main_image_tag
 
     def get_timestamp(self) -> str:
@@ -95,9 +100,11 @@ class ACSDeployer:
             detail = ""
             try:
                 if hasattr(e, "stderr") and e.stderr:
-                    detail = f": {e.stderr.strip()}"
+                    stderr_str = e.stderr.decode() if isinstance(e.stderr, bytes) else e.stderr
+                    detail = f": {stderr_str.strip()}"
                 elif hasattr(e, "stdout") and e.stdout:
-                    detail = f": {e.stdout.strip()}"
+                    stdout_str = e.stdout.decode() if isinstance(e.stdout, bytes) else e.stdout
+                    detail = f": {stdout_str.strip()}"
             except Exception:
                 detail = ""
             raise RuntimeError(f"roxctl invocation failed: {detail}") from e
@@ -179,7 +186,7 @@ class ACSDeployer:
             # Fallback to a default value if make tag fails
             return f"latest (error: {error_msg})"
 
-    def print_with_timestamp(self, message: str, style: str = None) -> None:
+    def print_with_timestamp(self, message: str, style: str | None = None) -> None:
         """Print message with timestamp prefix"""
         timestamp = self.get_timestamp()
         if style:
@@ -585,7 +592,7 @@ class ACSDeployer:
         self.initiate_namespace_deletion([namespace], wait=False)
         self.wait_for_namespaces_deletion([namespace], timeout_seconds=600)
 
-    def apply_admin_password_secret(self, name: str):
+    def apply_admin_password_secret(self, name: str) -> None:
         secret = {
             "apiVersion": "v1",
             "kind": "Secret",
@@ -643,9 +650,9 @@ class ACSDeployer:
                 error_output = ""
                 try:
                     if hasattr(e, "stderr") and e.stderr:
-                        error_output = e.stderr
+                        error_output = e.stderr.decode() if isinstance(e.stderr, bytes) else e.stderr
                     elif hasattr(e, "stdout") and e.stdout:
-                        error_output = e.stdout
+                        error_output = e.stdout.decode() if isinstance(e.stdout, bytes) else e.stdout
                 except Exception:
                     error_output = ""
 
@@ -677,6 +684,9 @@ class ACSDeployer:
                     detail = ""
                 self.logger.error(f"CRS issuing failed{detail}")
                 raise
+
+        # This should never be reached due to the raise above, but mypy requires it
+        raise RuntimeError("Unexpected code path in generate_crs")
 
     def apply_yaml_to_namespace(self, namespace: str, crs_content: str):
         """Apply CRS content as a Kubernetes Secret for operator consumption"""
@@ -724,7 +734,7 @@ class ACSDeployer:
             )
 
             if result.returncode == 0 and result.stdout.strip():
-                return result.stdout().strip()
+                return result.stdout.strip()
 
             raise ValueError("No Central endpoint found")
 
@@ -743,7 +753,7 @@ class ACSDeployer:
                 return True
 
             # Create namespace
-            namespace = {
+            namespace_obj = {
                 "apiVersion": "v1",
                 "kind": "Namespace",
                 "metadata": {"name": namespace, "labels": {"name": namespace}},
@@ -752,7 +762,7 @@ class ACSDeployer:
             # f"Creating namespace: {namespace}"
             result = subprocess.run(
                 [self.kubectl, "apply", "-f", "-"],
-                input=yaml.dump(namespace),
+                input=yaml.dump(namespace_obj),
                 check=True,  # , encoding="utf-8"), check=True,
                 capture_output=True,
                 text=True,
@@ -761,63 +771,6 @@ class ACSDeployer:
         except Exception as e:
             self.logger.error(f"Failed to ensure namespace exists: {str(e)}")
             raise
-
-    def execute_teardown_steps(self, teardown_steps: list[dict[str, Any]], namespace: str):
-        """Execute teardown steps with proper waiting and error handling"""
-        success_count = 0
-
-        for step in teardown_steps:
-            if "wait_for_empty_namespace" in step and step["wait_for_empty_namespace"]:
-                # Special handling for waiting for operator cleanup
-                if self.wait_for_operator_cleanup(namespace):
-                    success_count += 1
-                else:
-                    self.logger.print_with_timestamp(
-                        f"⚠️  Operator cleanup timeout in {namespace}, continuing with force cleanup...",
-                        style="dim yellow",
-                    )
-            elif "command" in step:
-                # Regular command execution
-                try:
-                    subprocess.run(step["command"], capture_output=True, text=True, check=True)
-                    success_count += 1
-                except subprocess.CalledProcessError as e:
-                    # Log but continue with other cleanup steps for teardown operations
-                    self.logger.print_with_timestamp(
-                        f"⚠️  Failed: {step['description']} (continuing...) - {e}", style="dim yellow"
-                    )
-
-        # Wait for namespace deletion if we tried to delete it
-        if any("delete namespace" in step.get("description", "") for step in teardown_steps):
-            self.wait_for_namespace_deletion(namespace, timeout=120)
-
-    def wait_for_namespace_deletion(self, namespace: str, timeout: int = 120) -> bool:
-        """Wait for namespace to be completely deleted"""
-        try:
-            self.logger.print_with_timestamp(
-                f"⏳ Waiting for namespace {namespace} to be deleted...", style="bold cyan"
-            )
-
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
-
-                if result.returncode != 0:
-                    self.logger.print_with_timestamp(
-                        f"✓ Namespace {namespace} deleted successfully", style="bold green"
-                    )
-                    return True
-
-                time.sleep(1)
-
-            self.logger.print_with_timestamp(
-                f"⚠️  Timeout waiting for namespace {namespace} deletion", style="bold yellow"
-            )
-            return False
-
-        except Exception as e:
-            self.logger.error(f"Failed to wait for namespace deletion: {str(e)}")
-            return False
 
     def wait_for_ready_deployment(self, namespace: str, deployment: str, timeout: int = 800):
         """Wait for deployment to become ready"""
@@ -902,7 +855,7 @@ class ACSDeployer:
             finally:
                 os.close(fd)
 
-            self.rox_ca_cert_file = path  # type: ignore[attr-defined]
+            self.rox_ca_cert_file = path
             return path
 
         except subprocess.CalledProcessError as e:
