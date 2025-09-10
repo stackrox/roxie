@@ -211,6 +211,51 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
         with open(self.central_env_file, "w") as f:
             f.write(env_content)
 
+    def teardown_namespace(self, namespace: str):
+        # Force delete workloads
+        try:
+            subprocess.run(
+                [
+                    self.kubectl,
+                    "-n",
+                    namespace,
+                    "delete",
+                    "pods,deployments,daemonsets",
+                    "--all",
+                    "--force",
+                    "--grace-period=0",
+                    "--ignore-not-found=true",
+                    "--timeout=60s",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except Exception as e:
+            self.logger.print_with_timestamp(f"Warning: failed force-deleting workloads: {e}", style="dim yellow")
+
+        # Delete other namespaced resources
+        for args, label in [
+            (["all", "--all"], "all resources"),
+            (["secrets,configmaps", "--all"], "secrets/configmaps"),
+            (["pvc", "--all"], "PVCs"),
+        ]:
+            try:
+                subprocess.run(
+                    [self.kubectl, "-n", namespace, "delete", *args, "--ignore-not-found=true", "--timeout=120s"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            except Exception as e:
+                self.logger.print_with_timestamp(
+                    f"Warning: failed deleting {label} in {namespace}: {e}", style="dim yellow"
+                )
+
+        # Delete the namespace (async) and wait until gone
+        self.initiate_namespace_deletion([namespace], wait=False)
+        self.wait_for_namespaces_deletion([namespace], timeout_seconds=600)
+
     # Inline operator-specific teardown methods
     def teardown_operator_custom_resources(self, component: str):
         self.logger.print_with_timestamp("🗑️  Tearing down operator-managed resources", style="bold cyan")
@@ -237,52 +282,24 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             )
             return
 
-        teardown_steps: list[dict[str, Any]] = [
-            {
-                "description": f"Deleting Central CR in {namespace}",
-                "command": [
-                    self.kubectl,
-                    "delete",
-                    "central",
-                    "--all",
-                    "-n",
-                    namespace,
-                    "--ignore-not-found=true",
-                    "--timeout=300s",
-                ],
-            },
-            {"description": f"Waiting for operator cleanup in {namespace}", "wait_for_empty_namespace": True},
-            {
-                "description": f"Force deleting remaining resources in {namespace}",
-                "command": [
-                    self.kubectl,
-                    "delete",
-                    "all",
-                    "--all",
-                    "-n",
-                    namespace,
-                    "--ignore-not-found=true",
-                    "--timeout=120s",
-                ],
-            },
-            {
-                "description": f"Deleting secrets and configmaps in {namespace}",
-                "command": [
-                    self.kubectl,
-                    "delete",
-                    "secrets,configmaps",
-                    "--all",
-                    "-n",
-                    namespace,
-                    "--ignore-not-found=true",
-                ],
-            },
-            {
-                "description": f"Deleting namespace: {namespace}",
-                "command": [self.kubectl, "delete", "namespace", namespace, "--ignore-not-found=true"],
-            },
-        ]
-        self.execute_teardown_steps(teardown_steps, namespace)
+        # 1) Delete Central CR
+        subprocess.run(
+            [
+                self.kubectl,
+                "-n",
+                namespace,
+                "delete",
+                "central",
+                "--all",
+                "--ignore-not-found=true",
+                "--timeout=120s",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.teardown_namespace(namespace)
 
     def teardown_secured_cluster_operator_resources(self):
         namespace = self.secured_cluster_namespace_operator
@@ -295,53 +312,25 @@ export ROX_ADMIN_PASSWORD="{self.central_password}"
             self.logger.print_with_timestamp(
                 f"Namespace '{namespace}' does not exist - nothing to teardown", style="dim yellow"
             )
+            return
 
-        teardown_steps: list[dict[str, Any]] = [
-            {
-                "description": f"Deleting SecuredCluster CR in {namespace}",
-                "command": [
-                    self.kubectl,
-                    "delete",
-                    "securedcluster",
-                    "--all",
-                    "-n",
-                    namespace,
-                    "--ignore-not-found=true",
-                    "--timeout=300s",
-                ],
-            },
-            {"description": f"Waiting for operator cleanup in {namespace}", "wait_for_empty_namespace": True},
-            {
-                "description": f"Force deleting remaining resources in {namespace}",
-                "command": [
-                    self.kubectl,
-                    "delete",
-                    "all",
-                    "--all",
-                    "-n",
-                    namespace,
-                    "--ignore-not-found=true",
-                    "--timeout=120s",
-                ],
-            },
-            {
-                "description": f"Deleting secrets and configmaps in {namespace}",
-                "command": [
-                    self.kubectl,
-                    "delete",
-                    "secrets,configmaps",
-                    "--all",
-                    "-n",
-                    namespace,
-                    "--ignore-not-found=true",
-                ],
-            },
-            {
-                "description": f"Deleting namespace: {namespace}",
-                "command": [self.kubectl, "delete", "namespace", namespace, "--ignore-not-found=true"],
-            },
-        ]
-        self.execute_teardown_steps(teardown_steps, namespace)
+        # Delete SecuredCluster CR(s)
+        subprocess.run(
+            [
+                self.kubectl,
+                "delete",
+                "securedcluster",
+                "--all",
+                "-n",
+                namespace,
+                "--ignore-not-found=true",
+                "--timeout=120s",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.teardown_namespace(namespace)
 
     def has_operator_deployment(self, component: str) -> bool:
         """Check if operator deployment exists for the given component"""

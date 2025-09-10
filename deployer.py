@@ -310,8 +310,10 @@ class ACSDeployer:
         with self.create_progress_with_timestamp() as progress:
             task = progress.add_task(progress_msg, total=None)
 
-            start_time = time.time()
+            for namespace in namespaces:
+                self._attempt_clear_namespace_finalizers(namespace)
 
+            start_time = time.time()
             while time.time() - start_time < timeout_seconds:
                 try:
                     # Check each namespace individually
@@ -365,7 +367,7 @@ class ACSDeployer:
                                 description=f"Waiting for namespaces to be deleted ({len(existing_namespaces)} remaining)",
                             )
 
-                    time.sleep(1)  # Check every 2 seconds
+                    time.sleep(1)
 
                 except Exception:
                     # If we can't check status, assume they're being deleted
@@ -409,6 +411,29 @@ class ACSDeployer:
             self.logger.print_with_timestamp(f"✓ namespace {namespaces[0]} deleted", style="bold green")
         else:
             self.logger.print_with_timestamp("✓ All namespaces deleted", style="bold green")
+
+    def _attempt_clear_namespace_finalizers(self, namespace: str) -> None:
+        """Best-effort removal of namespace finalizers to accelerate deletion."""
+        try:
+            subprocess.run(
+                [
+                    self.kubectl,
+                    "patch",
+                    "namespace",
+                    namespace,
+                    "-p",
+                    '{"metadata":{"finalizers":[]}}',
+                    "--type=merge",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except Exception as e:
+            # Best-effort only; log and continue
+            self.logger.print_with_timestamp(
+                f"Finalizer clear attempt failed for {namespace}: {e}", style="dim yellow"
+            )
 
     def teardown_all_async(self):
         """Teardown all ACS namespaces asynchronously"""
