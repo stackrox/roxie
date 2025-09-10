@@ -43,7 +43,7 @@ def main() -> int:
         default=None,
         help=(
             "Preserve envrc behavior: write API_ENDPOINT and ROX_ADMIN_PASSWORD to a file (default path if omitted). "
-            "If not provided, roxie will spawn a subshell with these variables set and teardown on exit."
+            "If not provided, roxie will spawn a subshell with these variables set."
         ),
     )
 
