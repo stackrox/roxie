@@ -16,7 +16,7 @@ from errors import RoxieError
 
 def main() -> int:
     """Main function for roxie deployment tool"""
-    parser = argparse.ArgumentParser(description="roxie - Advanced Cluster Security Deployment Tool")
+    parser = argparse.ArgumentParser(prog="roxie", description="roxie - Advanced Cluster Security Deployment Tool")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Deploy subcommand
