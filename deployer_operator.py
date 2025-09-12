@@ -38,7 +38,7 @@ class ACSDeployerOperator(ACSDeployer):
         self.apply_crds_to_cluster(crd_files)
         self.deploy_operator_from_csv(bundle_dir)
 
-    def deploy(self, component: str = "both"):
+    def deploy(self, component: str = "both", resources: str = "default"):
         """Deploy specified component(s) using operator."""
         self.logger.print_with_timestamp("Initiating operator-based deployment of ACS", style="bold cyan")
 
@@ -65,10 +65,10 @@ class ACSDeployerOperator(ACSDeployer):
             # No operator present; just deploy it
             self.deploy_rhacs_operator()
 
-        self.deploy_component(component)
+        self.deploy_component(component, resources=resources)
         self.logger.print_with_timestamp("✓ Operator-based deployment completed successfully!", style="bold green")
 
-    def deploy_central(self):
+    def deploy_central(self, resources: str = "default"):
         self.teardown()
         self.ensure_namespace_exists(self.central_namespace)
         self.prepare_namespace(self.central_namespace)
@@ -77,23 +77,23 @@ class ACSDeployerOperator(ACSDeployer):
         self.create_central_cr()
         self.show_central_success_panel()
 
-    def deploy_secured_cluster(self):
+    def deploy_secured_cluster(self, resources: str = "default"):
         self.teardown("secured-cluster")
         self.ensure_namespace_exists(self.secured_cluster_namespace)
         self.prepare_namespace(self.secured_cluster_namespace)
         self.create_secured_cluster_cr("")
 
-    def deploy_component(self, component: str):
+    def deploy_component(self, component: str, resources: str = "default"):
         """Deploy Custom Resource for the specified component"""
         self.logger.print_with_timestamp(f"Deploying Custom Resources for: {component}", style="bold cyan")
 
         if component == "central":
-            self.deploy_central()
+            self.deploy_central(resources=resources)
         elif component == "secured-cluster":
-            self.deploy_secured_cluster()
+            self.deploy_secured_cluster(resources=resources)
         elif component == "both":
-            self.deploy_central()
-            self.deploy_secured_cluster()
+            self.deploy_central(resources=resources)
+            self.deploy_secured_cluster(resources=resources)
         self.logger.print_with_timestamp("✓ Custom Resources deployed successfully for", style="bold green")
 
     def create_central_cr(self):

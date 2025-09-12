@@ -34,6 +34,12 @@ def main() -> int:
         help="Deploy using Helm charts instead of operator (default is operator). Use -- to separate helm args.",
     )
     deploy_parser.add_argument(
+        "--resources",
+        choices=["small", "default"],
+        default="default",
+        help="Resource sizing preset for deployments (currently no-op).",
+    )
+    deploy_parser.add_argument(
         "--shell",
         help="Specify shell to spawn as sub-shell after Central deployment. If not provided, roxie will use the shell specified by the SHELL environment variable.",
     )
@@ -90,7 +96,7 @@ def main() -> int:
                         "Already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again."
                     )
 
-            deployer.deploy(args.component)
+            deployer.deploy(args.component, resources=getattr(args, "resources", "default"))
 
             # Spawn subshell only for central/both when --envrc is not used
             if args.component in ("central", "both"):

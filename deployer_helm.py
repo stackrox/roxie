@@ -1,6 +1,7 @@
 import subprocess
 import tempfile
 
+import yaml
 from rich.panel import Panel
 
 from deployer import ACSDeployer
@@ -9,29 +10,82 @@ from deployer import ACSDeployer
 class ACSDeployerHelm(ACSDeployer):
     """Helm-specific deployer that implements Helm deployment/teardown."""
 
-    def deploy(self, component: str = "both", helm_args: list[str] | None = None, input_yaml: str = ""):
+    def get_central_resources_yaml(self, resources_name: str) -> str:
+        """Return a YAML overlay for central resources preset. Currently a no-op."""
+        resources_small = {
+            "central": {
+                "resources": {
+                    "requests": {"cpu": "500m", "memory": "2Gi"},
+                    "limits": {"cpu": "2000m", "memory": "4Gi"},
+                },
+                "telemetry": {"enabled": False},
+                "exposure": {"loadBalancer": {"enabled": True}},
+                "db": {
+                    "resources": {
+                        "requests": {"cpu": "500m", "memory": "1Gi"},
+                        "limits": {"cpu": "2000m", "memory": "4Gi"},
+                    }
+                },
+            },
+            "scanner": {
+                "resources": {
+                    "requests": {"cpu": "500m", "memory": "500Mi"},
+                    "limits": {"cpu": "2000m", "memory": "2500Mi"},
+                },
+                "dbResources": {
+                    "requests": {"cpu": "400m", "memory": "512Mi"},
+                    "limits": {"cpu": "2000m", "memory": "4Gi"},
+                },
+                "replicas": 1,
+                "autoscaling": {"disable": True},
+            },
+            "scannerV4": {
+                "indexer": {"replicas": 1, "autoscaling": {"disable": True}},
+                "matcher": {"replicas": 1, "autoscaling": {"disable": True}},
+            },
+        }
+        resources = {}
+
+        if resources_name == "small":
+            resources = resources_small
+
+        resources_marshalled = yaml.safe_dump(resources, sort_keys=False)
+        return resources_marshalled
+
+    def get_secured_cluster_resources_yaml(self, resources: str) -> str:
+        """Return a YAML overlay for secured-cluster resources preset. Currently a no-op."""
+        return ""
+
+    def deploy(
+        self,
+        component: str = "both",
+        resources: str = "default",
+        helm_args: list[str] | None = None,
+        input_yaml: str = "",
+    ):
         self.logger.print_with_timestamp("Initiating Helm-based deployment of ACS", style="bold cyan")
-        self.deploy_component(component, helm_args, input_yaml)
+        self.deploy_component(component, resources, helm_args, input_yaml)
 
     def deploy_component(
-        self, component: str = "both", helm_args: list[str] | None = None, input_yaml: str = ""
+        self, component: str = "both", resources: str = "default", helm_args: list[str] | None = None, input_yaml: str = ""
     ):
         if helm_args is None:
             helm_args = []
 
         if component == "central":
-            self.deploy_central(helm_args, input_yaml)
+            self.deploy_central(resources, helm_args, input_yaml)
         elif component == "secured-cluster":
-            self.deploy_secured_cluster(helm_args, input_yaml)
+            self.deploy_secured_cluster(resources, helm_args, input_yaml)
         elif component in ["both"]:
-            self.deploy_central(helm_args, input_yaml)
-            self.deploy_secured_cluster(helm_args, input_yaml)
+            self.deploy_central(resources, helm_args, input_yaml)
+            self.deploy_secured_cluster(resources, helm_args, input_yaml)
         else:
             self.logger.error("Error: central or secured-cluster?")
             raise ValueError("FIXME")
 
-    def deploy_central(self, helm_args: list[str], input_yaml: str = ""):
+    def deploy_central(self, resources: str, helm_args: list[str], input_yaml: str = ""):
         with tempfile.TemporaryDirectory() as central_chart_dir:
+            resources_yaml = self.get_central_resources_yaml(resources)
             default_settings = f"""
 central:
     adminPassword:
@@ -116,6 +170,7 @@ scannerV4:
                 tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as default_f,
                 tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as image_f,
                 tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as input_f,
+                tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as resources_f,
             ):
                 default_f.write(default_settings)
                 default_f.flush()
@@ -126,11 +181,15 @@ scannerV4:
                 input_f.write(input_yaml)
                 input_f.flush()
 
+                resources_f.write(resources_yaml)
+                resources_f.flush()
+
                 helm_template_cmd = [
                     "helm", "template", "-n", self.central_namespace, "stackrox-central-services", central_chart_dir,
                     "-f", default_f.name,
                     "-f", image_f.name,
                     "-f", input_f.name,
+                    "-f", resources_f.name,
                 ] + helm_args
 
                 template_result = subprocess.run(helm_template_cmd, capture_output=True, text=True, check=True)
@@ -154,7 +213,9 @@ scannerV4:
 
             with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as default_f, tempfile.NamedTemporaryFile(
                 mode="w", suffix=".yaml"
-            ) as image_f, tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as input_f:
+            ) as image_f, tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as input_f, tempfile.NamedTemporaryFile(
+                mode="w", suffix=".yaml"
+            ) as resources_f:
                 default_f.write(default_settings)
                 default_f.flush()
 
@@ -164,11 +225,15 @@ scannerV4:
                 input_f.write(input_yaml)
                 input_f.flush()
 
+                resources_f.write(resources_yaml)
+                resources_f.flush()
+
                 install_cmd = [
                     "helm", "install", "-n", self.central_namespace, "stackrox-central-services", central_chart_dir,
                     "-f", default_f.name,
                     "-f", image_f.name,
                     "-f", input_f.name,
+                    "-f", resources_f.name,
                 ] + helm_args
 
                 subprocess.run(install_cmd, check=True, capture_output=True, text=True)
@@ -191,12 +256,13 @@ scannerV4:
             )
             self.console.print(success_panel)
 
-    def deploy_secured_cluster(self, helm_args: list[str], input_yaml: str = ""):
+    def deploy_secured_cluster(self, resources: str, helm_args: list[str], input_yaml: str = ""):
         main_image_tag = self.main_image_tag
         with tempfile.TemporaryDirectory() as chart_dir:
             import random
 
             cluster_name = f"sensor-{random.randint(1000, 9999)}"  # noqa: S311
+            resources_yaml = self.get_secured_cluster_resources_yaml(resources)
 
             info_panel = Panel.fit(
                 f"[bold]Cluster Name:     [/bold] {cluster_name}\n"
@@ -245,7 +311,9 @@ scannerV4DB:
                 mode="w", suffix=".yaml"
             ) as default_f, tempfile.NamedTemporaryFile(
                 mode="w", suffix=".yaml"
-            ) as image_f, tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as input_f:
+            ) as image_f, tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as input_f, tempfile.NamedTemporaryFile(
+                mode="w", suffix=".yaml"
+            ) as resources_f:
                 crs_f.write(crs_content)
                 crs_f.flush()
 
@@ -258,12 +326,16 @@ scannerV4DB:
                 input_f.write(input_yaml)
                 input_f.flush()
 
+                resources_f.write(resources_yaml)
+                resources_f.flush()
+
                 install_cmd = [
                     "helm", "install", "-n", self.secured_cluster_namespace, "stackrox-secured-cluster-services", chart_dir,
                     "--set-file", f"crs.file={crs_f.name}",
                     "-f", default_f.name,
                     "-f", image_f.name,
                     "-f", input_f.name,
+                    "-f", resources_f.name,
                 ] + helm_args
 
                 try:
