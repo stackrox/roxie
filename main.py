@@ -122,6 +122,9 @@ export ROX_CA_CERT_FILE="{deployer.rox_ca_cert_file}"
                         "\n"
                         "[roxie]   * roxctl central whoami\n"
                         "[roxie]   * roxcurl /v1/clusters\n"
+                        "\n"
+                        f"[roxie] Central UI: https://{deployer.central_endpoint} (username: admin, password: see $ROX_ADMIN_PASSWORD)\n"
+                        "\n"
                     )
                     console.print(banner, style="bold cyan")
 
