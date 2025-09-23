@@ -21,6 +21,9 @@ Roxie is a fast, developer-friendly CLI to deploy and manage Red Hat Advanced Cl
 Prerequisites:
 - Nix with flakes enabled (recommended). New to Nix? See the quick start in the Determinate Systems installer: https://install.determinate.systems/nix
 - `kubectl` configured to point at your target cluster
+- The `roxie` branch forked and cloned to your local machine
+- The `roxctl` CLI installed
+
 
 Get help:
 ```bash
