@@ -86,8 +86,9 @@ class DockerAuth:
                 helper_result = self.invoke_cred_helper(cred_helper, registry)
                 return self.format_cred_helper_result(helper_result)
 
-        if isinstance(auths[registry], str):
-            return auths[registry]
+        registry_auth = auths[registry]
+        if isinstance(registry_auth, str):
+            return registry_auth
 
         return ""
 
@@ -95,7 +96,8 @@ class DockerAuth:
         """Create Kubernetes pull secret YAML"""
         encoded_auth = self.get_encoded_docker_auth()
         docker_config = {"auths": {registry: {"auth": encoded_auth}}}
-        encoded_config = base64.b64encode(json.dumps(docker_config)).encode()
+        docker_config_json = json.dumps(docker_config)
+        encoded_config = base64.b64encode(docker_config_json.encode()).decode()
         secret = {
             "apiVersion": "v1",
             "kind": "Secret",
@@ -108,4 +110,5 @@ class DockerAuth:
                 ".dockerconfigjson": encoded_config,
             },
         }
-        return yaml.dump(secret)
+        secret_yaml: str = yaml.dump(secret)
+        return secret_yaml
