@@ -141,16 +141,22 @@ export ROX_CA_CERT_FILE="{deployer.rox_ca_cert_file}"
         console.print("\nOperation cancelled by user", style="bold yellow")
         return 1
     except CalledProcessError as e:
-        console.print(f"[bold red]{e}[/bold red]")
+        console.print(f"Error: {str(e)}", style="bold red")
+        console.print_exception()
         if e.stderr:
-            console.print(f"[dim]stderr: {e.stderr}[/dim]")
+            stderr = e.stderr.decode() if isinstance(e.stderr, bytes | bytearray) else e.stderr
+            console.print(f"[dim]Command stderr:\n{stderr}[/dim]")
         return 1
     except RoxieError as e:
         console.print(f"[bold red]{e}[/bold red]")
+        stderr = getattr(e, "stderr", None)
+        if stderr:
+            stderr = stderr.decode() if isinstance(stderr, bytes | bytearray) else stderr
+            console.print(f"[dim]Command stderr:\n{stderr}[/dim]")
         return 1
     except Exception as e:
         console.print(f"Unexpected error: {str(e)}", style="bold red")
-        console.print_exception()  # rich traceback
+        console.print_exception()
         return 1
     return 0
 

@@ -212,19 +212,19 @@ class ACSDeployer:
 
     def prepare_namespace(self, namespace: str):
         """Prepare Kubernetes namespace with required resources"""
-        # Create pull secret using Python function
         try:
             pull_secret_yaml = self.docker_auth.create_pull_secret_yaml(namespace)
-            # f"Applying pull secret to {namespace}",
             subprocess.run(
                 [self.kubectl, "-n", namespace, "apply", "-f", "-"],
                 input=pull_secret_yaml.encode("utf-8"),
                 capture_output=True,
                 check=True,
             )
-        except Exception as e:
-            self.logger.error(f"Failed to create pull secret: {str(e)}")
-            return False
+        except subprocess.CalledProcessError as e:
+            raise RoxieError(
+                f"Failed to create image pull secrets in namespace '{namespace}'",
+                stderr=e.stderr,
+            ) from e
 
     def namespace_exist(self, namespace: str) -> bool:
         """Check if Helm release doesn't exist"""
