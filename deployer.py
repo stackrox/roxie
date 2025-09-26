@@ -30,8 +30,10 @@ from errors import RoxieError
 from helpers import TimestampColumn
 from image_cache import ImageCache
 from logger import Logger
+from port_forward import PortForwardManager
 
 default_main_image_tag = "4.8.2"
+
 
 class ACSDeployer:
     """Deploys Advanced Cluster Security (ACS) using Kubernetes and Helm"""
@@ -47,6 +49,12 @@ class ACSDeployer:
         self.central_password = os.environ.get("ROX_ADMIN_PASSWORD") or self.generate_password()
         self.rox_ca_cert_file = os.environ.get("ROX_CA_CERT_FILE", None)
         self.kubectl = os.environ.get("ORCH_CMD", "kubectl")
+        # Whether to enable subshell-tied kubectl port-forward for Central
+        self.port_forwarding_enabled: bool = False
+        # Exposure mode for Central (e.g., 'loadbalancer', 'none')
+        self.exposure: str = "loadbalancer"
+        # Port-forward manager
+        self.port_forward = PortForwardManager(self.kubectl, self.logger)
         self.central_namespace = "acs-central"
         self.secured_cluster_namespace = "acs-sensor"
         self.central_namespace = "acs-central"
@@ -62,8 +70,11 @@ class ACSDeployer:
 
         self.logger.print_with_timestamp(f"Kubernetes context: {self.kube_context}", style="bold cyan")
 
-    def deploy(self, component: str = "both") -> None:
-        """Deploy ACS components - should be implemented by subclasses"""
+    def deploy(self, component: str, resources: str, exposure: str) -> None:
+        """Deploy ACS components - should be implemented by subclasses.
+
+        resources is a preset name (e.g., "default", "small"). Implementations may ignore it.
+        """
         raise NotImplementedError("deploy method must be implemented by subclasses")
 
     def lookup_latest_tag_from_stackrox_git_root(self) -> str | None:
@@ -234,10 +245,18 @@ class ACSDeployer:
         return result.returncode == 0
 
     def wait_for_central_endpoint(self, namespace: str):
-        """Wait for LoadBalancer IP and store endpoint"""
+        """Wait for Central endpoint and store it.
+
+        For exposure 'none', this function does not establish connectivity; callers should
+        set up port-forwarding beforehand if needed.
+        """
+
+        if self.exposure == "none":
+            # Nothing to wait for at the Service level; assume caller has established endpoint
+            return
 
         with self.create_progress_with_timestamp(include_bar=True, transient=True) as progress:
-            task = progress.add_task("Waiting for LoadBalancer IP", total=120)
+            task = progress.add_task("Waiting for Central IP", total=120)
 
             for _i in range(30):
                 try:
@@ -275,6 +294,47 @@ class ACSDeployer:
 
             progress.stop()
             raise RoxieError("Timeout waiting for LoadBalancer IP")
+
+    def start_central_port_forward(
+        self, namespace: str, service_name: str | None = None, remote_port: int = 443
+    ) -> None:
+        """Start a kubectl port-forward to Central service and set central_endpoint to localhost.
+
+        If service_name is not provided, it is derived from exposure:
+        - exposure == "none" -> service "central"
+        - otherwise -> service "central-loadbalancer"
+        """
+        if service_name is None:
+            service_name = "central" if self.exposure == "none" else "central-loadbalancer"
+        endpoint = self.port_forward.start(namespace, service_name, remote_port=remote_port, preferred_local_port=8443)
+        self.central_endpoint = endpoint
+
+    def stop_central_port_forward(self) -> None:
+        """Stop the active port-forward if running."""
+        self.port_forward.stop()
+
+    # --- Convenience defaults for local toy clusters (e.g., kind) ---
+    def is_kind_cluster(self) -> bool:
+        """Heuristic: context name starting with 'kind' means a kind cluster."""
+        try:
+            return str(self.kube_context).lower().startswith("kind")
+        except Exception:
+            return False
+
+    def apply_convenience_defaults(self, resources: str, exposure: str) -> tuple[str, str]:
+        """If running against a kind-like cluster, prefer small/no-LB/port-forwarding.
+
+        Returns possibly adjusted (resources, exposure). Also toggles port_forwarding_enabled.
+        """
+        if self.is_kind_cluster():
+            if exposure != "none" or resources != "small" or not self.port_forwarding_enabled:
+                self.logger.print_with_timestamp(
+                    "Detected kind cluster: using --resources=small --exposure=none with port-forwarding",
+                    style="bold yellow",
+                )
+            self.port_forwarding_enabled = True
+            return "small", "none"
+        return resources, exposure
 
     def get_current_context(self) -> str:
         """Get current kubectl context"""
@@ -418,7 +478,7 @@ class ACSDeployer:
 
         # Success message
         if len(namespaces) == 1:
-            self.logger.print_with_timestamp(f"✓ namespace {namespaces[0]} deleted", style="bold green")
+            self.logger.print_with_timestamp(f"✓ Namespace {namespaces[0]} deleted", style="bold green")
         else:
             self.logger.print_with_timestamp("✓ All namespaces deleted", style="bold green")
 
@@ -441,9 +501,7 @@ class ACSDeployer:
             )
         except Exception as e:
             # Best-effort only; log and continue
-            self.logger.print_with_timestamp(
-                f"Finalizer clear attempt failed for {namespace}: {e}", style="dim yellow"
-            )
+            self.logger.print_with_timestamp(f"Finalizer clear attempt failed for {namespace}: {e}", style="dim yellow")
 
     def teardown_all_async(self):
         """Teardown all ACS namespaces asynchronously"""
@@ -486,24 +544,19 @@ class ACSDeployer:
             raise RoxieError(f"Unknown component for operator teardown: {component}")
 
     def teardown_central(self):
-        namespace = self.central_namespace
-        self.logger.print_with_timestamp(
-            f"🗑️  Tearing down resources in: {namespace}", style="bold cyan"
+        result = subprocess.run(
+            [self.kubectl, "get", "namespace", self.central_namespace], capture_output=True, text=True
         )
-
-        result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
         if result.returncode != 0:
-            self.logger.print_with_timestamp(
-                f"Namespace '{namespace}' does not exist - nothing to teardown", style="dim yellow"
-            )
             return
 
-        # Try to delete Central CR.
+        self.logger.print_with_timestamp(f"🗑️  Tearing down resources in: {self.central_namespace}", style="bold cyan")
+
         subprocess.run(
             [
                 self.kubectl,
                 "-n",
-                namespace,
+                self.central_namespace,
                 "delete",
                 "central",
                 "--all",
@@ -514,22 +567,18 @@ class ACSDeployer:
             capture_output=True,
             text=True,
         )
-        self.teardown_namespace(namespace)
+        self.teardown_namespace(self.central_namespace)
 
     def teardown_secured_cluster(self):
-        namespace = self.secured_cluster_namespace
-        self.logger.print_with_timestamp(
-            f"🗑️  Tearing down resources in: {namespace}", style="bold cyan"
+        result = subprocess.run(
+            [self.kubectl, "get", "namespace", self.secured_cluster_namespace], capture_output=True, text=True
         )
-
-        result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
         if result.returncode != 0:
-            self.logger.print_with_timestamp(
-                f"Namespace '{namespace}' does not exist - nothing to teardown", style="dim yellow"
-            )
             return
 
-        # Try to delete SecuredCluster CR.
+        self.logger.print_with_timestamp(
+            f"🗑️  Tearing down resources in: {self.secured_cluster_namespace}", style="bold cyan"
+        )
         subprocess.run(
             [
                 self.kubectl,
@@ -537,7 +586,7 @@ class ACSDeployer:
                 "securedcluster",
                 "--all",
                 "-n",
-                namespace,
+                self.secured_cluster_namespace,
                 "--ignore-not-found=true",
                 "--timeout=120s",
             ],
@@ -545,7 +594,7 @@ class ACSDeployer:
             capture_output=True,
             text=True,
         )
-        self.teardown_namespace(namespace)
+        self.teardown_namespace(self.secured_cluster_namespace)
 
     def teardown_namespace(self, namespace: str):
         # Force delete workloads
@@ -619,7 +668,7 @@ class ACSDeployer:
             "eof",
             "bad gateway",
             "service unavailable",
-            "context deadline exceeded"
+            "context deadline exceeded",
         ]
 
         max_attempts = 3
@@ -698,6 +747,20 @@ class ACSDeployer:
             check=True,
         )
 
+    def show_central_success_panel(self):
+        """Show success panel and write environment file for operator central deployment"""
+        success_panel = Panel.fit(
+            f"[bold green]✓ Central Deployment Complete[/bold green]\n\n"
+            f"[bold]API Endpoint:     [/bold] {self.central_endpoint}\n"
+            f"[bold]Admin Password:   [/bold] {self.central_password}\n"
+            f"[bold]Namespace:        [/bold] {self.central_namespace}\n"
+            f"[bold]Deployment Mode:  [/bold] Operator\n"
+            f"[bold]Log File:         [/bold] {self.log_file}",
+            title="[bold green]Central Deployment Success[/bold green]",
+            border_style="green",
+        )
+        self.console.print(success_panel)
+
     def show_secured_cluster_success_panel(self):
         """Show success panel and write environment file for operator SecuredCluster deployment"""
         success_panel = Panel.fit(
@@ -775,7 +838,7 @@ class ACSDeployer:
     def wait_for_ready_deployment(self, namespace: str, deployment: str, timeout: int = 800):
         """Wait for deployment to become ready"""
         with self.create_progress_with_timestamp(include_bar=True) as progress:
-            task = progress.add_task("Waiting for Central deployment readiness", total=timeout)
+            task = progress.add_task(f"Waiting for {deployment} deployment readiness", total=timeout)
 
             start_time = time.time()
             steps_progressed = 0

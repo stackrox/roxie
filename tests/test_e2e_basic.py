@@ -14,6 +14,15 @@ pytestmark = pytest.mark.e2e
 
 main_image_tag = "4.8.2"
 
+common_deploy_args = ["--port-forwarding", "--exposure=none", "--resources=small"]
+
+def get_repo_root() -> str:
+    file_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(file_dir, os.pardir))
+    return repo_root
+
+repo_root = get_repo_root()
+roxie_path = os.path.join(repo_root, "bin", "roxie")
 
 def _require_binary(name: str) -> None:
     if shutil.which(name) is None:
@@ -44,7 +53,8 @@ def e2e_startup():
         os.environ["MAIN_IMAGE_TAG"] = main_image_tag
     ctx = _require_kube_context()
     print(f"Using kubectl context: {ctx}")
-
+    if not os.path.exists(roxie_path):
+        pytest.skip("bin/roxie not found; skipping e2e")
 
 @pytest.fixture(scope="module")
 def e2e_envrc_path():
@@ -115,15 +125,12 @@ def _load_envrc_env(path: str) -> dict[str, str]:
     values = dotenv_values(expanded)
     return {k: v for k, v in values.items() if v is not None}
 
+def maybe_skip_operator_test():
+    if os.environ.get("SKIP_OPERATOR_TESTS"):
+        pytest.skip("SKIP_OPERATOR_TESTS")
 
 def test_deploy_central_and_secured_cluster(e2e_envrc_path):
-    repo_root = os.path.dirname(os.path.abspath(__file__))
-    # tests/ -> project root
-    repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
-
-    roxie_path = os.path.join(repo_root, "bin", "roxie")
-    if not os.path.exists(roxie_path):
-        pytest.skip("bin/roxie not found; skipping e2e")
+    maybe_skip_operator_test()
 
     env = os.environ.copy()
     # Force roxie to use nix develop for e2e to ensure dependencies are present
@@ -134,7 +141,7 @@ def test_deploy_central_and_secured_cluster(e2e_envrc_path):
     # Deploy central
     print("=== Deploying central ===", flush=True)
     _preflight_operator_bundle_pull(env)
-    _run([roxie_path, "deploy", "central", "--envrc", e2e_envrc_path], env=env, timeout=1800)
+    _run([roxie_path, "deploy", "central", "--envrc", e2e_envrc_path] + common_deploy_args, env=env, timeout=1800)
 
     merged_env = env.copy()
     envrc_env = _load_envrc_env(e2e_envrc_path)
@@ -143,7 +150,7 @@ def test_deploy_central_and_secured_cluster(e2e_envrc_path):
 
     print("=== Deploying secured-cluster ===", flush=True)
     # Deploy secured-cluster with env from ~/.envrc.roxie
-    _run([roxie_path, "deploy", "secured-cluster"], env=merged_env, timeout=1800)
+    _run([roxie_path, "deploy", "secured-cluster"] + common_deploy_args, env=merged_env, timeout=1800)
 
     # Basic smoke checks: namespaces should exist (operator defaults)
     # Central
@@ -160,13 +167,8 @@ def test_deploy_central_and_secured_cluster(e2e_envrc_path):
 
 
 def test_teardown_central_and_secured_cluster():
-    repo_root = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
-    roxie_path = os.path.join(repo_root, "bin", "roxie")
-    if not os.path.exists(roxie_path):
-        pytest.skip("bin/roxie not found; skipping e2e")
+    maybe_skip_operator_test()
 
-    # Base env
     env = os.environ.copy()
     env.pop("IN_NIX_SHELL", None)
     env["PYTHONUNBUFFERED"] = "1"
@@ -182,7 +184,7 @@ def test_teardown_central_and_secured_cluster():
         print("~/.envrc.roxie not found or empty; proceeding with current environment", flush=True)
 
     print("=== Tearing down central and secured-cluster ===", flush=True)
-    _run([roxie_path, "teardown", "both"], env=merged_env, timeout=1800)
+    _run([roxie_path, "teardown", "both"] + common_deploy_args, env=merged_env, timeout=1800)
 
     # Verify namespaces are deleted
     def _ns_absent(ns: str) -> None:
@@ -195,11 +197,7 @@ def test_teardown_central_and_secured_cluster():
 
 
 def test_deploy_both_components_together(e2e_envrc_path):
-    repo_root = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
-    roxie_path = os.path.join(repo_root, "bin", "roxie")
-    if not os.path.exists(roxie_path):
-        pytest.skip("bin/roxie not found; skipping e2e")
+    maybe_skip_operator_test()
 
     env = os.environ.copy()
     env.pop("IN_NIX_SHELL", None)
@@ -207,7 +205,7 @@ def test_deploy_both_components_together(e2e_envrc_path):
 
     print("=== Deploying both components ===", flush=True)
     _preflight_operator_bundle_pull(env)
-    _run([roxie_path, "deploy", "both", "--envrc", e2e_envrc_path], env=env, timeout=2400)
+    _run([roxie_path, "deploy", "both", "--envrc", e2e_envrc_path] + common_deploy_args, env=env, timeout=2400)
 
     print("Verifying namespace: acs-central", flush=True)
     subprocess.run(["kubectl", "get", "namespace", "acs-central"], check=True)
@@ -216,18 +214,16 @@ def test_deploy_both_components_together(e2e_envrc_path):
 
 
 def test_deploy_central_and_secured_cluster_via_helm(e2e_envrc_path):
-    repo_root = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.abspath(os.path.join(repo_root, os.pardir))
-    roxie_path = os.path.join(repo_root, "bin", "roxie")
-    if not os.path.exists(roxie_path):
-        pytest.skip("bin/roxie not found; skipping e2e")
-
     env = os.environ.copy()
     env.pop("IN_NIX_SHELL", None)
     env["PYTHONUNBUFFERED"] = "1"
 
     print("=== Deploying central via Helm ===", flush=True)
-    _run([roxie_path, "deploy", "central", "--helm", "--envrc", e2e_envrc_path], env=env, timeout=2400)
+    _run(
+        [roxie_path, "deploy", "central", "--helm", "--envrc", e2e_envrc_path] + common_deploy_args,
+        env=env,
+        timeout=2400,
+    )
 
     merged_env = env.copy()
     envrc_env = _load_envrc_env(e2e_envrc_path)
@@ -235,4 +231,4 @@ def test_deploy_central_and_secured_cluster_via_helm(e2e_envrc_path):
     merged_env.update(envrc_env)
 
     print("=== Deploying secured-cluster via Helm ===", flush=True)
-    _run([roxie_path, "deploy", "secured-cluster", "--helm"], env=merged_env, timeout=2400)
+    _run([roxie_path, "deploy", "secured-cluster", "--helm"] + common_deploy_args, env=merged_env, timeout=2400)

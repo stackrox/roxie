@@ -19,6 +19,7 @@
           pytest
           pytest-mock
           python-dotenv
+          deepmerge
         ]);
       in
       {
@@ -34,7 +35,7 @@
             skopeo
             kubectl
             kubernetes-helm
-            
+
             # Build tools
             gnumake
             

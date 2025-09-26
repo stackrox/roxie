@@ -34,6 +34,17 @@ def main() -> int:
         help="Deploy using Helm charts instead of operator (default is operator). Use -- to separate helm args.",
     )
     deploy_parser.add_argument(
+        "--port-forwarding",
+        action="store_true",
+        help="Enable localhost port-forward for Central in the spawned subshell.",
+    )
+    deploy_parser.add_argument(
+        "--exposure",
+        choices=["loadbalancer", "none"],
+        default="loadbalancer",
+        help="Central exposure backend (default: loadbalancer).",
+    )
+    deploy_parser.add_argument(
         "--resources",
         choices=["small", "default"],
         default="default",
@@ -66,7 +77,9 @@ def main() -> int:
     teardown_parser.add_argument("--operator", action="store_true", help="Force teardown of operator deployment")
     teardown_parser.add_argument("--helm", action="store_true", help="Force teardown of Helm deployment")
 
-    args, _ = parser.parse_known_args()
+    # Parse arguments strictly: unknown args cause failure. Helm args must follow '--' and are captured below.
+    args = parser.parse_args()
+    args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
@@ -96,7 +109,14 @@ def main() -> int:
                         "Already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again."
                     )
 
-            deployer.deploy(args.component, resources=getattr(args, "resources", "default"))
+            # Persist subshell port-forwarding preference
+            exposure_val = getattr(args, "exposure", "loadbalancer")
+            deployer.port_forwarding_enabled = bool(getattr(args, "port_forwarding", False)) or exposure_val == "none"
+            deployer.deploy(
+                args.component,
+                resources=getattr(args, "resources", "default"),
+                exposure=exposure_val,
+            )
 
             # Spawn subshell only for central/both when --envrc is not used
             if args.component in ("central", "both"):
@@ -111,9 +131,7 @@ export ROX_CA_CERT_FILE="{deployer.rox_ca_cert_file}"
                     with open(deployer.central_env_file, "w") as f:
                         f.write(env_content)
                 else:
-                    shell = args.shell
-                    if shell is None:
-                        shell = os.environ.get("ROXIE_USER_SHELL")
+                    shell = str(args.shell or os.environ.get("ROXIE_USER_SHELL"))
                     deployer.logger.print_with_timestamp(f"Spawning sub-shell: {shell}", style="bold cyan")
                     banner = (
                         "\n[roxie] Entering a subshell with ACS environment variables set.\n"
@@ -139,6 +157,8 @@ export ROX_CA_CERT_FILE="{deployer.rox_ca_cert_file}"
                         env["ROX_CA_CERT_FILE"] = ca_file
                     env["ROXIE_SHELL"] = "1"
                     env["name"] = f"acs@{deployer.kube_context}"
+
+                    # Just spawn the subshell; endpoint should already be established
                     subprocess.run([shell, "-i"], check=False, env=env)
 
         elif args.command == "teardown":

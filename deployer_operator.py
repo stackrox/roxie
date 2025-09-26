@@ -5,7 +5,6 @@ import time
 from typing import Any
 
 import yaml
-from rich.panel import Panel
 
 import helpers
 from deployer import ACSDeployer
@@ -14,8 +13,6 @@ from errors import RoxieError
 
 class ACSDeployerOperator(ACSDeployer):
     """Operator-specific deployer that implements Operator deployment/teardown."""
-
-
 
     def apply_crds_to_cluster(self, crd_files: list[str]):
         """Apply CRD files to the cluster using kubectl"""
@@ -38,7 +35,7 @@ class ACSDeployerOperator(ACSDeployer):
         self.apply_crds_to_cluster(crd_files)
         self.deploy_operator_from_csv(bundle_dir)
 
-    def deploy(self, component: str = "both", resources: str = "default"):
+    def deploy(self, component: str, resources: str, exposure: str):
         """Deploy specified component(s) using operator."""
         self.logger.print_with_timestamp("Initiating operator-based deployment of ACS", style="bold cyan")
 
@@ -65,42 +62,105 @@ class ACSDeployerOperator(ACSDeployer):
             # No operator present; just deploy it
             self.deploy_rhacs_operator()
 
-        self.deploy_component(component, resources=resources)
+        # Persist exposure, apply convenience defaults (e.g., kind)
+        resources, exposure = self.apply_convenience_defaults(resources, exposure)
+        self.exposure = exposure
+        self.deploy_component(component, resources, exposure)
         self.logger.print_with_timestamp("✓ Operator-based deployment completed successfully!", style="bold green")
 
-    def deploy_central(self, resources: str = "default"):
+    def deploy_central(self, resources: str, exposure: str):
+        self.logger.print_with_timestamp(f"Deploying Central with resources: {resources}", style="bold cyan")
         self.teardown()
         self.ensure_namespace_exists(self.central_namespace)
         self.prepare_namespace(self.central_namespace)
-        # Ensure CRDs are present before creating Central CR
         self.ensure_crds_installed()
-        self.create_central_cr()
+        cr = self.create_central_cr(resources, exposure)
+        self.apply_central_cr(cr)
         self.show_central_success_panel()
 
-    def deploy_secured_cluster(self, resources: str = "default"):
+    def deploy_secured_cluster(self, resources: str):
+        self.logger.print_with_timestamp(f"Deploying Secured Cluster with resources: {resources}", style="bold cyan")
         self.teardown("secured-cluster")
         self.ensure_namespace_exists(self.secured_cluster_namespace)
         self.prepare_namespace(self.secured_cluster_namespace)
-        self.create_secured_cluster_cr("")
+        cr = self.create_secured_cluster_cr(resources)
+        self.apply_secured_cluster_cr(cr)
+        self.show_secured_cluster_success_panel()
 
-    def deploy_component(self, component: str, resources: str = "default"):
+    def deploy_component(self, component: str, resources: str, exposure: str):
         """Deploy Custom Resource for the specified component"""
         self.logger.print_with_timestamp(f"Deploying Custom Resources for: {component}", style="bold cyan")
 
         if component == "central":
-            self.deploy_central(resources=resources)
+            self.deploy_central(resources, exposure)
         elif component == "secured-cluster":
             self.deploy_secured_cluster(resources=resources)
         elif component == "both":
-            self.deploy_central(resources=resources)
+            self.deploy_central(resources, exposure)
             self.deploy_secured_cluster(resources=resources)
         self.logger.print_with_timestamp("✓ Custom Resources deployed successfully for", style="bold green")
 
-    def create_central_cr(self):
+    def get_central_resources(self, resource_name: str = "default"):
+        if resource_name == "small":
+            return {
+                "spec": {
+                    "central": {
+                        "resources": {
+                            "requests": {"cpu": "500m", "memory": "700Mi"},
+                            "limits": {"cpu": "2000m", "memory": "3500Mi"},
+                        },
+                        "db": {
+                            "resources": {
+                                "requests": {"cpu": "500m", "memory": "700Mi"},
+                                "limits": {"cpu": "2000m", "memory": "3500Mi"},
+                            }
+                        },
+                    },
+                    "scanner": {"scannerComponent": "Disabled"},
+                    "scannerV4": {
+                        "db": {
+                            "resources": {
+                                "requests": {"cpu": "400m", "memory": "1000Mi"},
+                                "limits": {"cpu": "1000m", "memory": "2500Mi"},
+                            }
+                        },
+                        "indexer": {
+                            "resources": {
+                                "requests": {"cpu": "400m", "memory": "512Mi"},
+                                "limits": {"cpu": "2000m", "memory": "4Gi"},
+                            }
+                        },
+                    },
+                }
+            }
+        return {}
+
+    def get_secured_cluster_resources(self, resource_name: str = "default"):
+        if resource_name == "small":
+            return {
+                "spec": {
+                    "sensor": {
+                        "resources": {
+                            "requests": {"cpu": "500m", "memory": "500Mi"},
+                            "limits": {"cpu": "1000m", "memory": "2Gi"},
+                        }
+                    },
+                    "scanner": {"scannerComponent": "Disabled"},
+                    "scannerV4": {"scannerComponent": "Disabled"},
+                }
+            }
+        return {}
+
+    def get_central_cr_exposure(self, exposure: str) -> dict[str, Any]:
+        exposure_cr = {}  # Disabled exposure.
+        if exposure == "loadbalancer":
+            exposure_cr = {"loadBalancer": {"enabled": True}}
+        return {"spec": {"central": {"exposure": exposure_cr}}}
+
+    def create_central_cr(self, resources_name: str, exposure: str) -> dict[str, Any]:
         """Create Central Custom Resource for operator deployment"""
         self.apply_admin_password_secret("admin-password")
-        # Create Central CR specification
-        central_cr = {
+        base_central_cr: dict[str, Any] = {
             "apiVersion": "platform.stackrox.io/v1alpha1",
             "kind": "Central",
             "metadata": {
@@ -111,17 +171,21 @@ class ACSDeployerOperator(ACSDeployer):
             "spec": {
                 "central": {
                     "adminPasswordSecret": {"name": "admin-password"},
-                    "exposure": {"loadBalancer": {"enabled": True}},
                     "telemetry": {"enabled": False},
                 },
-                "scanner": {"analyzer": {"scaling": {"autoScaling": "Enabled", "replicas": 1}}},
+                "scanner": {"analyzer": {"scaling": {"autoScaling": "Disabled", "replicas": 1}}},
                 "scannerV4": {
                     "indexer": {"scaling": {"autoScaling": "Disabled", "replicas": 1}},
                     "matcher": {"scaling": {"autoScaling": "Disabled", "replicas": 1}},
                 },
             },
         }
+        resources_cr = self.get_central_resources(resources_name)
+        exposure_cr = self.get_central_cr_exposure(exposure)
+        central_cr = helpers.merge_dicts(base_central_cr, resources_cr, exposure_cr)
+        return central_cr
 
+    def apply_central_cr(self, central_cr: dict[str, Any]):
         subprocess.run(
             [self.kubectl, "apply", "-f", "-"],
             input=yaml.dump(central_cr),
@@ -130,6 +194,9 @@ class ACSDeployerOperator(ACSDeployer):
             text=True,
         )
         self.wait_for_ready_deployment(self.central_namespace, "central")
+        # Establish endpoint depending on exposure
+        if self.exposure == "none" and self.port_forwarding_enabled:
+            self.start_central_port_forward(self.central_namespace)
         self.wait_for_central_endpoint(self.central_namespace)
         # Fetch Central CA certificate and persist to temp file
         try:
@@ -137,7 +204,7 @@ class ACSDeployerOperator(ACSDeployer):
         except Exception as e:
             self.logger.print_with_timestamp(f"Warning: failed to fetch central CA: {e}", style="bold yellow")
 
-    def create_secured_cluster_cr(self, cluster_name="sensor"):
+    def create_secured_cluster_cr(self, resources_name: str, cluster_name="sensor") -> dict[str, Any]:
         """Create SecuredCluster Custom Resource for operator deployment"""
         if not cluster_name:
             cluster_name = f"sensor-{random.randint(1000, 9999)}"  # noqa: S311
@@ -150,8 +217,7 @@ class ACSDeployerOperator(ACSDeployer):
             # Try to get Central endpoint from service/LoadBalancer
             self.central_endpoint = self.get_central_endpoint(self.central_namespace)
 
-        # Create SecuredCluster CR specification
-        secured_cluster_cr = {
+        base_secured_cluster_cr = {
             "apiVersion": "platform.stackrox.io/v1alpha1",
             "kind": "SecuredCluster",
             "metadata": {
@@ -161,7 +227,7 @@ class ACSDeployerOperator(ACSDeployer):
             },
             "spec": {
                 "clusterName": self.cluster_name,
-                "centralEndpoint": self.central_endpoint,
+                "centralEndpoint": "https://central.acs-central.svc:443",
                 "imagePullSecrets": [{"name": "stackrox"}],
                 "admissionControl": {"replicas": 1},
                 "scanner": {"analyzer": {"scaling": {"autoScaling": "Enabled", "replicas": 1}}},
@@ -170,7 +236,11 @@ class ACSDeployerOperator(ACSDeployer):
                 },
             },
         }
+        resources_cr = self.get_secured_cluster_resources(resources_name)
+        secured_cluster_cr = helpers.merge_dicts(base_secured_cluster_cr, resources_cr)
+        return secured_cluster_cr
 
+    def apply_secured_cluster_cr(self, secured_cluster_cr: dict[str, Any]):
         subprocess.run(
             [self.kubectl, "apply", "-f", "-"],
             input=yaml.dump(secured_cluster_cr),
@@ -178,27 +248,7 @@ class ACSDeployerOperator(ACSDeployer):
             capture_output=True,
             text=True,
         )
-
-        self.wait_for_ready_deployment(self.central_namespace, "central")
-        self.logger.print_with_timestamp("📋 SecuredCluster CR details:", style="bold cyan")
-        self.logger.print_with_timestamp(f"  • Cluster Name: {cluster_name}", style="dim cyan")
-        self.logger.print_with_timestamp(f"  • Central Endpoint: {self.central_endpoint}", style="dim cyan")
-
-        self.show_secured_cluster_success_panel()
-
-    def show_central_success_panel(self):
-        """Show success panel and write environment file for operator central deployment"""
-        success_panel = Panel.fit(
-            f"[bold green]✓ Central Deployment Complete[/bold green]\n\n"
-            f"[bold]API Endpoint:     [/bold] {self.central_endpoint}\n"
-            f"[bold]Admin Password:   [/bold] {self.central_password}\n"
-            f"[bold]Namespace:        [/bold] {self.central_namespace}\n"
-            f"[bold]Deployment Mode:  [/bold] Operator\n"
-            f"[bold]Log File:         [/bold] {self.log_file}",
-            title="[bold green]Central Deployment Success[/bold green]",
-            border_style="green",
-        )
-        self.console.print(success_panel)
+        self.wait_for_ready_deployment(self.secured_cluster_namespace, "sensor")
 
     def has_operator_deployment(self, component: str) -> bool:
         """Check if operator deployment exists for the given component"""
@@ -343,12 +393,8 @@ class ACSDeployerOperator(ACSDeployer):
             # Need to fetch bundle and apply CRDs
             operator_tag_for_image = self.operator_tag
             bundle_image = f"quay.io/rhacs-eng/stackrox-operator-bundle:{operator_tag_for_image}"
-            self.logger.print_with_timestamp(
-                f"Missing CRDs detected ({', '.join(missing)})", style="bold yellow"
-            )
-            self.logger.print_with_timestamp(
-                f"Fetching bundle {bundle_image}", style="bold yellow"
-            )
+            self.logger.print_with_timestamp(f"Missing CRDs detected ({', '.join(missing)})", style="bold yellow")
+            self.logger.print_with_timestamp(f"Fetching bundle {bundle_image}", style="bold yellow")
             bundle_dir = self.download_and_extract_operator_bundle(bundle_image)
             crd_files = self.identify_crd_files(bundle_dir)
             self.apply_crds_to_cluster(crd_files)
