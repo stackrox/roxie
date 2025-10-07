@@ -1,9 +1,11 @@
 """Main entry point for the roxie deployment tool."""
 
 import argparse
+import contextlib
 import os
 import subprocess
 import sys
+import tempfile
 from subprocess import CalledProcessError
 
 from rich.console import Console
@@ -79,7 +81,6 @@ def main() -> int:
 
     # Parse arguments strictly: unknown args cause failure. Helm args must follow '--' and are captured below.
     args = parser.parse_args()
-    args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
@@ -141,7 +142,7 @@ export ROX_CA_CERT_FILE="{deployer.rox_ca_cert_file}"
                         "[roxie]   * roxctl central whoami\n"
                         "[roxie]   * roxcurl /v1/clusters\n"
                         "\n"
-                        f"[roxie] Central UI: https://{deployer.central_endpoint} (username: admin, password: see $ROX_ADMIN_PASSWORD)\n"
+                        "[roxie] Central UI: http://localhost:8080 (username: admin, password: see $ROX_ADMIN_PASSWORD)\n"
                         "\n"
                     )
                     console.print(banner, style="bold cyan")
@@ -158,8 +159,75 @@ export ROX_CA_CERT_FILE="{deployer.rox_ca_cert_file}"
                     env["ROXIE_SHELL"] = "1"
                     env["name"] = f"acs@{deployer.kube_context}"
 
-                    # Just spawn the subshell; endpoint should already be established
-                    subprocess.run([shell, "-i"], check=False, env=env)
+                    # Create a temporary HAProxy config and tie HAProxy process lifetime to the subshell via ExitStack
+                    with contextlib.ExitStack() as cleanup:
+                        endpoint = str(getattr(deployer, "central_endpoint", ""))
+                        ca_file = str(getattr(deployer, "rox_ca_cert_file", ""))
+
+                        if endpoint and ca_file:
+                            haproxy_cfg_path = None
+                            tmp = tempfile.NamedTemporaryFile(
+                                mode="w", suffix=".cfg", prefix="roxie-haproxy-", delete=False
+                            )
+                            try:
+                                haproxy_cfg_path = tmp.name
+                                tmp.write(
+                                    f"""
+global
+    log /dev/null local0
+
+defaults
+    log     global
+    mode    http
+    timeout connect 5s
+    timeout client  30s
+    timeout server  30s
+
+frontend http_front
+    bind *:8080
+    default_backend https_back
+
+backend https_back
+    server srv1 {endpoint} ssl verify required ca-file {ca_file}
+"""
+                                )
+                            finally:
+                                tmp.close()
+
+                            env["ROXIE_HAPROXY_CFG_FILE"] = haproxy_cfg_path
+                            cleanup.callback(lambda: os.path.exists(haproxy_cfg_path) and os.remove(haproxy_cfg_path))
+
+                            # Start HAProxy in the background; silence stdout/stderr
+                            try:
+                                haproxy_proc = subprocess.Popen(
+                                    ["haproxy", "-f", haproxy_cfg_path],
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
+                                )
+
+                                def _stop_haproxy() -> None:
+                                    try:
+                                        haproxy_proc.terminate()
+                                        try:
+                                            haproxy_proc.wait(timeout=3)
+                                        except Exception:
+                                            haproxy_proc.kill()
+                                    except Exception as e:
+                                        print("Failed to stop haproxy: ", e)
+                                        pass
+
+                                cleanup.callback(_stop_haproxy)
+                            except Exception as e:
+                                deployer.logger.print_with_timestamp(
+                                    f"Failed to start haproxy: {e}", style="bold yellow"
+                                )
+                        else:
+                            deployer.logger.print_with_timestamp(
+                                "HAProxy config not created (missing endpoint or CA cert)", style="dim yellow"
+                            )
+
+                        # Spawn the subshell with the environment prepared
+                        subprocess.run([shell, "-i"], check=False, env=env)
 
         elif args.command == "teardown":
             deployer.teardown(args.component)

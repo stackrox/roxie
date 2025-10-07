@@ -4,7 +4,7 @@
   nixConfig.warn-dirty = false;
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/25.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -35,6 +35,7 @@
             skopeo
             kubectl
             kubernetes-helm
+            haproxy
 
             # Build tools
             gnumake

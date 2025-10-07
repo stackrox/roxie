@@ -16,13 +16,16 @@ main_image_tag = "4.8.2"
 
 common_deploy_args = ["--port-forwarding", "--exposure=none", "--resources=small"]
 
+
 def get_repo_root() -> str:
     file_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(file_dir, os.pardir))
     return repo_root
 
+
 repo_root = get_repo_root()
 roxie_path = os.path.join(repo_root, "bin", "roxie")
+
 
 def _require_binary(name: str) -> None:
     if shutil.which(name) is None:
@@ -56,6 +59,7 @@ def e2e_startup():
     if not os.path.exists(roxie_path):
         pytest.skip("bin/roxie not found; skipping e2e")
 
+
 @pytest.fixture(scope="module")
 def e2e_envrc_path():
     # Create a temporary, permission-protected envrc file path for tests
@@ -70,8 +74,6 @@ def e2e_envrc_path():
 
 
 def _run(cmd: list[str], env: dict[str, str] | None = None, timeout: int = 900) -> subprocess.CompletedProcess[str]:
-    print(f"$ {' '.join(cmd)}", flush=True)
-    # Stream output in real time
     proc = subprocess.Popen(cmd, env=env)
     try:
         proc.wait(timeout=timeout)
@@ -125,9 +127,11 @@ def _load_envrc_env(path: str) -> dict[str, str]:
     values = dotenv_values(expanded)
     return {k: v for k, v in values.items() if v is not None}
 
+
 def maybe_skip_operator_test():
     if os.environ.get("SKIP_OPERATOR_TESTS"):
         pytest.skip("SKIP_OPERATOR_TESTS")
+
 
 def test_deploy_central_and_secured_cluster(e2e_envrc_path):
     maybe_skip_operator_test()
