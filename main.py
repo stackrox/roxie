@@ -36,6 +36,11 @@ def main() -> int:
         help="Deploy using Helm charts instead of operator (default is operator). Use -- to separate helm args.",
     )
     deploy_parser.add_argument(
+        "--override",
+        dest="override_file",
+        help="Path to a YAML file with overrides for the component being deployed (CR or Helm values).",
+    )
+    deploy_parser.add_argument(
         "--port-forwarding",
         action="store_true",
         help="Enable localhost port-forward for Central in the spawned subshell.",
@@ -94,6 +99,7 @@ def main() -> int:
             deployer = ACSDeployerHelm(console=console)
         else:
             deployer = ACSDeployerOperator(console=console)
+        deployer.override_file = getattr(args, "override_file", None)
 
         # If --envrc provided, optionally override the output path on the deployer
         envrc_provided = getattr(args, "envrc", None) is not None

@@ -82,7 +82,8 @@ class ACSDeployerHelm(ACSDeployer):
             }
 
         resources_overlay = self.get_central_resources(resources_name)
-        central_dict = helpers.merge_dicts(base, image_settings, resources_overlay)
+        override_values = self.load_override_dict()
+        central_dict = helpers.merge_dicts(base, image_settings, resources_overlay, override_values)
         central_yaml: str = yaml.dump(central_dict)
         return central_yaml
 
@@ -117,7 +118,8 @@ class ACSDeployerHelm(ACSDeployer):
             }
 
         resources = self.get_secured_cluster_resources(resources_name)
-        secured_cluster_dict = helpers.merge_dicts(base, image_settings, resources)
+        override_values = self.load_override_dict()
+        secured_cluster_dict = helpers.merge_dicts(base, image_settings, resources, override_values)
         secured_cluster_yaml: str = yaml.dump(secured_cluster_dict)
         return secured_cluster_yaml
 

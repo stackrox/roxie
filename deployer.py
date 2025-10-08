@@ -27,7 +27,7 @@ from rich.progress import (
 
 from docker_auth import DockerAuth
 from errors import RoxieError
-from helpers import TimestampColumn, run_command
+from helpers import TimestampColumn, load_yaml_file, run_command
 from image_cache import ImageCache
 from logger import Logger
 from port_forward import PortForwardManager
@@ -65,6 +65,7 @@ class ACSDeployer:
         self.log_file = os.environ.get("LOG_FILE", self.create_temp_log())
         self.roxctl_version = self.get_roxctl_version()
         self.cluster_name = ""  # Will be set during secured cluster deployment
+        self.override_file: str | None = None
         self.logger.print_with_timestamp("🚀 ACS Deployer initialized", style="bold green")
         self.kube_context = self.get_current_context()
 
@@ -76,6 +77,13 @@ class ACSDeployer:
         resources is a preset name (e.g., "default", "small"). Implementations may ignore it.
         """
         raise NotImplementedError("deploy method must be implemented by subclasses")
+
+    def load_override_dict(self) -> dict[str, Any]:
+        """Load user-provided YAML override into a dict.
+
+        Returns an empty dict when no override is provided.
+        """
+        return load_yaml_file(self.override_file)
 
     def lookup_latest_tag_from_stackrox_git_root(self) -> str | None:
         """Lookup latest tag from stackrox git root"""
@@ -630,22 +638,6 @@ class ACSDeployer:
         # Delete the namespace asynchronously and wait until gone.
         self.initiate_namespace_deletion([namespace], wait=False)
         self.wait_for_namespaces_deletion([namespace], timeout_seconds=600)
-
-    def apply_admin_password_secret(self, name: str) -> None:
-        secret = {
-            "apiVersion": "v1",
-            "kind": "Secret",
-            "metadata": {"namespace": self.central_namespace, "name": name},
-            "stringData": {"password": self.central_password},
-        }
-        run_command(
-            "Applying admin password secret",
-            [self.kubectl, "apply", "-f", "-"],
-            input=yaml.dump(secret),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
 
     def generate_crs(self, cluster_name: str) -> str:
         """Generate CRS (Central Resource Secret) for secured cluster deployment"""

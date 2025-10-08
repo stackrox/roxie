@@ -11,6 +11,7 @@ from deployer import ACSDeployer
 from errors import RoxieError
 from helpers import run_command
 
+admin_password_secret_name = "admin-password"  # noqa: S105
 
 class ACSDeployerOperator(ACSDeployer):
     """Operator-specific deployer that implements Operator deployment/teardown."""
@@ -82,15 +83,19 @@ class ACSDeployerOperator(ACSDeployer):
         self.prepare_namespace(self.central_namespace)
         self.ensure_crds_installed()
         cr = self.create_central_cr(resources, exposure)
+        self.apply_admin_password_secret(admin_password_secret_name)
         self.apply_central_cr(cr)
         self.show_central_success_panel()
 
     def deploy_secured_cluster(self, resources: str):
+        self.cluster_name = f"sensor-{random.randint(1000, 9999)}" # noqa: S311
         self.logger.print_with_timestamp(f"Deploying Secured Cluster with resources: {resources}", style="bold cyan")
         self.teardown("secured-cluster")
         self.ensure_namespace_exists(self.secured_cluster_namespace)
         self.prepare_namespace(self.secured_cluster_namespace)
+        crs_content = self.generate_crs(cluster_name)
         cr = self.create_secured_cluster_cr(resources)
+        self.apply_yaml_to_namespace(self.secured_cluster_namespace, crs_content)
         self.apply_secured_cluster_cr(cr)
         self.show_secured_cluster_success_panel()
 
@@ -166,7 +171,6 @@ class ACSDeployerOperator(ACSDeployer):
 
     def create_central_cr(self, resources_name: str, exposure: str) -> dict[str, Any]:
         """Create Central Custom Resource for operator deployment"""
-        self.apply_admin_password_secret("admin-password")
         base_central_cr: dict[str, Any] = {
             "apiVersion": "platform.stackrox.io/v1alpha1",
             "kind": "Central",
@@ -177,7 +181,7 @@ class ACSDeployerOperator(ACSDeployer):
             },
             "spec": {
                 "central": {
-                    "adminPasswordSecret": {"name": "admin-password"},
+                    "adminPasswordSecret": {"name": admin_password_secret_name},
                     "telemetry": {"enabled": False},
                 },
                 "scanner": {"analyzer": {"scaling": {"autoScaling": "Disabled", "replicas": 1}}},
@@ -189,7 +193,8 @@ class ACSDeployerOperator(ACSDeployer):
         }
         resources_cr = self.get_central_resources(resources_name)
         exposure_cr = self.get_central_cr_exposure(exposure)
-        central_cr = helpers.merge_dicts(base_central_cr, resources_cr, exposure_cr)
+        override_cr: dict[str, Any] = self.load_override_dict()
+        central_cr = helpers.merge_dicts(base_central_cr, resources_cr, exposure_cr, override_cr)
         return central_cr
 
     def apply_central_cr(self, central_cr: dict[str, Any]):
@@ -214,12 +219,6 @@ class ACSDeployerOperator(ACSDeployer):
 
     def create_secured_cluster_cr(self, resources_name: str, cluster_name="sensor") -> dict[str, Any]:
         """Create SecuredCluster Custom Resource for operator deployment"""
-        if not cluster_name:
-            cluster_name = f"sensor-{random.randint(1000, 9999)}"  # noqa: S311
-        self.cluster_name = cluster_name
-        crs_content = self.generate_crs(cluster_name)
-        self.apply_yaml_to_namespace(self.secured_cluster_namespace, crs_content)
-
         # Determine central endpoint
         if not self.central_endpoint:
             # Try to get Central endpoint from service/LoadBalancer
@@ -245,8 +244,25 @@ class ACSDeployerOperator(ACSDeployer):
             },
         }
         resources_cr = self.get_secured_cluster_resources(resources_name)
-        secured_cluster_cr = helpers.merge_dicts(base_secured_cluster_cr, resources_cr)
+        override_cr = self.load_override_dict()
+        secured_cluster_cr = helpers.merge_dicts(base_secured_cluster_cr, resources_cr, override_cr)
         return secured_cluster_cr
+
+    def apply_admin_password_secret(self, name: str) -> None:
+        secret = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"namespace": self.central_namespace, "name": name},
+            "stringData": {"password": self.central_password},
+        }
+        run_command(
+            "Applying admin password secret",
+            [self.kubectl, "apply", "-f", "-"],
+            input=yaml.dump(secret),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
     def apply_secured_cluster_cr(self, secured_cluster_cr: dict[str, Any]):
         run_command(

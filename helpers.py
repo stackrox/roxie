@@ -8,6 +8,7 @@ import subprocess
 import time
 from typing import Any
 
+import yaml
 from deepmerge import Merger
 from rich.progress import ProgressColumn
 from rich.text import Text
@@ -55,3 +56,20 @@ def merge_dicts(base_dict: dict[str, Any], *dicts: dict[str, Any]) -> dict[str, 
     for d in dicts:
         merger.merge(result, d)
     return result
+
+
+def load_yaml_file(path: str | None) -> dict[str, Any]:
+    """Load a YAML file as a dict. Returns empty dict for empty files.
+
+    Raises RoxieError if the file cannot be read or if content is not a mapping.
+    """
+    if not path:
+        return {}
+    try:
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+    except Exception as e:  # noqa: S110
+        raise RoxieError(f"Failed to read YAML file: {path}: {e}") from e
+    if not isinstance(data, dict):
+        raise RoxieError("YAML content must be a mapping (dict)")
+    return data
