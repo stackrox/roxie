@@ -195,7 +195,15 @@ backend https_back
                                 tmp.close()
 
                             env["ROXIE_HAPROXY_CFG_FILE"] = haproxy_cfg_path
-                            cleanup.callback(lambda: os.path.exists(haproxy_cfg_path) and os.remove(haproxy_cfg_path))
+                            def _cleanup_cfg() -> None:
+                                if os.path.exists(haproxy_cfg_path):
+                                    try:
+                                        os.remove(haproxy_cfg_path)
+                                    except FileNotFoundError:
+                                        return
+                                    except Exception as e:
+                                        console.print(f"Warning: failed removing temp haproxy config: {e}", style="dim yellow")
+                            cleanup.callback(_cleanup_cfg)
 
                             # Start HAProxy in the background; silence stdout/stderr
                             try:
