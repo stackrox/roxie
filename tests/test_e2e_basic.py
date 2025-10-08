@@ -188,7 +188,7 @@ def test_teardown_central_and_secured_cluster():
         print("~/.envrc.roxie not found or empty; proceeding with current environment", flush=True)
 
     print("=== Tearing down central and secured-cluster ===", flush=True)
-    _run([roxie_path, "teardown", "both"] + common_deploy_args, env=merged_env, timeout=1800)
+    _run([roxie_path, "teardown", "both"], env=merged_env, timeout=1800)
 
     # Verify namespaces are deleted
     def _ns_absent(ns: str) -> None:
