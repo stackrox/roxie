@@ -27,7 +27,7 @@ from rich.progress import (
 
 from docker_auth import DockerAuth
 from errors import RoxieError
-from helpers import TimestampColumn
+from helpers import TimestampColumn, run_command
 from image_cache import ImageCache
 from logger import Logger
 from port_forward import PortForwardManager
@@ -103,22 +103,16 @@ class ACSDeployer:
 
     def get_roxctl_version(self) -> str:
         """Get roxctl version with error handling"""
-        try:
-            result = subprocess.run(["roxctl", "version"], capture_output=True, text=True, check=True, timeout=10)
-            return result.stdout.strip()
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
-            # Surface a clear error upstream; include stderr/stdout when available
-            detail = ""
-            try:
-                if hasattr(e, "stderr") and e.stderr:
-                    stderr_str = e.stderr.decode() if isinstance(e.stderr, bytes) else e.stderr
-                    detail = f": {stderr_str.strip()}"
-                elif hasattr(e, "stdout") and e.stdout:
-                    stdout_str = e.stdout.decode() if isinstance(e.stdout, bytes) else e.stdout
-                    detail = f": {stdout_str.strip()}"
-            except Exception:
-                detail = ""
-            raise RuntimeError(f"roxctl invocation failed: {detail}") from e
+        result = run_command(
+            "Obtaining roxctl version",
+            ["roxctl", "version"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        output: str = result.stdout.strip()
+        return output
 
     def create_temp_log(self) -> str:
         """Create a temporary log file"""
@@ -172,7 +166,8 @@ class ACSDeployer:
                 raise RoxieError(f"STACKROX_GIT_ROOT is not a git repository: {stackrox_git_root}")
 
             # Execute make tag command
-            result = subprocess.run(
+            result = run_command(
+                "Getting latest commit tag from git repo",
                 ["make", "--quiet", "--no-print-directory", "tag"],
                 cwd=stackrox_git_root,
                 capture_output=True,
@@ -181,7 +176,7 @@ class ACSDeployer:
                 timeout=30,
             )
 
-            tag = result.stdout.strip()
+            tag: str = result.stdout.strip()
             if not tag:
                 raise RoxieError(f"make tag command in STACKROX_GIT_ROOT ({stackrox_git_root}) returned empty output")
 
@@ -223,24 +218,22 @@ class ACSDeployer:
 
     def prepare_namespace(self, namespace: str):
         """Prepare Kubernetes namespace with required resources"""
-        # Create pull secret using Python function
-        try:
-            pull_secret_yaml = self.docker_auth.create_pull_secret_yaml(namespace)
-            # f"Applying pull secret to {namespace}",
-            subprocess.run(
-                [self.kubectl, "-n", namespace, "apply", "-f", "-"],
-                input=pull_secret_yaml.encode("utf-8"),
-                capture_output=True,
-                check=True,
-            )
-        except Exception as e:
-            self.logger.error(f"Failed to create pull secret: {str(e)}")
-            return False
+        pull_secret_yaml = self.docker_auth.create_pull_secret_yaml(namespace)
+        run_command(
+            "Applying image pull secrets",
+            [self.kubectl, "-n", namespace, "apply", "-f", "-"],
+            input=pull_secret_yaml.encode("utf-8"),
+            capture_output=True,
+            check=True,
+        )
 
     def namespace_exist(self, namespace: str) -> bool:
         """Check if Helm release doesn't exist"""
-        result = subprocess.run(
-            [self.kubectl, "get", "namespace", namespace], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        result = run_command(
+            "Checking if namespace exists",
+            [self.kubectl, "get", "namespace", namespace],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         return result.returncode == 0
 
@@ -259,38 +252,34 @@ class ACSDeployer:
             task = progress.add_task("Waiting for Central IP", total=120)
 
             for _i in range(30):
-                try:
-                    result = subprocess.run(
-                        [
-                            self.kubectl,
-                            "-n",
-                            namespace,
-                            "get",
-                            "service",
-                            "central-loadbalancer",
-                            "-o",
-                            "jsonpath={.status.loadBalancer.ingress[0].ip}",
-                        ],
-                        capture_output=True,
-                        text=True,
-                        check=True,
-                    )
+                result = run_command(
+                    "Getting LoadBalancer IP",
+                    [
+                        self.kubectl,
+                        "-n",
+                        namespace,
+                        "get",
+                        "service",
+                        "central-loadbalancer",
+                        "-o",
+                        "jsonpath={.status.loadBalancer.ingress[0].ip}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
 
-                    lb_ip = result.stdout.strip()
-                    if lb_ip and lb_ip != "<none>":
-                        # Store the endpoint
-                        self.central_endpoint = f"{lb_ip}:443"
-                        # Immediately print success message to overwrite progress bar
-                        progress.stop()
-                        self.logger.print_with_timestamp(f"✓ Got LoadBalancer IP: {lb_ip}", style="bold green")
-                        return
+                lb_ip = result.stdout.strip()
+                if lb_ip and lb_ip != "<none>":
+                    # Store the endpoint
+                    self.central_endpoint = f"{lb_ip}:443"
+                    # Immediately print success message to overwrite progress bar
+                    progress.stop()
+                    self.logger.print_with_timestamp(f"✓ Got LoadBalancer IP: {lb_ip}", style="bold green")
+                    return
 
-                    progress.update(task, advance=4)
-                    time.sleep(1)
-
-                except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-                    progress.update(task, advance=1)
-                    time.sleep(1)
+                progress.update(task, advance=4)
+                time.sleep(1)
 
             progress.stop()
             raise RoxieError("Timeout waiting for LoadBalancer IP")
@@ -338,14 +327,15 @@ class ACSDeployer:
 
     def get_current_context(self) -> str:
         """Get current kubectl context"""
-        try:
-            result = subprocess.run(
-                [self.kubectl, "config", "current-context"], capture_output=True, text=True, check=True
-            )
-            return result.stdout.strip()
-        except Exception as e:
-            self.logger.error(f"Failed to get current context: {str(e)}")
-            raise
+        result = run_command(
+            "Getting current kube context",
+            [self.kubectl, "config", "current-context"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output: str = result.stdout.strip()
+        return output
 
     def initiate_namespace_deletion(self, namespaces: list[str], wait: bool = False):
         """Initiate deletion of one or more namespaces"""
@@ -357,7 +347,7 @@ class ACSDeployer:
             try:
                 if wait:
                     # Synchronous deletion - wait for completion
-                    subprocess.run(cmd, stderr=subprocess.DEVNULL, check=True)
+                    run_command("Deleting namespace", cmd, stderr=subprocess.DEVNULL, check=True)
                 else:
                     # Asynchronous deletion - fire and forget
                     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -391,7 +381,8 @@ class ACSDeployer:
                     terminating_count = 0
 
                     for namespace in namespaces:
-                        result = subprocess.run(
+                        result = run_command(
+                            "Checking namespaces",
                             [
                                 self.kubectl,
                                 "get",
@@ -447,7 +438,8 @@ class ACSDeployer:
             try:
                 remaining_namespaces = []
                 for namespace in namespaces:
-                    result = subprocess.run(
+                    result = run_command(
+                        "Checking namespace",
                         [self.kubectl, "get", "namespace", namespace, "-o", "name"],
                         capture_output=True,
                         text=True,
@@ -484,24 +476,21 @@ class ACSDeployer:
 
     def _attempt_clear_namespace_finalizers(self, namespace: str) -> None:
         """Best-effort removal of namespace finalizers to accelerate deletion."""
-        try:
-            subprocess.run(
-                [
-                    self.kubectl,
-                    "patch",
-                    "namespace",
-                    namespace,
-                    "-p",
-                    '{"metadata":{"finalizers":[]}}',
-                    "--type=merge",
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-        except Exception as e:
-            # Best-effort only; log and continue
-            self.logger.print_with_timestamp(f"Finalizer clear attempt failed for {namespace}: {e}", style="dim yellow")
+        run_command(
+            "Patching namespace finalizers",
+            [
+                self.kubectl,
+                "patch",
+                "namespace",
+                namespace,
+                "-p",
+                '{"metadata":{"finalizers":[]}}',
+                "--type=merge",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
 
     def teardown_all_async(self):
         """Teardown all ACS namespaces asynchronously"""
@@ -544,15 +533,20 @@ class ACSDeployer:
             raise RoxieError(f"Unknown component for operator teardown: {component}")
 
     def teardown_central(self):
-        result = subprocess.run(
-            [self.kubectl, "get", "namespace", self.central_namespace], capture_output=True, text=True
+        self.logger.print_with_timestamp(f"🗑️  Tearing down resources in: {self.central_namespace}", style="bold cyan")
+
+        result = run_command(
+            "Checking namespace",
+            [self.kubectl, "get", "namespace", self.central_namespace],
+            capture_output=True,
+            text=True,
         )
         if result.returncode != 0:
             return
 
-        self.logger.print_with_timestamp(f"🗑️  Tearing down resources in: {self.central_namespace}", style="bold cyan")
-
-        subprocess.run(
+        # Try to delete Central CR.
+        run_command(
+            "Deleting Central CR",
             [
                 self.kubectl,
                 "-n",
@@ -570,16 +564,18 @@ class ACSDeployer:
         self.teardown_namespace(self.central_namespace)
 
     def teardown_secured_cluster(self):
-        result = subprocess.run(
-            [self.kubectl, "get", "namespace", self.secured_cluster_namespace], capture_output=True, text=True
+        namespace = self.secured_cluster_namespace
+        self.logger.print_with_timestamp(f"🗑️  Tearing down resources in: {namespace}", style="bold cyan")
+
+        result = run_command(
+            "Checking namespace", [self.kubectl, "get", "namespace", namespace], capture_output=True, text=True
         )
         if result.returncode != 0:
             return
 
-        self.logger.print_with_timestamp(
-            f"🗑️  Tearing down resources in: {self.secured_cluster_namespace}", style="bold cyan"
-        )
-        subprocess.run(
+        # Try to delete SecuredCluster CR.
+        run_command(
+            "Deleting SecuredCluster CR",
             [
                 self.kubectl,
                 "delete",
@@ -598,26 +594,24 @@ class ACSDeployer:
 
     def teardown_namespace(self, namespace: str):
         # Force delete workloads
-        try:
-            subprocess.run(
-                [
-                    self.kubectl,
-                    "-n",
-                    namespace,
-                    "delete",
-                    "pods,deployments,daemonsets",
-                    "--all",
-                    "--force",
-                    "--grace-period=0",
-                    "--ignore-not-found=true",
-                    "--timeout=60s",
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-        except Exception as e:
-            self.logger.print_with_timestamp(f"Warning: failed force-deleting workloads: {e}", style="dim yellow")
+        run_command(
+            "Deleting workloads",
+            [
+                self.kubectl,
+                "-n",
+                namespace,
+                "delete",
+                "pods,deployments,daemonsets",
+                "--all",
+                "--force",
+                "--grace-period=0",
+                "--ignore-not-found=true",
+                "--timeout=60s",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
 
         # Delete other namespaced resources
         for args, label in [
@@ -625,17 +619,13 @@ class ACSDeployer:
             (["secrets,configmaps", "--all"], "secrets/configmaps"),
             (["pvc", "--all"], "PVCs"),
         ]:
-            try:
-                subprocess.run(
-                    [self.kubectl, "-n", namespace, "delete", *args, "--ignore-not-found=true", "--timeout=120s"],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
-            except Exception as e:
-                self.logger.print_with_timestamp(
-                    f"Warning: failed deleting {label} in {namespace}: {e}", style="dim yellow"
-                )
+            run_command(
+                f"Deleting {label} in {namespace}",
+                [self.kubectl, "-n", namespace, "delete", *args, "--ignore-not-found=true", "--timeout=120s"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
 
         # Delete the namespace asynchronously and wait until gone.
         self.initiate_namespace_deletion([namespace], wait=False)
@@ -648,8 +638,13 @@ class ACSDeployer:
             "metadata": {"namespace": self.central_namespace, "name": name},
             "stringData": {"password": self.central_password},
         }
-        subprocess.run(
-            [self.kubectl, "apply", "-f", "-"], input=yaml.dump(secret), capture_output=True, text=True, check=True
+        run_command(
+            "Applying admin password secret",
+            [self.kubectl, "apply", "-f", "-"],
+            input=yaml.dump(secret),
+            capture_output=True,
+            text=True,
+            check=True,
         )
 
     def generate_crs(self, cluster_name: str) -> str:
@@ -677,7 +672,8 @@ class ACSDeployer:
                 env = {**os.environ, "ROX_ADMIN_PASSWORD": self.central_password}
                 if self.rox_ca_cert_file:
                     env["ROX_CA_CERT_FILE"] = self.rox_ca_cert_file
-                result = subprocess.run(
+                result = run_command(
+                    "Generating CRS",
                     [
                         "roxctl",
                         "-e",
@@ -693,7 +689,8 @@ class ACSDeployer:
                     check=True,
                     env=env,
                 )
-                return result.stdout.strip()
+                output: str = result.stdout.strip()
+                return output
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
                 # Decide whether to retry based on error text
                 error_output = ""
@@ -739,7 +736,8 @@ class ACSDeployer:
 
     def apply_yaml_to_namespace(self, namespace: str, crs_content: str):
         """Apply CRS content as a Kubernetes Secret for operator consumption"""
-        subprocess.run(
+        run_command(
+            "Applying CRS content as a Kubernetes Secret for operator consumption",
             [self.kubectl, "apply", "-n", namespace, "-f", "-"],
             input=crs_content,
             capture_output=True,
@@ -777,63 +775,53 @@ class ACSDeployer:
 
     def get_central_endpoint(self, namespace: str) -> str:
         """Get Central endpoint from LoadBalancer or service"""
-        try:
-            # Try to get LoadBalancer IP from Central service
+        # Try to get LoadBalancer IP from Central service
+        result = run_command(
+            "Getting Central endpoint from LoadBalancer or service",
+            [
+                self.kubectl,
+                "-n",
+                namespace,
+                "get",
+                "service",
+                "central-loadbalancer",
+                "-o",
+                "jsonpath={.status.loadBalancer.ingress[0].ip}",
+            ],
+            capture_output=True,
+            text=True,
+        )
 
-            # Check for Central service with LoadBalancer
-            result = subprocess.run(
-                [
-                    self.kubectl,
-                    "-n",
-                    namespace,
-                    "get",
-                    "service",
-                    "central-loadbalancer",
-                    "-o",
-                    "jsonpath={.status.loadBalancer.ingress[0].ip}",
-                ],
-                capture_output=True,
-                text=True,
-            )
+        if result.returncode == 0 and result.stdout.strip():
+            output: str = result.stdout.strip()
+            return output
 
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-
-            raise ValueError("No Central endpoint found")
-
-        except Exception as e:
-            self.logger.error(f"Failed to get central endpoint: {str(e)}")
-            raise
+        raise ValueError("No Central endpoint found")
 
     def ensure_namespace_exists(self, namespace: str):
         """Ensure the specified namespace exists, create if it doesn't"""
-        try:
-            # Check if namespace exists
-            result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
+        result = run_command(
+            "Checking namespace", [self.kubectl, "get", "namespace", namespace], capture_output=True, text=True
+        )
 
-            if result.returncode == 0:
-                self.logger.print_with_timestamp(f"Namespace '{namespace}' already exists", style="dim cyan")
-                return True
+        if result.returncode == 0:
+            self.logger.print_with_timestamp(f"Namespace '{namespace}' already exists", style="dim cyan")
+            return True
 
-            # Create namespace
-            namespace_obj = {
-                "apiVersion": "v1",
-                "kind": "Namespace",
-                "metadata": {"name": namespace, "labels": {"name": namespace}},
-            }
+        namespace_obj = {
+            "apiVersion": "v1",
+            "kind": "Namespace",
+            "metadata": {"name": namespace, "labels": {"name": namespace}},
+        }
 
-            # f"Creating namespace: {namespace}"
-            result = subprocess.run(
-                [self.kubectl, "apply", "-f", "-"],
-                input=yaml.dump(namespace_obj),
-                check=True,  # , encoding="utf-8"), check=True,
-                capture_output=True,
-                text=True,
-            )
-
-        except Exception as e:
-            self.logger.error(f"Failed to ensure namespace exists: {str(e)}")
-            raise
+        result = run_command(
+            "Creating namespace",
+            [self.kubectl, "apply", "-f", "-"],
+            input=yaml.dump(namespace_obj),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
     def wait_for_ready_deployment(self, namespace: str, deployment: str, timeout: int = 800):
         """Wait for deployment to become ready"""
@@ -843,35 +831,29 @@ class ACSDeployer:
             start_time = time.time()
             steps_progressed = 0
             while time.time() - start_time < timeout:
-                try:
-                    # Check if central deployment exists and is ready
-                    result = subprocess.run(
-                        [
-                            self.kubectl,
-                            "get",
-                            "deployment",
-                            deployment,
-                            "-n",
-                            namespace,
-                            "-o",
-                            "jsonpath={.status.readyReplicas}",
-                        ],
-                        capture_output=True,
-                        text=True,
-                    )
+                # Check if central deployment exists and is ready
+                result = run_command(
+                    "Checking deployment readiness",
+                    [
+                        self.kubectl,
+                        "get",
+                        "deployment",
+                        deployment,
+                        "-n",
+                        namespace,
+                        "-o",
+                        "jsonpath={.status.readyReplicas}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
 
-                    if result.returncode == 0 and result.stdout.strip():
-                        ready_replicas = result.stdout.strip()
-                        if ready_replicas and ready_replicas != "0":
-                            progress.stop()
-                            self.logger.print_with_timestamp(f"✓ Deployment {deployment} ready", style="bold green")
-                            return
-
-                except Exception as e:
-                    self.logger.print_with_timestamp(
-                        f"Ignoring transient error while checking {deployment} readiness: {e}",
-                        style="dim yellow",
-                    )
+                if result.returncode == 0 and result.stdout.strip():
+                    ready_replicas = result.stdout.strip()
+                    if ready_replicas and ready_replicas != "0":
+                        progress.stop()
+                        self.logger.print_with_timestamp(f"✓ Deployment {deployment} ready", style="bold green")
+                        return
 
                 more_steps = math.floor(time.time() - start_time) - steps_progressed
                 progress.update(task, advance=more_steps)
@@ -888,39 +870,35 @@ class ACSDeployer:
 
         Returns the path to the written PEM file.
         """
+        # Get base64-encoded CA from the secret
+        result = run_command(
+            "Getting central CA certificate from secret",
+            [
+                self.kubectl,
+                "-n",
+                namespace,
+                "get",
+                "secret",
+                "central-tls",
+                "-o",
+                "jsonpath={.data.ca\\.pem}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        encoded = (result.stdout or "").strip()
+        if not encoded:
+            raise RoxieError("central CA not found in secret central-tls")
+
+        decoded_bytes = base64.b64decode(encoded)
+
+        fd, path = tempfile.mkstemp(prefix="roxie-ca-", suffix=".pem", text=False)
         try:
-            # Get base64-encoded CA from the secret
-            result = subprocess.run(
-                [
-                    self.kubectl,
-                    "-n",
-                    namespace,
-                    "get",
-                    "secret",
-                    "central-tls",
-                    "-o",
-                    "jsonpath={.data.ca\\.pem}",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
+            os.write(fd, decoded_bytes)
+        finally:
+            os.close(fd)
 
-            encoded = (result.stdout or "").strip()
-            if not encoded:
-                raise RoxieError("central CA not found in secret central-tls")
-
-            decoded_bytes = base64.b64decode(encoded)
-
-            fd, path = tempfile.mkstemp(prefix="roxie-ca-", suffix=".pem", text=False)
-            try:
-                os.write(fd, decoded_bytes)
-            finally:
-                os.close(fd)
-
-            self.rox_ca_cert_file = path
-            return path
-
-        except subprocess.CalledProcessError as e:
-            detail = (e.stderr or e.stdout or "").strip()
-            raise RoxieError(f"Failed to fetch central CA: {detail}") from e
+        self.rox_ca_cert_file = path
+        return path

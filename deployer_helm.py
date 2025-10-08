@@ -1,5 +1,4 @@
 import random
-import subprocess
 import tempfile
 from typing import Any
 
@@ -8,6 +7,7 @@ from rich.panel import Panel
 
 import helpers
 from deployer import ACSDeployer
+from helpers import run_command
 from resources_presets import (
     resources_central_db_small,
     resources_central_small,
@@ -173,7 +173,11 @@ class ACSDeployerHelm(ACSDeployer):
             )
             self.console.print(info_panel)
 
-            subprocess.run(
+            if self.namespace_exist(self.central_namespace):
+                self.teardown_all_async()
+
+            run_command(
+                "Instantiating central-services chart",
                 [
                     "roxctl",
                     "helm",
@@ -206,7 +210,9 @@ class ACSDeployerHelm(ACSDeployer):
                     central_f.name,
                 ] + helm_args
 
-                template_result = subprocess.run(helm_template_cmd, capture_output=True, text=True, check=True)
+                template_result = run_command(
+                    "Rendering central-services chart", helm_template_cmd, capture_output=True, text=True, check=True
+                )
                 image_refs = []
                 for line in template_result.stdout.split("\n"):
                     if 'image: "' in line:
@@ -220,7 +226,8 @@ class ACSDeployerHelm(ACSDeployer):
                     "securedclusters.platform.stackrox.io",
                     "securitypolicies.config.stackrox.io",
                 ]
-                subprocess.run(
+                run_command(
+                    "Deleting CRDs",
                     [self.kubectl, "delete", "crd", "--ignore-not-found=true"] + crds,
                     check=True,
                     capture_output=True,
@@ -240,7 +247,7 @@ class ACSDeployerHelm(ACSDeployer):
                     central_f.name,
                 ] + helm_args
 
-                subprocess.run(install_cmd, check=True, capture_output=True, text=True)
+                run_command("Installing helm-services chart", install_cmd, check=True, capture_output=True, text=True)
 
             self.wait_for_ready_deployment(self.central_namespace, "central")
             if self.exposure == "none" and self.port_forwarding_enabled:
@@ -271,7 +278,8 @@ class ACSDeployerHelm(ACSDeployer):
 
             crs_content = self.generate_crs(cluster_name)
 
-            subprocess.run(
+            run_command(
+                "Instantiating secured-cluster-services chart",
                 [
                     "roxctl",
                     "helm",
@@ -312,7 +320,9 @@ class ACSDeployerHelm(ACSDeployer):
                     values_f.name,
                 ] + helm_args
 
-                subprocess.run(install_cmd, check=True, capture_output=True, text=True)
+                run_command(
+                    "Installing secured-cluster-services chart", install_cmd, check=True, capture_output=True, text=True
+                )
 
             # success_panel = Panel.fit(
             #     f"[bold green]✓ Secured Cluster Deployment Complete[/bold green]\n\n[bold]Cluster Name:     [/bold] {cluster_name}\n",

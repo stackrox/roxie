@@ -2,13 +2,14 @@ import os
 import random
 import subprocess
 import time
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
 import helpers
 from deployer import ACSDeployer
 from errors import RoxieError
+from helpers import run_command
 
 
 class ACSDeployerOperator(ACSDeployer):
@@ -19,7 +20,13 @@ class ACSDeployerOperator(ACSDeployer):
         self.logger.print_with_timestamp(f"Applying {len(crd_files)} CRD(s) to cluster", style="bold cyan")
 
         for crd_file in crd_files:
-            subprocess.run([self.kubectl, "apply", "-f", crd_file], capture_output=True, text=True, check=True)
+            run_command(
+                "Applying CRD to cluster",
+                [self.kubectl, "apply", "-f", crd_file],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
             crd_basename = os.path.basename(crd_file)
             self.logger.print_with_timestamp(f"✓ Successfully applied CRD {crd_basename}", style="bold green")
 
@@ -186,7 +193,8 @@ class ACSDeployerOperator(ACSDeployer):
         return central_cr
 
     def apply_central_cr(self, central_cr: dict[str, Any]):
-        subprocess.run(
+        run_command(
+            "Applying Central CR",
             [self.kubectl, "apply", "-f", "-"],
             input=yaml.dump(central_cr),
             check=True,
@@ -241,7 +249,8 @@ class ACSDeployerOperator(ACSDeployer):
         return secured_cluster_cr
 
     def apply_secured_cluster_cr(self, secured_cluster_cr: dict[str, Any]):
-        subprocess.run(
+        run_command(
+            "Applying SecuredCluster CR",
             [self.kubectl, "apply", "-f", "-"],
             input=yaml.dump(secured_cluster_cr),
             check=True,
@@ -266,14 +275,22 @@ class ACSDeployerOperator(ACSDeployer):
                 return False
 
             # Check if namespace exists
-            result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
-
+            result = run_command(
+                title=f"Retrieving namespace {namespace}",
+                cmd=[self.kubectl, "get", "namespace", namespace],
+                capture_output=True,
+                text=True,
+            )
             if result.returncode != 0:
                 return False
 
             # Check if CR exists
-            result = subprocess.run([self.kubectl, "get", cr_type, "-n", namespace], capture_output=True, text=True)
-
+            result = run_command(
+                title=f"Retrieving {cr_type} in namespace {namespace}",
+                cmd=[self.kubectl, "get", cr_type, "-n", namespace],
+                capture_output=True,
+                text=True,
+            )
             return result.returncode == 0
 
         except Exception as e:
@@ -295,25 +312,22 @@ class ACSDeployerOperator(ACSDeployer):
             self.logger.print_with_timestamp(f"Using {container_tool} to extract bundle", style="dim blue")
 
             # Pull the bundle image (silent on success)
-            try:
-                subprocess.run(
-                    [container_tool, "pull", bundle_image],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    check=True,
-                )
-            except subprocess.CalledProcessError as e:
-                detail = (e.stderr or "").strip()
-                raise RuntimeError(f"Failed to pull bundle image: {bundle_image}: {detail}") from e
+            run_command(
+                "Pulling operator bundle image",
+                [container_tool, "pull", bundle_image],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True,
+            )
 
             # Extract bundle contents using container copy
             # Create a temporary container and copy files out
             container_id = f"stackrox-bundle-extract-{int(time.time())}"
 
             try:
-                # Create container
-                subprocess.run(
+                run_command(
+                    "Creating temporary container for bundle",
                     [container_tool, "create", "--name", container_id, bundle_image],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,
@@ -321,8 +335,8 @@ class ACSDeployerOperator(ACSDeployer):
                     check=True,
                 )
 
-                # Copy manifests directory from container to host
-                subprocess.run(
+                run_command(
+                    "Retrieving bundle contents",
                     [container_tool, "cp", f"{container_id}:/manifests/.", bundle_dir],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,
@@ -332,15 +346,13 @@ class ACSDeployerOperator(ACSDeployer):
 
             finally:
                 # Clean up container
-                try:
-                    subprocess.run(
-                        [container_tool, "rm", container_id],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        check=False,
-                    )
-                except Exception:  # noqa: S110
-                    pass
+                run_command(
+                    "Removing temporary container",
+                    [container_tool, "rm", container_id],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
 
             self.logger.print_with_timestamp(f"✓ Bundle extracted to: {bundle_dir}", style="bold green")
             return bundle_dir
@@ -385,7 +397,7 @@ class ACSDeployerOperator(ACSDeployer):
 
         missing: list[str] = []
         for crd in required_crds:
-            result = subprocess.run([self.kubectl, "get", "crd", crd], capture_output=True, text=True)
+            result = run_command("Retrieving CRD", [self.kubectl, "get", "crd", crd], capture_output=True, text=True)
             if result.returncode != 0:
                 missing.append(crd)
 
@@ -501,7 +513,13 @@ metadata:
                 temp_file = f.name
 
             try:
-                subprocess.run([self.kubectl, "apply", "-f", temp_file], capture_output=True, text=True, check=True)
+                run_command(
+                    "Applying namespace",
+                    [self.kubectl, "apply", "-f", temp_file],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
             finally:
                 os.unlink(temp_file)
 
@@ -511,19 +529,20 @@ metadata:
 
     def create_service_account(self, namespace: str, service_account_name: str):
         """Create ServiceAccount for operator"""
-        try:
-            sa_yaml = {
-                "apiVersion": "v1",
-                "kind": "ServiceAccount",
-                "metadata": {"name": service_account_name, "namespace": namespace, "labels": {"app": "rhacs-operator"}},
-            }
+        sa_yaml = {
+            "apiVersion": "v1",
+            "kind": "ServiceAccount",
+            "metadata": {"name": service_account_name, "namespace": namespace, "labels": {"app": "rhacs-operator"}},
+        }
 
-            subprocess.run(
-                [self.kubectl, "apply", "-f", "-"], input=yaml.dump(sa_yaml), capture_output=True, text=True, check=True
-            )
-
-        except Exception as e:
-            raise RoxieError("Failed to create ServiceAccount") from e
+        run_command(
+            "Creating ServiceAccount for operator",
+            [self.kubectl, "apply", "-f", "-"],
+            input=yaml.dump(sa_yaml),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
     def create_cluster_role_from_csv(self, deployment_spec: dict[str, Any]):
         """Create ClusterRole from CSV cluster permissions"""
@@ -542,7 +561,8 @@ metadata:
             "rules": rules,
         }
 
-        subprocess.run(
+        run_command(
+            "Applying ClusterRole",
             [self.kubectl, "apply", "-f", "-"],
             input=yaml.dump(cluster_role_yaml),
             capture_output=True,
@@ -563,7 +583,8 @@ metadata:
             },
             "subjects": [{"kind": "ServiceAccount", "name": service_account_name, "namespace": namespace}],
         }
-        subprocess.run(
+        run_command(
+            "Applying ClusterRoleBinding",
             [self.kubectl, "apply", "-f", "-"],
             input=yaml.dump(crb_yaml),
             capture_output=True,
@@ -602,7 +623,8 @@ metadata:
                 "service_account", "rhacs-operator-controller-manager"
             )
 
-        subprocess.run(
+        run_command(
+            "Applying operator deployment",
             [self.kubectl, "apply", "-f", "-"],
             input=yaml.dump(deployment_yaml),
             capture_output=True,
@@ -612,45 +634,29 @@ metadata:
 
     def apply_bundle_service_resources(self, bundle_dir: str, namespace: str):
         """Apply Service and ClusterRole resources from bundle to the operator namespace"""
-        success_count = 0
-        total_count = 0
 
-        # Apply the Service resource
         service_file = os.path.join(bundle_dir, "rhacs-operator-controller-manager-metrics-service_v1_service.yaml")
-        if os.path.exists(service_file):
-            total_count += 1
-            # Need to patch the service to add namespace
-            import tempfile
+        run_command(
+            "Applying Service",
+            [self.kubectl, "apply", "-n", namespace, "-f", service_file],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
-            with open(service_file) as f:
-                service_content = yaml.safe_load(f)
-
-            # Add namespace to metadata
-            if "metadata" not in service_content:
-                service_content["metadata"] = {}
-            service_content["metadata"]["namespace"] = namespace
-
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-                yaml.dump(service_content, f, default_flow_style=False)
-                temp_file = f.name
-
-            try:
-                subprocess.run([self.kubectl, "apply", "-f", temp_file], capture_output=True, text=True, check=True)
-                success_count += 1
-            finally:
-                os.unlink(temp_file)
-
-        # Apply the ClusterRole resource (metrics reader)
         clusterrole_file = os.path.join(
             bundle_dir, "rhacs-operator-metrics-reader_rbac.authorization.k8s.io_v1_clusterrole.yaml"
         )
-        if os.path.exists(clusterrole_file):
-            total_count += 1
-            subprocess.run([self.kubectl, "apply", "-f", clusterrole_file], capture_output=True, text=True, check=True)
-            success_count += 1
+        run_command(
+            "Applying ClusterRole",
+            [self.kubectl, "apply", "-f", clusterrole_file],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
         self.logger.print_with_timestamp(
-            f"✓ Applied {success_count}/{total_count} bundle service resources", style="bold green"
+            f"✓ Applied bundle service resources to namespace {namespace}", style="bold green"
         )
 
     def wait_for_operator_ready(
@@ -663,7 +669,8 @@ metadata:
             start_time = time.time()
             while time.time() - start_time < timeout:
                 # Check deployment status
-                result = subprocess.run(
+                result = run_command(
+                    "Checking operator deployment status",
                     [
                         self.kubectl,
                         "get",
@@ -702,14 +709,17 @@ metadata:
         """Check if the operator is already deployed and ready"""
         try:
             # Check if namespace exists
-            result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
+            result = run_command(
+                "Checking namespace", [self.kubectl, "get", "namespace", namespace], capture_output=True, text=True
+            )
 
             if result.returncode != 0:
                 self.logger.print_with_timestamp(f"Operator namespace '{namespace}' does not exist", style="dim cyan")
                 return False
 
             # Check if deployment exists and is ready
-            result = subprocess.run(
+            result = run_command(
+                "Checking operator deployment status",
                 [
                     self.kubectl,
                     "get",
@@ -754,7 +764,8 @@ metadata:
         """Get the version of the currently deployed operator"""
         try:
             # Get the container image from the deployment
-            result = subprocess.run(
+            result = run_command(
+                "Getting current operator version",
                 [
                     self.kubectl,
                     "get",
@@ -772,7 +783,7 @@ metadata:
             if result.returncode != 0:
                 return ""
 
-            image = result.stdout.strip()
+            image = cast(str, result.stdout).strip()
             if ":" in image:
                 # Extract tag from image (e.g., "quay.io/rhacs-eng/stackrox-operator:4.9.0-441-g7754d5a916")
                 current_tag = image.split(":")[-1]
@@ -916,22 +927,18 @@ metadata:
         # Execute cleanup steps
         success_count = 0
         for step in cleanup_steps:
-            try:
-                self.logger.print_with_timestamp(f"➡️  {step['description']}", style="dim cyan")
-                subprocess.run(
-                    step["command"],
-                    text=True,
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
-                )
-                success_count += 1
-            except subprocess.CalledProcessError as e:
-                self.logger.print_with_timestamp(
-                    f"⚠️  Failed: {step['description']} (continuing...) - {(e.stderr or str(e)).strip()}",
-                    style="dim yellow",
-                )
-                continue
+            self.logger.print_with_timestamp(f"➡️  {step['description']}", style="dim cyan")
+            desc = cast(str, step["description"])
+            cmd = cast(list[str], step["command"])
+            run_command(
+                title=desc,
+                cmd=cmd,
+                text=True,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+            success_count += 1
 
         # Wait for namespace deletion
         self.logger.print_with_timestamp("⏳ Waiting for operator namespace to be fully deleted...", style="bold cyan")
@@ -940,7 +947,9 @@ metadata:
         start_time = time.time()
 
         while time.time() - start_time < timeout:
-            result = subprocess.run([self.kubectl, "get", "namespace", namespace], capture_output=True, text=True)
+            result = run_command(
+                "Checking namespace", [self.kubectl, "get", "namespace", namespace], capture_output=True, text=True
+            )
             if result.returncode != 0:
                 self.logger.print_with_timestamp("✓ Operator teardown completed", style="bold green")
                 return

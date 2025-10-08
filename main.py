@@ -195,6 +195,7 @@ backend https_back
                                 tmp.close()
 
                             env["ROXIE_HAPROXY_CFG_FILE"] = haproxy_cfg_path
+
                             def _cleanup_cfg() -> None:
                                 if os.path.exists(haproxy_cfg_path):
                                     try:
@@ -202,7 +203,10 @@ backend https_back
                                     except FileNotFoundError:
                                         return
                                     except Exception as e:
-                                        console.print(f"Warning: failed removing temp haproxy config: {e}", style="dim yellow")
+                                        console.print(
+                                            f"Warning: failed removing temp haproxy config: {e}", style="dim yellow"
+                                        )
+
                             cleanup.callback(_cleanup_cfg)
 
                             # Start HAProxy in the background; silence stdout/stderr
@@ -246,16 +250,22 @@ backend https_back
         console.print("\nOperation cancelled by user", style="bold yellow")
         return 1
     except CalledProcessError as e:
-        console.print(f"[bold red]{e}[/bold red]")
+        console.print(f"Error: {str(e)}", style="bold red")
+        console.print_exception()
         if e.stderr:
-            console.print(f"[dim]stderr: {e.stderr}[/dim]")
+            stderr = e.stderr.decode() if isinstance(e.stderr, bytes | bytearray) else e.stderr
+            console.print(f"[dim]Command stderr:\n{stderr}[/dim]")
         return 1
     except RoxieError as e:
         console.print(f"[bold red]{e}[/bold red]")
+        stderr = getattr(e, "stderr", None)
+        if stderr:
+            stderr = stderr.decode() if isinstance(stderr, bytes | bytearray) else stderr
+            console.print(f"[dim]Command stderr:\n{stderr}[/dim]")
         return 1
     except Exception as e:
         console.print(f"Unexpected error: {str(e)}", style="bold red")
-        console.print_exception()  # rich traceback
+        console.print_exception()
         return 1
     return 0
 

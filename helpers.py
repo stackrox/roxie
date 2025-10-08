@@ -12,6 +12,8 @@ from deepmerge import Merger
 from rich.progress import ProgressColumn
 from rich.text import Text
 
+from errors import RoxieError
+
 
 class TimestampColumn(ProgressColumn):
     """A column that shows a live timestamp relative to start time"""
@@ -37,6 +39,13 @@ def get_current_cluster_context() -> str:
 
 def get_container_tool() -> str:
     return "podman"
+
+
+def run_command(title: str, cmd: list[str], **kwargs) -> subprocess.CompletedProcess[Any]:
+    try:
+        return subprocess.run(cmd, **kwargs)
+    except subprocess.CalledProcessError as e:
+        raise RoxieError(f"Step '{title}' failed", stderr=e.stderr) from e
 
 
 def merge_dicts(base_dict: dict[str, Any], *dicts: dict[str, Any]) -> dict[str, Any]:

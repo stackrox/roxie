@@ -2,10 +2,10 @@
 
 import json
 import os
-import subprocess
 
 from rich.console import Console
 
+from helpers import run_command
 from logger import Logger
 
 
@@ -92,20 +92,20 @@ class ImageCache:
             return True
 
         # Use skopeo to check if image is pullable
-        try:
-            result = subprocess.run(
-                ["skopeo", "inspect", "--raw", f"docker://{image_ref}"], capture_output=True, text=True, timeout=30
-            )
+        result = run_command(
+            "Verifying image pullability",
+            ["skopeo", "inspect", "--raw", f"docker://{image_ref}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
 
-            if result.returncode == 0:
-                self.add_to_cache(image_ref)
-                return True
-            else:
-                print(result.stderr)
-                print(result.stdout)
-
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-            pass
+        if result.returncode == 0:
+            self.add_to_cache(image_ref)
+            return True
+        else:
+            print(result.stderr)
+            print(result.stdout)
 
         return False
 
