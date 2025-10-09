@@ -2,6 +2,8 @@
 
 Roxie is a fast, developer-friendly CLI to deploy and manage Red Hat Advanced Cluster Security (ACS) on any Kubernetes/OpenShift cluster.
 
+Roxie has been authored with significant AI contributions.
+
 ## Highlights
 
 - Quick & easy ACS deployment: one command to get Central and a Secured Cluster up and running.
