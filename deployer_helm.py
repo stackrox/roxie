@@ -262,12 +262,12 @@ class ACSDeployerHelm(ACSDeployer):
         self.logger.print_with_timestamp(
             f"Deploying Secured Cluster with Helm with resources: {resources}", style="bold cyan"
         )
-        cluster_name = f"sensor-{random.randint(1000, 9999)}"  # noqa: S311
-        values_yaml = self.create_secured_cluster_yaml(cluster_name, resources)
+        self.cluster_name = f"sensor-{random.randint(1000, 9999)}"  # noqa: S311
+        values_yaml = self.create_secured_cluster_yaml(self.cluster_name, resources)
 
         with tempfile.TemporaryDirectory() as chart_dir:
             info_panel = Panel.fit(
-                f"[bold]Cluster Name:     [/bold] {cluster_name}\n"
+                f"[bold]Cluster Name:     [/bold] {self.cluster_name}\n"
                 f"[bold]Namespace:        [/bold] {self.secured_cluster_namespace}\n"
                 f"[bold]Image Tag:        [/bold] {self.main_image_tag or 'default'}",
                 title="[bold cyan]ACS Secured Cluster Deployment Plan[/bold cyan]",
@@ -278,7 +278,7 @@ class ACSDeployerHelm(ACSDeployer):
             if self.namespace_exist(self.secured_cluster_namespace):
                 self.teardown("secured-cluster")
 
-            crs_content = self.generate_crs(cluster_name)
+            crs_content = self.generate_crs(self.cluster_name)
 
             run_command(
                 "Instantiating secured-cluster-services chart",
@@ -326,10 +326,4 @@ class ACSDeployerHelm(ACSDeployer):
                     "Installing secured-cluster-services chart", install_cmd, check=True, capture_output=True, text=True
                 )
 
-            # success_panel = Panel.fit(
-            #     f"[bold green]✓ Secured Cluster Deployment Complete[/bold green]\n\n[bold]Cluster Name:     [/bold] {cluster_name}\n",
-            #     title="[bold green]Secured Cluster[/bold green]",
-            #     border_style="green",
-            # )
-            # self.console.print(success_panel)
             self.show_secured_cluster_success_panel()

@@ -13,6 +13,7 @@ from helpers import run_command
 
 admin_password_secret_name = "admin-password"  # noqa: S105
 
+
 class ACSDeployerOperator(ACSDeployer):
     """Operator-specific deployer that implements Operator deployment/teardown."""
 
@@ -88,13 +89,13 @@ class ACSDeployerOperator(ACSDeployer):
         self.show_central_success_panel()
 
     def deploy_secured_cluster(self, resources: str):
-        self.cluster_name = f"sensor-{random.randint(1000, 9999)}" # noqa: S311
+        self.cluster_name = f"sensor-{random.randint(1000, 9999)}"  # noqa: S311
         self.logger.print_with_timestamp(f"Deploying Secured Cluster with resources: {resources}", style="bold cyan")
         self.teardown("secured-cluster")
         self.ensure_namespace_exists(self.secured_cluster_namespace)
         self.prepare_namespace(self.secured_cluster_namespace)
-        crs_content = self.generate_crs(cluster_name)
-        cr = self.create_secured_cluster_cr(resources)
+        crs_content = self.generate_crs(self.cluster_name)
+        cr = self.create_secured_cluster_cr(resources, self.cluster_name)
         self.apply_yaml_to_namespace(self.secured_cluster_namespace, crs_content)
         self.apply_secured_cluster_cr(cr)
         self.show_secured_cluster_success_panel()
@@ -217,7 +218,7 @@ class ACSDeployerOperator(ACSDeployer):
         except Exception as e:
             self.logger.print_with_timestamp(f"Warning: failed to fetch central CA: {e}", style="bold yellow")
 
-    def create_secured_cluster_cr(self, resources_name: str, cluster_name="sensor") -> dict[str, Any]:
+    def create_secured_cluster_cr(self, resources_name: str, cluster_name) -> dict[str, Any]:
         """Create SecuredCluster Custom Resource for operator deployment"""
         # Determine central endpoint
         if not self.central_endpoint:

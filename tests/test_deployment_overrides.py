@@ -1,6 +1,5 @@
 import yaml
 
-from deployer import ACSDeployer
 from deployer_helm import ACSDeployerHelm
 from deployer_operator import ACSDeployerOperator
 
@@ -59,9 +58,10 @@ def test_create_secured_cluster_cr_respects_override(tmp_path):
 
     def _fake_generate_crs(cluster_name: str) -> str:  # noqa: ARG001
         return "kind: Secret\napiVersion: v1"
+
     op.generate_crs = _fake_generate_crs  # type: ignore[method-assign]
 
-    sc = op.create_secured_cluster_cr(resources_name="default")
+    sc = op.create_secured_cluster_cr(resources_name="default", cluster_name="sensor-x")
 
     assert sc["metadata"]["annotations"]["example.com/sc"] == "ok"
     assert sc["spec"]["admissionControl"]["replicas"] == 3
