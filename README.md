@@ -61,18 +61,6 @@ Teardown:
 ./bin/roxie teardown both
 ```
 
-### Environment integration (direnv)
-
-Roxie manages an envrc file at `~/.envrc.roxie` with handy variables (e.g., `API_ENDPOINT`, `ROX_ADMIN_PASSWORD`) from the current deployment. You can source it from any project’s `.envrc` to make these available in your shell:
-
-```bash
-if [[ -f ~/.envrc.roxie ]]; then
-  source_env ~/.envrc.roxie
-fi
-```
-
-This makes it convenient to access the admin password and API endpoint from the latest deploy.
-
 ## Development
 
 Enter the dev shell (pins Python, kubectl, helm, pytest, etc.):
