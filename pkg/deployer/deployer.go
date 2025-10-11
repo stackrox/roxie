@@ -1,0 +1,728 @@
+package deployer
+
+import (
+	"context"
+	"crypto/rand"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+
+	"github.com/fatih/color"
+
+	"github.com/stackrox/roxie-golang/pkg/clusterdefaults"
+	"github.com/stackrox/roxie-golang/pkg/dockerauth"
+	"github.com/stackrox/roxie-golang/pkg/helpers"
+	"github.com/stackrox/roxie-golang/pkg/imagecache"
+	"github.com/stackrox/roxie-golang/pkg/logger"
+	"github.com/stackrox/roxie-golang/pkg/portforward"
+)
+
+var (
+	centralNamespace = "acs-central"
+	sensorNamespace  = "acs-sensor"
+	defaultExposure  = "loadbalancer"
+)
+
+// Deployer is the base deployer for ACS
+type Deployer struct {
+	logger                 *logger.Logger
+	startTime              time.Time
+	dockerAuth             *dockerauth.DockerAuth
+	imageCache             *imagecache.ImageCache
+	portForward            *portforward.Manager
+	clusterDefaults        *clusterdefaults.Manager
+	kubectl                string
+	roxctlVersion          string
+	centralNamespace       string
+	sensorNamespace        string
+	mainImageTag           string
+	operatorTag            string
+	centralEndpoint        string
+	centralPassword        string
+	roxCACertFile          string
+	kubeContext            string
+	portForwardEnabled     bool
+	exposure               string
+	overrideFile           string
+	overrideSetExpressions []string
+	envrcFile              string
+	useHelm                bool
+	verbose                bool
+	earlyReadiness         bool
+}
+
+func New(log *logger.Logger, overrideFile string, overrideSetExpressions []string) (*Deployer, error) {
+	// Check required tools first
+	if err := checkRequiredTools(); err != nil {
+		return nil, err
+	}
+
+	roxctlVersion, err := getRoxctlVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	kubectl := getKubectl()
+
+	d := &Deployer{
+		logger:                 log,
+		startTime:              time.Now(),
+		kubectl:                kubectl,
+		roxctlVersion:          roxctlVersion,
+		centralNamespace:       centralNamespace,
+		sensorNamespace:        sensorNamespace,
+		mainImageTag:           helpers.LookupMainImageTag(),
+		exposure:               defaultExposure,
+		overrideFile:           overrideFile,
+		overrideSetExpressions: overrideSetExpressions,
+	}
+
+	d.dockerAuth = dockerauth.New(log, true)
+	d.imageCache = imagecache.New(log, "", 20)
+	d.portForward = portforward.New(kubectl, log)
+	d.clusterDefaults = clusterdefaults.NewManager(log)
+	d.operatorTag = helpers.ConvertMainTagToOperatorTag(d.mainImageTag)
+
+	if password := os.Getenv("ROX_ADMIN_PASSWORD"); password != "" {
+		d.centralPassword = password
+	} else {
+		d.centralPassword = generatePassword()
+	}
+
+	if endpoint := os.Getenv("API_ENDPOINT"); endpoint != "" {
+		d.centralEndpoint = endpoint
+	}
+
+	if caCert := os.Getenv("ROX_CA_CERT_FILE"); caCert != "" {
+		d.roxCACertFile = caCert
+	}
+
+	ctx, err := getCurrentContext(kubectl)
+	if err != nil {
+		return nil, err
+	}
+	d.kubeContext = ctx
+
+	log.Success("🚀 ACS Deployer initialized")
+	log.PrintWithTimestamp(fmt.Sprintf("roxctl version: %s", d.roxctlVersion))
+
+	return d, nil
+}
+
+func formatComponentName(component string) string {
+	switch component {
+	case "both", "all":
+		return "Central and Secured Cluster"
+	case "secured-cluster", "sensor":
+		return "Secured Cluster"
+	case "central":
+		return "Central"
+	default:
+		return component
+	}
+}
+
+func (d *Deployer) Deploy(ctx context.Context, component, resources, exposure string) error {
+	adjustedResources, adjustedExposure, adjustedPortForward := d.clusterDefaults.ApplyConvenienceDefaults(
+		d.kubeContext,
+		resources,
+		exposure,
+		d.portForwardEnabled,
+	)
+
+	resources = adjustedResources
+	exposure = adjustedExposure
+	d.portForwardEnabled = adjustedPortForward
+	d.exposure = exposure
+
+	d.logger.PrintWithTimestamp(fmt.Sprintf("Initiating deployment of %s", formatComponentName(component)))
+
+	switch component {
+	case "central":
+		return d.deployCentral(ctx, resources, exposure)
+	case "secured-cluster", "sensor":
+		return d.deploySecuredCluster(ctx, resources)
+	case "both", "all":
+		if err := d.deployCentral(ctx, resources, exposure); err != nil {
+			return fmt.Errorf("failed to deploy central: %w", err)
+		}
+		return d.deploySecuredCluster(ctx, resources)
+	default:
+		return fmt.Errorf("unknown component: %s", component)
+	}
+}
+
+func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string) error {
+	if d.namespaceExists(d.centralNamespace) {
+		d.logger.Info("Existing Central deployment found, tearing down...")
+		if err := d.teardownCentral(ctx); err != nil {
+			d.logger.Warning(fmt.Sprintf("Error during teardown: %v", err))
+		}
+		if err := d.waitForNamespaceDeletion(d.centralNamespace); err != nil {
+			return fmt.Errorf("failed waiting for namespace deletion: %w", err)
+		}
+	}
+
+	portForwardWanted := d.portForwardEnabled
+
+	var err error
+	if d.useHelm {
+		err = d.deployCentralHelm(ctx, resources, exposure)
+	} else {
+		err = d.deployCentralOperator(ctx, resources, exposure)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	// envrc may be used from different processes, so use actual endpoint not port-forward
+	if d.envrcFile != "" {
+		if err := d.writeEnvrcFile(ctx, exposure, portForwardWanted); err != nil {
+			d.logger.Warning(fmt.Sprintf("Failed to write envrc file: %v", err))
+		}
+	}
+
+	return nil
+}
+
+func (d *Deployer) deploySecuredCluster(ctx context.Context, resources string) error {
+	if d.namespaceExists(d.sensorNamespace) {
+		d.logger.Info("Existing SecuredCluster deployment found, tearing down...")
+		if err := d.teardownSecuredCluster(ctx); err != nil {
+			d.logger.Warning(fmt.Sprintf("Error during teardown: %v", err))
+		}
+		if err := d.waitForNamespaceDeletion(d.sensorNamespace); err != nil {
+			return fmt.Errorf("failed waiting for namespace deletion: %w", err)
+		}
+	}
+
+	if d.useHelm {
+		return d.deploySecuredClusterHelm(ctx, resources)
+	}
+	return d.deploySecuredClusterOperator(ctx, resources)
+}
+
+func (d *Deployer) Teardown(ctx context.Context, component string) error {
+	d.logger.PrintWithTimestamp(fmt.Sprintf("Starting teardown of %s", component))
+
+	switch component {
+	case "central":
+		return d.teardownCentral(ctx)
+	case "secured-cluster", "sensor":
+		return d.teardownSecuredCluster(ctx)
+	case "both", "all":
+		if err := d.teardownSecuredCluster(ctx); err != nil {
+			d.logger.Warning(fmt.Sprintf("Error tearing down secured cluster: %v", err))
+		}
+		return d.teardownCentral(ctx)
+	default:
+		return fmt.Errorf("unknown component: %s", component)
+	}
+}
+
+func (d *Deployer) teardownCentral(ctx context.Context) error {
+	d.logger.Info(fmt.Sprintf("🗑️  Tearing down %s", d.centralNamespace))
+
+	if !d.namespaceExists(d.centralNamespace) {
+		d.logger.PrintWithTimestamp(fmt.Sprintf("Namespace %s doesn't exist, skipping", d.centralNamespace))
+		return nil
+	}
+
+	d.portForward.Stop()
+
+	d.logger.PrintWithTimestamp("Deleting Central custom resource")
+	d.runKubectl(ctx, KubectlOptions{
+		Args:         []string{"delete", "central", "stackrox-central-services", "-n", d.centralNamespace, "--wait=false"},
+		IgnoreErrors: true,
+	})
+
+	time.Sleep(2 * time.Second)
+
+	_, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{"delete", "namespace", d.centralNamespace, "--wait=false"},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete namespace: %w", err)
+	}
+
+	d.logger.PrintWithTimestamp("⏳ Waiting for namespace to be fully deleted...")
+	if err := d.waitForNamespaceDeletion(d.centralNamespace); err != nil {
+		return fmt.Errorf("failed waiting for namespace deletion: %w", err)
+	}
+
+	d.logger.Success(fmt.Sprintf("✓ %s has been deleted", d.centralNamespace))
+	return nil
+}
+
+func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
+	d.logger.Info(fmt.Sprintf("🗑️  Tearing down %s", d.sensorNamespace))
+
+	if !d.namespaceExists(d.sensorNamespace) {
+		d.logger.PrintWithTimestamp(fmt.Sprintf("Namespace %s doesn't exist, skipping", d.sensorNamespace))
+		return nil
+	}
+
+	d.logger.PrintWithTimestamp("Deleting SecuredCluster custom resource")
+	d.runKubectl(ctx, KubectlOptions{
+		Args:         []string{"delete", "securedcluster", "stackrox-secured-cluster-services", "-n", d.sensorNamespace, "--wait=false"},
+		IgnoreErrors: true,
+	})
+
+	time.Sleep(2 * time.Second)
+
+	_, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{"delete", "namespace", d.sensorNamespace, "--wait=false"},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete namespace: %w", err)
+	}
+
+	d.logger.PrintWithTimestamp("⏳ Waiting for namespace to be fully deleted...")
+	if err := d.waitForNamespaceDeletion(d.sensorNamespace); err != nil {
+		return fmt.Errorf("failed waiting for namespace deletion: %w", err)
+	}
+
+	d.logger.Success(fmt.Sprintf("✓ %s has been deleted", d.sensorNamespace))
+	return nil
+}
+
+func (d *Deployer) ensureNamespaceExists(namespace string) error {
+	if d.isNamespaceTerminating(namespace) {
+		d.logger.PrintWithTimestamp(fmt.Sprintf("Namespace %s is terminating, waiting for deletion to complete...", namespace))
+		if err := d.waitForNamespaceDeletion(namespace); err != nil {
+			return fmt.Errorf("failed waiting for namespace deletion: %w", err)
+		}
+	}
+
+	if d.namespaceExists(namespace) {
+		return nil
+	}
+
+	d.logger.PrintWithTimestamp(fmt.Sprintf("Creating namespace %s", namespace))
+
+	_, err := d.runKubectl(context.Background(), KubectlOptions{
+		Args: []string{"create", "namespace", namespace},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create namespace: %w", err)
+	}
+
+	return nil
+}
+
+func (d *Deployer) namespaceExists(namespace string) bool {
+	_, err := d.runKubectl(context.Background(), KubectlOptions{
+		Args: []string{"get", "namespace", namespace},
+	})
+	return err == nil
+}
+
+func (d *Deployer) isNamespaceTerminating(namespace string) bool {
+	result, err := d.runKubectl(context.Background(), KubectlOptions{
+		Args: []string{"get", "namespace", namespace, "-o", "jsonpath={.status.phase}"},
+	})
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(result.Stdout) == "Terminating"
+}
+
+func (d *Deployer) waitForNamespaceDeletion(namespace string) error {
+	timeout := 5 * time.Minute
+	checkInterval := 2 * time.Second
+	progressInterval := 10 * time.Second // Report progress every 10 seconds
+	deadline := time.Now().Add(timeout)
+	lastProgressReport := time.Now()
+
+	for time.Now().Before(deadline) {
+		if !d.namespaceExists(namespace) {
+			d.logger.PrintWithTimestamp(fmt.Sprintf("Namespace %s has been deleted", namespace))
+			return nil
+		}
+
+		// Report progress periodically
+		if time.Since(lastProgressReport) >= progressInterval {
+			elapsed := time.Since(deadline.Add(-timeout))
+			d.logger.Dim(fmt.Sprintf("  ⋯ Still waiting for namespace deletion... (%.0fs elapsed)", elapsed.Seconds()))
+			lastProgressReport = time.Now()
+		}
+
+		time.Sleep(checkInterval)
+	}
+
+	return fmt.Errorf("timeout waiting for namespace %s to be deleted", namespace)
+}
+
+// checkRequiredTools verifies that required CLI tools are available
+func checkRequiredTools() error {
+	requiredTools := []string{"kubectl", "roxctl", "skopeo"}
+
+	var missing []string
+	for _, tool := range requiredTools {
+		if _, err := exec.LookPath(tool); err != nil {
+			missing = append(missing, tool)
+		}
+	}
+
+	// Check for container tool (podman or docker)
+	containerTool := ""
+	if _, err := exec.LookPath("podman"); err == nil {
+		containerTool = "podman"
+	} else if _, err := exec.LookPath("docker"); err == nil {
+		containerTool = "docker"
+	}
+
+	if containerTool == "" {
+		missing = append(missing, "podman or docker")
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("required tools not found in PATH: %s\nPlease install these tools and ensure they are available in your PATH", strings.Join(missing, ", "))
+	}
+
+	return nil
+}
+
+func getKubectl() string {
+	if kubectl := os.Getenv("ORCH_CMD"); kubectl != "" {
+		return kubectl
+	}
+	return "kubectl"
+}
+
+func getRoxctlVersion() (string, error) {
+	cmd := exec.Command("roxctl", "version")
+	output, err := cmd.Output()
+	if err != nil {
+		if _, ok := err.(*exec.Error); ok {
+			return "", errors.New("roxctl not found in PATH; please install roxctl and ensure it's available in your PATH")
+		}
+		if _, ok := err.(*exec.ExitError); ok {
+			return "", errors.New("roxctl not found in PATH; please install roxctl and ensure it's available in your PATH")
+		}
+		return "", fmt.Errorf("failed to get roxctl version: %w", err)
+	}
+
+	version := strings.TrimSpace(string(output))
+	if version == "" {
+		return "", errors.New("roxctl returned empty version")
+	}
+
+	return version, nil
+}
+
+func getCurrentContext(kubectl string) (string, error) {
+	cmd := exec.Command(kubectl, "config", "current-context")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current context: %w", err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+func generatePassword() string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+	const passwordLength = 20
+
+	password := make([]byte, passwordLength)
+	randomBytes := make([]byte, passwordLength)
+
+	if _, err := rand.Read(randomBytes); err != nil {
+		return fmt.Sprintf("admin-%d", time.Now().Unix())
+	}
+
+	for i := 0; i < passwordLength; i++ {
+		password[i] = charset[int(randomBytes[i])%len(charset)]
+	}
+
+	return string(password)
+}
+
+func (d *Deployer) SetEnvrcFile(path string) {
+	d.envrcFile = path
+}
+
+func (d *Deployer) SetPortForwardingEnabled(enabled bool) {
+	d.portForwardEnabled = enabled
+}
+
+func (d *Deployer) SetUseHelm(useHelm bool) error {
+	if useHelm {
+		if _, err := exec.LookPath("helm"); err != nil {
+			return errors.New("helm not found in PATH; please install helm and ensure it's available in your PATH when using --helm flag")
+		}
+	}
+	d.useHelm = useHelm
+	return nil
+}
+
+func (d *Deployer) SetVerbose(verbose bool) {
+	d.verbose = verbose
+}
+
+func (d *Deployer) SetEarlyReadiness(enabled bool) {
+	d.earlyReadiness = enabled
+}
+
+func (d *Deployer) GetDeploymentInfo() (endpoint, password, caCertFile, kubeContext, exposure string) {
+	return d.centralEndpoint, d.centralPassword, d.roxCACertFile, d.kubeContext, d.exposure
+}
+
+// cleanupTempDir safely removes a temporary directory with logging
+func (d *Deployer) cleanupTempDir(path string, description string) {
+	if path == "" {
+		return
+	}
+	if err := os.RemoveAll(path); err != nil {
+		d.logger.Warning(fmt.Sprintf("Failed to cleanup %s at %s: %v", description, path, err))
+	} else {
+		d.logger.Dim(fmt.Sprintf("Cleaned up %s: %s", description, path))
+	}
+}
+
+func (d *Deployer) writeEnvrcFile(ctx context.Context, exposure string, portForwardWanted bool) error {
+	endpoint := strings.TrimPrefix(d.centralEndpoint, "https://")
+
+	content := fmt.Sprintf(`export API_ENDPOINT="%s"
+export ROX_ENDPOINT="%s"
+export ROX_BASE_URL="https://%s"
+export ROX_ADMIN_PASSWORD="%s"
+export ROX_CA_CERT_FILE="%s"
+`, endpoint, endpoint, endpoint, d.centralPassword, d.roxCACertFile)
+
+	if err := os.WriteFile(d.envrcFile, []byte(content), 0600); err != nil {
+		return fmt.Errorf("failed to write envrc file: %w", err)
+	}
+
+	d.logger.Success(fmt.Sprintf("✓ Environment variables written to %s", d.envrcFile))
+	return nil
+}
+
+func (d *Deployer) PrintCentralDeploymentSummary() {
+	component := "Central"
+	mainImageTag := d.mainImageTag
+	helm := d.useHelm
+	exposure := d.exposure
+	portForwarding := d.portForwardEnabled
+	log := d.logger
+	kubeContext := d.kubeContext
+
+	// Calculate box width
+	boxWidth := 60
+
+	// Helper function to truncate long values
+	truncate := func(s string, maxLen int) string {
+		if len(s) <= maxLen {
+			return s
+		}
+		return s[:maxLen-3] + "..."
+	}
+
+	// Helper function to create a row with alignment on colon
+	createRow := func(label, value string) string {
+		// Fixed label width for alignment (adjust this to fit longest label)
+		labelWidth := 22
+		// Maximum value length to keep total under boxWidth
+		maxValueLen := boxWidth - labelWidth - 4 // 4 = space + colon + space + border
+		truncatedValue := truncate(value, maxValueLen)
+
+		// Right-align label, then colon, then value
+		labelPadding := labelWidth - len(label)
+		if labelPadding < 0 {
+			labelPadding = 0
+		}
+		content := fmt.Sprintf(" %s%s: %s", strings.Repeat(" ", labelPadding), label, truncatedValue)
+
+		// Pad to box width
+		padding := boxWidth - len(content) - 1
+		if padding < 0 {
+			padding = 0
+		}
+		return content + strings.Repeat(" ", padding) + " │"
+	}
+
+	// Print the box
+	cyan := color.New(color.FgCyan, color.Bold)
+
+	log.PrintWithTimestamp("")
+	log.PrintWithTimestamp(cyan.Sprint("┌" + strings.Repeat("─", boxWidth) + "┐"))
+
+	title := " Deployment Configuration"
+	titlePadding := boxWidth - len(title)
+	log.PrintWithTimestamp(cyan.Sprint("│") + title + strings.Repeat(" ", titlePadding) + cyan.Sprint("│"))
+	log.PrintWithTimestamp(cyan.Sprint("├" + strings.Repeat("─", boxWidth) + "┤"))
+
+	// Deployment details
+	log.PrintWithTimestamp(cyan.Sprint("│") + createRow("Component", component))
+	log.PrintWithTimestamp(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
+	log.PrintWithTimestamp(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
+	log.PrintWithTimestamp(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]))
+	log.PrintWithTimestamp(cyan.Sprint("│") + createRow("Exposure", exposure))
+
+	if portForwarding || exposure == "none" {
+		log.PrintWithTimestamp(cyan.Sprint("│") + createRow("Port Forwarding", "Enabled (localhost:8443)"))
+	}
+
+	log.PrintWithTimestamp(cyan.Sprint("└" + strings.Repeat("─", boxWidth) + "┘"))
+	log.PrintWithTimestamp("")
+}
+
+// checkDeploymentProgressInNamespace checks for deployment state changes in a specific namespace and reports them
+func (d *Deployer) checkDeploymentProgressInNamespace(ctx context.Context, namespace string, seenDeployments map[string]string) {
+	result, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{"get", "deployments", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{'|'}{.status.replicas}{'|'}{.status.readyReplicas}{'|'}{.status.availableReplicas}{'\\n'}{end}"},
+	})
+	if err != nil {
+		return
+	}
+
+	lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "|")
+		if len(parts) < 4 {
+			continue
+		}
+
+		name := parts[0]
+		replicas := parts[1]
+		ready := parts[2]
+		available := parts[3]
+
+		// Create state key
+		stateKey := fmt.Sprintf("%s:%s:%s:%s", name, replicas, ready, available)
+
+		// Check if this is a new deployment or state change
+		if prevState, exists := seenDeployments[name]; !exists {
+			// New deployment detected
+			d.logger.PrintWithTimestamp(fmt.Sprintf("  → Deployment '%s' created (%s/%s replicas ready)", name, ready, replicas))
+			seenDeployments[name] = stateKey
+		} else if prevState != stateKey {
+			// State changed
+			if available != "" && available != "0" && available == replicas {
+				d.logger.PrintWithTimestamp(fmt.Sprintf("  ✓ Deployment '%s' is available (%s/%s replicas)", name, available, replicas))
+			} else if ready != prevState[len(name)+1:] {
+				d.logger.PrintWithTimestamp(fmt.Sprintf("  ⋯ Deployment '%s' progressing (%s/%s replicas ready)", name, ready, replicas))
+			}
+			seenDeployments[name] = stateKey
+		}
+	}
+}
+
+// checkPodProgressInNamespace checks for pod state changes in a specific namespace and reports them
+func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace string, seenPods map[string]string) {
+	result, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{"get", "pods", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{'|'}{.status.phase}{'|'}{.status.containerStatuses[0].ready}{'\\n'}{end}"},
+	})
+	if err != nil {
+		return
+	}
+
+	lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "|")
+		if len(parts) < 2 {
+			continue
+		}
+
+		name := parts[0]
+		phase := parts[1]
+		ready := ""
+		if len(parts) > 2 {
+			ready = parts[2]
+		}
+
+		stateKey := fmt.Sprintf("%s:%s", phase, ready)
+
+		// Only report significant state changes
+		if prevState, exists := seenPods[name]; !exists {
+			if phase == "Pending" {
+				d.logger.Dim(fmt.Sprintf("    • Pod '%s' starting...", name))
+			} else if phase == "Running" && ready == "true" {
+				d.logger.Dim(fmt.Sprintf("    • Pod '%s' running", name))
+			}
+			seenPods[name] = stateKey
+		} else if prevState != stateKey {
+			if phase == "Running" && ready == "true" {
+				d.logger.Dim(fmt.Sprintf("    • Pod '%s' is ready", name))
+			} else if phase == "Running" && ready == "false" {
+				d.logger.Dim(fmt.Sprintf("    • Pod '%s' running (not ready yet)", name))
+			}
+			seenPods[name] = stateKey
+		}
+	}
+}
+
+func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
+	component := "Secured Cluster"
+	mainImageTag := d.mainImageTag
+	helm := d.useHelm
+	log := d.logger
+	kubeContext := d.kubeContext
+
+	// Calculate box width
+	boxWidth := 60
+
+	// Helper function to truncate long values
+	truncate := func(s string, maxLen int) string {
+		if len(s) <= maxLen {
+			return s
+		}
+		return s[:maxLen-3] + "..."
+	}
+
+	// Helper function to create a row with alignment on colon
+	createRow := func(label, value string) string {
+		// Fixed label width for alignment (adjust this to fit longest label)
+		labelWidth := 22
+		// Maximum value length to keep total under boxWidth
+		maxValueLen := boxWidth - labelWidth - 4 // 4 = space + colon + space + border
+		truncatedValue := truncate(value, maxValueLen)
+
+		// Right-align label, then colon, then value
+		labelPadding := labelWidth - len(label)
+		if labelPadding < 0 {
+			labelPadding = 0
+		}
+		content := fmt.Sprintf(" %s%s: %s", strings.Repeat(" ", labelPadding), label, truncatedValue)
+
+		// Pad to box width
+		padding := boxWidth - len(content) - 1
+		if padding < 0 {
+			padding = 0
+		}
+		return content + strings.Repeat(" ", padding) + " │"
+	}
+
+	// Print the box
+	cyan := color.New(color.FgCyan, color.Bold)
+
+	log.PrintWithTimestamp("")
+	log.PrintWithTimestamp(cyan.Sprint("┌" + strings.Repeat("─", boxWidth) + "┐"))
+
+	title := " Deployment Configuration"
+	titlePadding := boxWidth - len(title)
+	log.PrintWithTimestamp(cyan.Sprint("│") + title + strings.Repeat(" ", titlePadding) + cyan.Sprint("│"))
+	log.PrintWithTimestamp(cyan.Sprint("├" + strings.Repeat("─", boxWidth) + "┤"))
+
+	// Deployment details
+	log.PrintWithTimestamp(cyan.Sprint("│") + createRow("Component", component))
+	log.PrintWithTimestamp(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
+	log.PrintWithTimestamp(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
+	log.PrintWithTimestamp(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]))
+
+	log.PrintWithTimestamp(cyan.Sprint("└" + strings.Repeat("─", boxWidth) + "┘"))
+	log.PrintWithTimestamp("")
+}
