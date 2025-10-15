@@ -25,7 +25,7 @@
           # Inject version information at build time
           ldflags = [
             "-X main.version=0.1"
-            "-X main.gitCommit=${self.rev or "unknown"}"
+            "-X main.gitCommit=${self.shortRev or "dirty"}"
             "-X main.buildDate=1970-01-01T00:00:00Z"
           ];
 
