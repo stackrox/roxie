@@ -46,11 +46,21 @@ func (l *Logger) Info(message string) {
 	fmt.Fprintf(l.stdout, "%s %s\n", timestamp, info)
 }
 
+// Infof prints a formatted info message with magenta styling
+func (l *Logger) Infof(format string, args ...interface{}) {
+	l.Info(fmt.Sprintf(format, args...))
+}
+
 // Error prints an error message with red styling to stderr
 func (l *Logger) Error(message string) {
 	timestamp := color.GreenString(l.getTimestamp())
 	errMsg := color.New(color.FgRed, color.Bold).Sprint(message)
 	fmt.Fprintf(l.stderr, "%s %s\n", timestamp, errMsg)
+}
+
+// Errorf prints a formatted error message with red styling to stderr
+func (l *Logger) Errorf(format string, args ...interface{}) {
+	l.Error(fmt.Sprintf(format, args...))
 }
 
 // Success prints a success message with green styling
@@ -65,6 +75,11 @@ func (l *Logger) Warning(message string) {
 	timestamp := color.GreenString(l.getTimestamp())
 	warning := color.New(color.FgYellow, color.Bold).Sprint(message)
 	fmt.Fprintf(l.stdout, "%s %s\n", timestamp, warning)
+}
+
+// Warning prints a formatted warning message with yellow styling
+func (l *Logger) Warningf(format string, args ...interface{}) {
+	l.Warning(fmt.Sprintf(format, args...))
 }
 
 // Dim prints a dimmed message

@@ -21,12 +21,23 @@ func (d *Deployer) deployCentralOperator(ctx context.Context, resources, exposur
 		return fmt.Errorf("failed to ensure CRDs installed: %w", err)
 	}
 
-	if !d.isOperatorDeployed(ctx) {
+	operatorDeployed := d.isOperatorDeployed(ctx)
+	needsDeployment := !operatorDeployed
+
+	if operatorDeployed {
+		// Operator exists, check if version is correct
+		if d.isOperatorVersionCorrect(ctx) {
+			d.logger.Info("✓ Operator already deployed with correct version")
+		} else {
+			d.logger.Info("🔄 Operator version mismatch, redeploying...")
+			needsDeployment = true
+		}
+	}
+
+	if needsDeployment {
 		if err := d.deployOperator(ctx); err != nil {
 			return fmt.Errorf("failed to deploy operator: %w", err)
 		}
-	} else {
-		d.logger.Info("✓ Operator already deployed")
 	}
 
 	if err := d.prepareNamespace(ctx, d.centralNamespace); err != nil {
@@ -61,6 +72,45 @@ func (d *Deployer) isOperatorDeployed(ctx context.Context) bool {
 	return err == nil
 }
 
+// isOperatorVersionCorrect checks if the deployed operator matches the desired version
+func (d *Deployer) isOperatorVersionCorrect(ctx context.Context) bool {
+	currentImage, err := d.getDeployedOperatorImage(ctx)
+	if err != nil {
+		d.logger.Warningf("Could not retrieve operator image: %v", err)
+		return false
+	}
+
+	// Extract the tag from the current image
+	parts := strings.SplitN(currentImage, ":", 2)
+	if len(parts) < 2 {
+		d.logger.Warningf("Could not parse operator image tag from: %s", currentImage)
+		return false
+	}
+	currentTag := parts[1]
+
+	if currentTag != d.operatorTag {
+		d.logger.Info("Operator version mismatch detected:")
+		d.logger.Infof("  Current: %s", currentTag)
+		d.logger.Infof("  Desired: %s", d.operatorTag)
+		return false
+	}
+	return true
+}
+
+// getDeployedOperatorImage gets the image of the currently deployed operator
+func (d *Deployer) getDeployedOperatorImage(ctx context.Context) (string, error) {
+	result, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace,
+			"-o", "jsonpath={.spec.template.spec.containers[0].image}"},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	image := strings.TrimSpace(result.Stdout)
+	return image, nil
+}
+
 // prepareNamespace creates pull secrets in the namespace
 func (d *Deployer) prepareNamespace(ctx context.Context, namespace string) error {
 	d.logger.PrintWithTimestamp(fmt.Sprintf("Preparing namespace %s", namespace))
@@ -79,7 +129,7 @@ func (d *Deployer) prepareNamespace(ctx context.Context, namespace string) error
 		Stdin: strings.NewReader(pullSecretYAML),
 	})
 	if err != nil {
-		d.logger.Warning(fmt.Sprintf("Could not apply pull secret: %v", err))
+		d.logger.Warningf("Could not apply pull secret: %v", err)
 	}
 
 	return nil
@@ -262,8 +312,8 @@ func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
-		d.logger.Error(fmt.Sprintf("kubectl stdout: %s", result.Stdout))
-		d.logger.Error(fmt.Sprintf("kubectl stderr: %s", result.Stderr))
+		d.logger.Errorf("kubectl stdout: %s", result.Stdout)
+		d.logger.Errorf("kubectl stderr: %s", result.Stderr)
 		return fmt.Errorf("failed to apply Central CR: %w\nStderr: %s", err, result.Stderr)
 	}
 
@@ -439,12 +489,23 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources s
 		return fmt.Errorf("failed to ensure CRDs installed: %w", err)
 	}
 
-	if !d.isOperatorDeployed(ctx) {
+	operatorDeployed := d.isOperatorDeployed(ctx)
+	needsDeployment := !operatorDeployed
+
+	if operatorDeployed {
+		// Operator exists, check if version is correct
+		if d.isOperatorVersionCorrect(ctx) {
+			d.logger.Info("✓ Operator already deployed with correct version")
+		} else {
+			d.logger.Info("🔄 Operator version mismatch, redeploying...")
+			needsDeployment = true
+		}
+	}
+
+	if needsDeployment {
 		if err := d.deployOperator(ctx); err != nil {
 			return fmt.Errorf("failed to deploy operator: %w", err)
 		}
-	} else {
-		d.logger.Info("✓ Operator already deployed")
 	}
 
 	if err := d.prepareNamespace(ctx, d.sensorNamespace); err != nil {
