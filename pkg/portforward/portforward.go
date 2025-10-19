@@ -114,7 +114,7 @@ func (m *Manager) Start(namespace, serviceName string, remotePort, preferredLoca
 	m.proc = cmd
 	m.localPort = localPort
 	endpoint := fmt.Sprintf("127.0.0.1:%d", localPort)
-	m.logger.Success(fmt.Sprintf("✓ Port-forward active at https://%s", endpoint))
+	m.logger.Successf("✓ Port-forward active at https://%s", endpoint)
 
 	return endpoint, nil
 }

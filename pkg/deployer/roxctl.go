@@ -57,7 +57,7 @@ func (d *Deployer) runRoxctl(ctx context.Context, opts RoxctlOptions) (*RoxctlRe
 	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
 		if attempt > 1 {
 			waitTime := time.Duration(attempt*opts.RetryDelay) * time.Second
-			d.logger.PrintWithTimestamp(fmt.Sprintf("Retrying roxctl command (attempt %d/%d) after %v...", attempt, opts.MaxAttempts, waitTime))
+			d.logger.Infof("Retrying roxctl command (attempt %d/%d) after %v...", attempt, opts.MaxAttempts, waitTime)
 			time.Sleep(waitTime)
 		}
 
@@ -102,11 +102,11 @@ func (d *Deployer) runRoxctl(ctx context.Context, opts RoxctlOptions) (*RoxctlRe
 		}
 
 		if !isRetryable || attempt == opts.MaxAttempts {
-			d.logger.Error(fmt.Sprintf("roxctl error: %s", lastStderr))
+			d.logger.Errorf("roxctl error: %s", lastStderr)
 			return nil, fmt.Errorf("roxctl command failed: %w", err)
 		}
 
-		d.logger.Warning(fmt.Sprintf("Transient error in roxctl command: %s", lastStderr))
+		d.logger.Warningf("Transient error in roxctl command: %s", lastStderr)
 	}
 
 	return nil, fmt.Errorf("roxctl command failed after %d attempts: %w", opts.MaxAttempts, lastErr)

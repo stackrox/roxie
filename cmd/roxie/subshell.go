@@ -24,7 +24,7 @@ func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
 		shellPath = "/bin/bash"
 	}
 
-	log.PrintWithTimestamp(fmt.Sprintf("Spawning sub-shell: %s", shellPath))
+	log.Infof("Spawning sub-shell: %s", shellPath)
 
 	env := os.Environ()
 
@@ -57,7 +57,7 @@ func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
 		var err error
 		haproxyCmd, haproxyConfigPath, err = startHAProxy(endpoint, caCertFile, log)
 		if err != nil {
-			log.Warning(fmt.Sprintf("Failed to start HAProxy: %v", err))
+			log.Warningf("Failed to start HAProxy: %v", err)
 		} else {
 			env = append(env, fmt.Sprintf("ROXIE_HAPROXY_CFG_FILE=%s", haproxyConfigPath))
 			haproxyStarted = true

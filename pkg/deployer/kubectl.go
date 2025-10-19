@@ -61,7 +61,7 @@ func (d *Deployer) runKubectl(ctx context.Context, opts KubectlOptions) (*Kubect
 	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
 		if attempt > 1 {
 			waitTime := time.Duration(attempt*opts.RetryDelay) * time.Second
-			d.logger.PrintWithTimestamp(fmt.Sprintf("Retrying kubectl command (attempt %d/%d) after %v...", attempt, opts.MaxAttempts, waitTime))
+			d.logger.Infof("Retrying kubectl command (attempt %d/%d) after %v...", attempt, opts.MaxAttempts, waitTime)
 			time.Sleep(waitTime)
 		}
 
@@ -113,7 +113,7 @@ func (d *Deployer) runKubectl(ctx context.Context, opts KubectlOptions) (*Kubect
 			}, fmt.Errorf("kubectl command failed: %w", err)
 		}
 
-		d.logger.Warning(fmt.Sprintf("Transient error in kubectl command: %s", lastStderr))
+		d.logger.Warningf("Transient error in kubectl command: %s", lastStderr)
 	}
 
 	return &KubectlResult{

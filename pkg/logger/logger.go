@@ -33,12 +33,6 @@ func (l *Logger) getTimestamp() string {
 	return fmt.Sprintf("%02d:%02d", minutes, seconds)
 }
 
-// PrintWithTimestamp prints a message with a timestamp prefix
-func (l *Logger) PrintWithTimestamp(message string) {
-	timestamp := color.GreenString(l.getTimestamp())
-	fmt.Fprintf(l.stdout, "%s %s\n", timestamp, message)
-}
-
 // Info prints an info message with magenta styling
 func (l *Logger) Info(message string) {
 	timestamp := color.GreenString(l.getTimestamp())
@@ -70,6 +64,11 @@ func (l *Logger) Success(message string) {
 	fmt.Fprintf(l.stdout, "%s %s\n", timestamp, success)
 }
 
+// Successf prints a formatted success message with green styling
+func (l *Logger) Successf(format string, args ...interface{}) {
+	l.Success(fmt.Sprintf(format, args...))
+}
+
 // Warning prints a warning message with yellow styling
 func (l *Logger) Warning(message string) {
 	timestamp := color.GreenString(l.getTimestamp())
@@ -87,4 +86,9 @@ func (l *Logger) Dim(message string) {
 	timestamp := color.GreenString(l.getTimestamp())
 	dim := color.New(color.Faint).Sprint(message)
 	fmt.Fprintf(l.stdout, "%s %s\n", timestamp, dim)
+}
+
+// Dimf prints a formatted dimmed message
+func (l *Logger) Dimf(format string, args ...interface{}) {
+	l.Dim(fmt.Sprintf(format, args...))
 }

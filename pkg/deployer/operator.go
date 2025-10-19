@@ -26,7 +26,7 @@ const (
 
 // deployOperator deploys the RHACS operator
 func (d *Deployer) deployOperator(ctx context.Context) error {
-	d.logger.Info(fmt.Sprintf("Operator tag: %s", d.operatorTag))
+	d.logger.Infof("Operator tag: %s", d.operatorTag)
 	bundleImage := fmt.Sprintf("quay.io/rhacs-eng/stackrox-operator-bundle:%s", d.operatorTag)
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
@@ -35,7 +35,7 @@ func (d *Deployer) deployOperator(ctx context.Context) error {
 	}
 	defer d.cleanupTempDir(bundleDir, "operator bundle directory")
 
-	d.logger.Info(fmt.Sprintf("Bundle image: %s", bundleImage))
+	d.logger.Infof("Bundle image: %s", bundleImage)
 
 	crdFiles, err := d.identifyCRDFiles(bundleDir)
 	if err != nil {
@@ -65,7 +65,7 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 	containerTool := helpers.GetContainerTool()
 	d.logger.Dim(fmt.Sprintf("Using %s to extract bundle", containerTool))
 
-	d.logger.PrintWithTimestamp("Pulling operator bundle image...")
+	d.logger.Info("Pulling operator bundle image...")
 	pullCmd := exec.CommandContext(ctx, containerTool, "pull", bundleImage)
 	if err := pullCmd.Run(); err != nil {
 		os.RemoveAll(bundleDir)
@@ -91,7 +91,7 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 		return "", fmt.Errorf("failed to copy bundle contents: %w", err)
 	}
 
-	d.logger.Success(fmt.Sprintf("✓ Bundle extracted to: %s", bundleDir))
+	d.logger.Successf("✓ Bundle extracted to: %s", bundleDir)
 	return bundleDir, nil
 }
 
@@ -142,19 +142,19 @@ func (d *Deployer) identifyCRDFiles(bundleDir string) ([]string, error) {
 
 // applyCRDsToCluster applies CRD files to the cluster
 func (d *Deployer) applyCRDsToCluster(ctx context.Context, crdFiles []string) error {
-	d.logger.Info(fmt.Sprintf("Applying %d CRD(s) to cluster", len(crdFiles)))
+	d.logger.Infof("Applying %d CRD(s) to cluster", len(crdFiles))
 
 	for _, crdFile := range crdFiles {
 		result, err := d.runKubectl(ctx, KubectlOptions{
 			Args: []string{"apply", "-f", crdFile},
 		})
 		if err != nil {
-			d.logger.Error(fmt.Sprintf("kubectl stderr: %s", result.Stderr))
+			d.logger.Errorf("kubectl stderr: %s", result.Stderr)
 			return fmt.Errorf("failed to apply CRD %s: %w\nStderr: %s", crdFile, err, result.Stderr)
 		}
 
 		basename := filepath.Base(crdFile)
-		d.logger.Success(fmt.Sprintf("✓ Successfully applied CRD %s", basename))
+		d.logger.Successf("✓ Successfully applied CRD %s", basename)
 	}
 
 	return nil
@@ -180,8 +180,8 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 
 	if len(missing) > 0 {
 		bundleImage := fmt.Sprintf("quay.io/rhacs-eng/stackrox-operator-bundle:%s", d.operatorTag)
-		d.logger.Warning(fmt.Sprintf("Missing CRDs detected (%s)", strings.Join(missing, ", ")))
-		d.logger.Warning(fmt.Sprintf("Fetching bundle %s", bundleImage))
+		d.logger.Warningf("Missing CRDs detected (%s)", strings.Join(missing, ", "))
+		d.logger.Warningf("Fetching bundle %s", bundleImage)
 
 		bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
 		if err != nil {
@@ -476,7 +476,7 @@ func (d *Deployer) applyBundleServiceResources(ctx context.Context, bundleDir, n
 
 // waitForOperatorReady waits for operator deployment to be ready
 func (d *Deployer) waitForOperatorReady(ctx context.Context, namespace, deploymentName string, timeout int) error {
-	d.logger.PrintWithTimestamp("⏳ Waiting for operator deployment to become ready...")
+	d.logger.Info("⏳ Waiting for operator deployment to become ready...")
 
 	start := time.Now()
 	for time.Since(start) < time.Duration(timeout)*time.Second {
@@ -486,7 +486,7 @@ func (d *Deployer) waitForOperatorReady(ctx context.Context, namespace, deployme
 		if err == nil && result.Stdout != "" {
 			replicas := strings.TrimSpace(result.Stdout)
 			if replicas != "0" && replicas != "" {
-				d.logger.Success(fmt.Sprintf("✓ Operator deployment is ready (%s replicas)", replicas))
+				d.logger.Successf("✓ Operator deployment is ready (%s replicas)", replicas)
 				return nil
 			}
 		}

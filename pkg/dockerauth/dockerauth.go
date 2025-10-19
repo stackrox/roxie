@@ -112,7 +112,7 @@ func (d *DockerAuth) getDockerConfigAuth(configPath string) (string, error) {
 
 			output, err := cmd.Output()
 			if err != nil {
-				d.logger.Warning(fmt.Sprintf("Credential helper '%s' for '%s' failed: %v", helper, registry, err))
+				d.logger.Warningf("Credential helper '%s' for '%s' failed: %v", helper, registry, err)
 				continue
 			}
 

@@ -113,7 +113,7 @@ func (d *Deployer) getDeployedOperatorImage(ctx context.Context) (string, error)
 
 // prepareNamespace creates pull secrets in the namespace
 func (d *Deployer) prepareNamespace(ctx context.Context, namespace string) error {
-	d.logger.PrintWithTimestamp(fmt.Sprintf("Preparing namespace %s", namespace))
+	d.logger.Infof("Preparing namespace %s", namespace)
 
 	if err := d.ensureNamespaceExists(namespace); err != nil {
 		return err
@@ -295,7 +295,7 @@ func (d *Deployer) getCentralExposureConfig(exposure string) map[string]interfac
 
 // applyCentralCR applies the Central CR to the cluster
 func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}) error {
-	d.logger.PrintWithTimestamp("Applying Central custom resource")
+	d.logger.Info("Applying Central custom resource")
 
 	yamlData, err := yaml.Marshal(cr)
 	if err != nil {
@@ -323,7 +323,7 @@ func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}
 
 // waitForCentralReady waits for Central to be ready
 func (d *Deployer) waitForCentralReady(ctx context.Context, timeout int) error {
-	d.logger.PrintWithTimestamp("⏳ Waiting for Central to become ready...")
+	d.logger.Info("⏳ Waiting for Central to become ready...")
 
 	// Track seen deployments and their states to avoid duplicate messages
 	seenDeployments := make(map[string]string)
@@ -348,7 +348,7 @@ func (d *Deployer) waitForCentralReady(ctx context.Context, timeout int) error {
 		if err == nil && result.Stdout != "" {
 			replicas := strings.TrimSpace(result.Stdout)
 			if replicas != "0" && replicas != "" {
-				d.logger.Success(fmt.Sprintf("✓ Central is ready (%s replicas)", replicas))
+				d.logger.Successf("✓ Central is ready (%s replicas)", replicas)
 				return nil
 			}
 		}
@@ -371,7 +371,7 @@ func (d *Deployer) checkPodProgress(ctx context.Context, seenPods map[string]str
 
 // waitForLoadBalancer waits for a LoadBalancer service to get an external IP
 func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceName string, timeout int) (string, error) {
-	d.logger.PrintWithTimestamp(fmt.Sprintf("⏳ Waiting for LoadBalancer %s to get external IP...", serviceName))
+	d.logger.Infof("⏳ Waiting for LoadBalancer %s to get external IP...", serviceName)
 
 	start := time.Now()
 	for time.Since(start) < time.Duration(timeout)*time.Second {
@@ -381,7 +381,7 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 		if err == nil && result.Stdout != "" {
 			ip := strings.TrimSpace(result.Stdout)
 			if ip != "" && ip != "<pending>" {
-				d.logger.Success(fmt.Sprintf("✓ LoadBalancer IP: %s", ip))
+				d.logger.Successf("✓ LoadBalancer IP: %s", ip)
 				return fmt.Sprintf("https://%s:443", ip), nil
 			}
 		}
@@ -393,7 +393,7 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 		if err == nil && result.Stdout != "" {
 			hostname := strings.TrimSpace(result.Stdout)
 			if hostname != "" && hostname != "<pending>" {
-				d.logger.Success(fmt.Sprintf("✓ LoadBalancer hostname: %s", hostname))
+				d.logger.Successf("✓ LoadBalancer hostname: %s", hostname)
 				return fmt.Sprintf("https://%s:443", hostname), nil
 			}
 		}
@@ -406,7 +406,7 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 
 // fetchCentralCACert fetches the Central CA certificate
 func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
-	d.logger.PrintWithTimestamp("Fetching Central CA certificate...")
+	d.logger.Info("Fetching Central CA certificate...")
 
 	result, err := d.runKubectl(ctx, KubectlOptions{
 		Args: []string{"get", "secret", "central-tls", "-n", d.centralNamespace, "-o", "jsonpath={.data.ca\\.pem}"},
@@ -434,7 +434,7 @@ func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
 		return fmt.Errorf("failed to write CA cert: %w", err)
 	}
 
-	d.logger.Success(fmt.Sprintf("✓ CA certificate saved to: %s", d.roxCACertFile))
+	d.logger.Successf("✓ CA certificate saved to: %s", d.roxCACertFile)
 	return nil
 }
 
@@ -447,7 +447,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context, exposure string
 		if exposure == "loadbalancer" {
 			_, err := d.waitForLoadBalancer(ctx, d.centralNamespace, "central-loadbalancer", 300)
 			if err != nil {
-				d.logger.Warning(fmt.Sprintf("LoadBalancer not ready: %v", err))
+				d.logger.Warningf("LoadBalancer not ready: %v", err)
 			} else {
 				serviceName = "central-loadbalancer"
 			}
@@ -472,11 +472,11 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context, exposure string
 	}
 
 	if err := d.fetchCentralCACert(ctx); err != nil {
-		d.logger.Warning(fmt.Sprintf("Could not fetch CA cert: %v", err))
+		d.logger.Warningf("Could not fetch CA cert: %v", err)
 	}
 
-	d.logger.Success(fmt.Sprintf("✓ Central is ready at: %s", d.centralEndpoint))
-	d.logger.Success(fmt.Sprintf("✓ Admin password: %s", d.centralPassword))
+	d.logger.Successf("✓ Central is ready at: %s", d.centralEndpoint)
+	d.logger.Successf("✓ Admin password: %s", d.centralPassword)
 
 	return nil
 }
@@ -536,7 +536,7 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources s
 		return fmt.Errorf("failed waiting for SecuredCluster: %w", err)
 	}
 
-	d.logger.Success(fmt.Sprintf("✓ SecuredCluster '%s' is ready", clusterName))
+	d.logger.Successf("✓ SecuredCluster '%s' is ready", clusterName)
 	return nil
 }
 
@@ -617,7 +617,7 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 
 // applySecuredClusterCR applies the SecuredCluster CR to the cluster
 func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]interface{}) error {
-	d.logger.PrintWithTimestamp("Applying SecuredCluster custom resource")
+	d.logger.Info("Applying SecuredCluster custom resource")
 
 	yamlData, err := yaml.Marshal(cr)
 	if err != nil {
@@ -634,7 +634,7 @@ func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]inte
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
-		d.logger.Error(fmt.Sprintf("kubectl error: %s", result.Stderr))
+		d.logger.Errorf("kubectl error: %s", result.Stderr)
 		return fmt.Errorf("failed to apply SecuredCluster CR: %w", err)
 	}
 
@@ -644,7 +644,7 @@ func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]inte
 
 // waitForSecuredClusterReady waits for SecuredCluster to be ready
 func (d *Deployer) waitForSecuredClusterReady(ctx context.Context, timeout int) error {
-	d.logger.PrintWithTimestamp("⏳ Waiting for SecuredCluster to become ready...")
+	d.logger.Info("⏳ Waiting for SecuredCluster to become ready...")
 
 	// Track seen deployments and their states to avoid duplicate messages
 	seenDeployments := make(map[string]string)

@@ -9,7 +9,7 @@ import (
 
 // generateCRS generates the Central Resource Secret using roxctl
 func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string, error) {
-	d.logger.PrintWithTimestamp("Generating CRS with roxctl...")
+	d.logger.Info("Generating CRS with roxctl...")
 
 	result, err := d.runRoxctl(ctx, RoxctlOptions{
 		Args: []string{
@@ -40,15 +40,15 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 
 // applyCRS applies the CRS content to the sensor namespace
 func (d *Deployer) applyCRS(ctx context.Context, crsContent string) error {
-	d.logger.PrintWithTimestamp("Applying CRS to sensor namespace")
+	d.logger.Info("Applying CRS to sensor namespace")
 
 	result, err := d.runKubectl(ctx, KubectlOptions{
 		Args:  []string{"apply", "-n", d.sensorNamespace, "-f", "-"},
 		Stdin: strings.NewReader(crsContent),
 	})
 	if err != nil {
-		d.logger.Error(fmt.Sprintf("kubectl stdout: %s", result.Stdout))
-		d.logger.Error(fmt.Sprintf("kubectl stderr: %s", result.Stderr))
+		d.logger.Errorf("kubectl stdout: %s", result.Stdout)
+		d.logger.Errorf("kubectl stderr: %s", result.Stderr)
 		return fmt.Errorf("failed to apply CRS: %w\nStderr: %s", err, result.Stderr)
 	}
 

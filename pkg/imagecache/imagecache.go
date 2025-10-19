@@ -159,7 +159,7 @@ func (ic *ImageCache) VerifyImagesPullable(images ...string) bool {
 
 	// Skip verification if environment variable is set
 	if skip := os.Getenv("SKIP_IMAGE_VERIFICATION"); skip == "true" || skip == "1" || skip == "yes" {
-		ic.logger.PrintWithTimestamp(fmt.Sprintf("Skipping image verification for %d images (SKIP_IMAGE_VERIFICATION=true)", len(images)))
+		ic.logger.Infof("Skipping image verification for %d images (SKIP_IMAGE_VERIFICATION=true)", len(images))
 		return true
 	}
 
@@ -175,7 +175,7 @@ func (ic *ImageCache) VerifyImagesPullable(images ...string) bool {
 
 	// Report cached results immediately
 	if len(cachedImages) > 0 {
-		ic.logger.Success(fmt.Sprintf("✓ %d images verified from cache", len(cachedImages)))
+		ic.logger.Successf("✓ %d images verified from cache", len(cachedImages))
 		for _, img := range cachedImages {
 			ic.logger.Dim(fmt.Sprintf("✓ Image %s (cached)", img))
 		}
@@ -228,24 +228,24 @@ func (ic *ImageCache) VerifyImagesPullable(images ...string) bool {
 			if res.success {
 				ic.logger.Dim(fmt.Sprintf("✓ Image %s verified", res.img))
 			} else {
-				ic.logger.Error(fmt.Sprintf("✗ Image %s failed: %s", res.img, res.errMsg))
+				ic.logger.Errorf("✗ Image %s failed: %s", res.img, res.errMsg)
 				failedImages = append(failedImages, res.img)
 			}
 		}
 	}
 
 	if len(failedImages) > 0 {
-		ic.logger.Error(fmt.Sprintf("Failed to verify %d images:", len(failedImages)))
+		ic.logger.Errorf("Failed to verify %d images:", len(failedImages))
 		for _, img := range failedImages {
-			ic.logger.Error(fmt.Sprintf("  - %s", img))
+			ic.logger.Errorf("  - %s", img)
 		}
 		return false
 	}
 
 	cachedCount := len(cachedImages)
 	verifiedCount := len(uncachedImages) - len(failedImages)
-	ic.logger.Success(fmt.Sprintf("✓ All %d images verified successfully (%d cached, %d verified)",
-		len(images), cachedCount, verifiedCount))
+	ic.logger.Successf("✓ All %d images verified successfully (%d cached, %d verified)",
+		len(images), cachedCount, verifiedCount)
 
 	return true
 }

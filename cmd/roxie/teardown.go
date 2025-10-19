@@ -33,7 +33,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 
 	log := logger.New()
 
-	log.Info(fmt.Sprintf("Tearing down %s", component))
+	log.Infof("Tearing down %s", component)
 
 	d, err := deployer.New(log, "", []string{})
 	if err != nil {

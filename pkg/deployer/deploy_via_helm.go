@@ -24,7 +24,7 @@ func (d *Deployer) deployCentralHelm(ctx context.Context, resources, exposure st
 	}
 	defer d.cleanupTempDir(chartDir, "central chart directory")
 
-	d.logger.PrintWithTimestamp(fmt.Sprintf("Chart directory: %s", chartDir))
+	d.logger.Infof("Chart directory: %s", chartDir)
 
 	if err := d.generateCentralChart(ctx, chartDir); err != nil {
 		return fmt.Errorf("failed to generate central chart: %w", err)
@@ -96,7 +96,7 @@ func (d *Deployer) deploySecuredClusterHelm(ctx context.Context, resources strin
 	}
 	defer d.cleanupTempDir(chartDir, "secured-cluster chart directory")
 
-	d.logger.PrintWithTimestamp(fmt.Sprintf("Chart directory: %s", chartDir))
+	d.logger.Infof("Chart directory: %s", chartDir)
 
 	crsContent, err := d.generateCRS(ctx, clusterName)
 	if err != nil {
@@ -163,13 +163,13 @@ func (d *Deployer) deploySecuredClusterHelm(ctx context.Context, resources strin
 		return fmt.Errorf("failed waiting for SecuredCluster: %w", err)
 	}
 
-	d.logger.Success(fmt.Sprintf("✓ SecuredCluster '%s' is ready", clusterName))
+	d.logger.Successf("✓ SecuredCluster '%s' is ready", clusterName)
 	return nil
 }
 
 // generateCentralChart generates the central-services Helm chart using roxctl
 func (d *Deployer) generateCentralChart(ctx context.Context, outputDir string) error {
-	d.logger.PrintWithTimestamp("Generating central-services chart with roxctl...")
+	d.logger.Info("Generating central-services chart with roxctl...")
 
 	_, err := d.runRoxctl(ctx, RoxctlOptions{
 		Args: []string{
@@ -189,7 +189,7 @@ func (d *Deployer) generateCentralChart(ctx context.Context, outputDir string) e
 
 // generateSecuredClusterChart generates the secured-cluster-services Helm chart using roxctl
 func (d *Deployer) generateSecuredClusterChart(ctx context.Context, outputDir string) error {
-	d.logger.PrintWithTimestamp("Generating secured-cluster-services chart with roxctl...")
+	d.logger.Info("Generating secured-cluster-services chart with roxctl...")
 
 	_, err := d.runRoxctl(ctx, RoxctlOptions{
 		Args: []string{
@@ -377,7 +377,7 @@ func (d *Deployer) getSecuredClusterResourcesHelm(resourcesName string) map[stri
 
 // verifyHelmChartImages renders the Helm template and verifies that images are pullable
 func (d *Deployer) verifyHelmChartImages(ctx context.Context, chartDir, valuesFile string) error {
-	d.logger.PrintWithTimestamp("Rendering Helm chart to verify images...")
+	d.logger.Info("Rendering Helm chart to verify images...")
 
 	cmd := exec.CommandContext(ctx, "helm", "template",
 		"-n", d.centralNamespace,
@@ -397,7 +397,7 @@ func (d *Deployer) verifyHelmChartImages(ctx context.Context, chartDir, valuesFi
 		return nil
 	}
 
-	d.logger.PrintWithTimestamp(fmt.Sprintf("Found %d unique image(s) to verify", len(imageRefs)))
+	d.logger.Infof("Found %d unique image(s) to verify", len(imageRefs))
 	for _, img := range imageRefs {
 		d.logger.Dim(fmt.Sprintf("  - %s", img))
 	}
@@ -439,7 +439,7 @@ func extractImageReferences(renderedYAML string) []string {
 
 // installCentralHelmChart installs the central-services Helm chart
 func (d *Deployer) installCentralHelmChart(ctx context.Context, chartDir, valuesFile string) error {
-	d.logger.PrintWithTimestamp("Installing central-services Helm chart...")
+	d.logger.Info("Installing central-services Helm chart...")
 
 	cmd := exec.CommandContext(ctx, "helm", "install",
 		"-n", d.centralNamespace,
@@ -452,8 +452,8 @@ func (d *Deployer) installCentralHelmChart(ctx context.Context, chartDir, values
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		d.logger.Error(fmt.Sprintf("helm stdout: %s", stdout.String()))
-		d.logger.Error(fmt.Sprintf("helm stderr: %s", stderr.String()))
+		d.logger.Errorf("helm stdout: %s", stdout.String())
+		d.logger.Errorf("helm stderr: %s", stderr.String())
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
@@ -463,7 +463,7 @@ func (d *Deployer) installCentralHelmChart(ctx context.Context, chartDir, values
 
 // installSecuredClusterHelmChart installs the secured-cluster-services Helm chart
 func (d *Deployer) installSecuredClusterHelmChart(ctx context.Context, chartDir, valuesFile, crsFile string) error {
-	d.logger.PrintWithTimestamp("Installing secured-cluster-services Helm chart...")
+	d.logger.Info("Installing secured-cluster-services Helm chart...")
 
 	cmd := exec.CommandContext(ctx, "helm", "install",
 		"-n", d.sensorNamespace,
@@ -477,8 +477,8 @@ func (d *Deployer) installSecuredClusterHelmChart(ctx context.Context, chartDir,
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		d.logger.Error(fmt.Sprintf("helm stdout: %s", stdout.String()))
-		d.logger.Error(fmt.Sprintf("helm stderr: %s", stderr.String()))
+		d.logger.Errorf("helm stdout: %s", stdout.String())
+		d.logger.Errorf("helm stderr: %s", stderr.String())
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
@@ -494,7 +494,7 @@ func (d *Deployer) deleteCRDs(ctx context.Context) {
 		"securitypolicies.config.stackrox.io",
 	}
 
-	d.logger.PrintWithTimestamp("Deleting CRDs...")
+	d.logger.Info("Deleting CRDs...")
 
 	args := append([]string{"delete", "crd", "--ignore-not-found=true"}, crds...)
 	d.runKubectl(ctx, KubectlOptions{
