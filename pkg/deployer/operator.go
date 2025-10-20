@@ -27,7 +27,7 @@ const (
 // deployOperator deploys the RHACS operator
 func (d *Deployer) deployOperator(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.operatorTag)
-	bundleImage := fmt.Sprintf("quay.io/rhacs-eng/stackrox-operator-bundle:%s", d.operatorTag)
+	bundleImage := d.getOperatorBundleImage()
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
 	if err != nil {
@@ -65,11 +65,20 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 	containerTool := helpers.GetContainerTool()
 	d.logger.Dim(fmt.Sprintf("Using %s to extract bundle", containerTool))
 
-	d.logger.Info("Pulling operator bundle image...")
-	pullCmd := exec.CommandContext(ctx, containerTool, "pull", bundleImage)
-	if err := pullCmd.Run(); err != nil {
-		os.RemoveAll(bundleDir)
-		return "", fmt.Errorf("failed to pull bundle image: %w", err)
+	// Check if image exists locally
+	inspectCmd := exec.CommandContext(ctx, containerTool, "inspect", bundleImage)
+	if err := inspectCmd.Run(); err != nil {
+		// Image doesn't exist locally, pull it
+		d.logger.Info("Pulling operator bundle image...")
+		pullCmd := exec.CommandContext(ctx, containerTool, "pull", bundleImage)
+		if output, err := pullCmd.CombinedOutput(); err != nil {
+			os.RemoveAll(bundleDir)
+			d.logger.Dim("Command output:")
+			d.logger.Dim(string(output))
+			return "", fmt.Errorf("failed to pull bundle image: %w", err)
+		}
+	} else {
+		d.logger.Dim("Bundle image already available locally, skipping pull")
 	}
 
 	containerID := fmt.Sprintf("stackrox-bundle-extract-%d", time.Now().Unix())
@@ -179,7 +188,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	}
 
 	if len(missing) > 0 {
-		bundleImage := fmt.Sprintf("quay.io/rhacs-eng/stackrox-operator-bundle:%s", d.operatorTag)
+		bundleImage := d.getOperatorBundleImage()
 		d.logger.Warningf("Missing CRDs detected (%s)", strings.Join(missing, ", "))
 		d.logger.Warningf("Fetching bundle %s", bundleImage)
 
@@ -198,6 +207,10 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (d *Deployer) getOperatorBundleImage() string {
+	return fmt.Sprintf("quay.io/rhacs-eng/stackrox-operator-bundle:v%s", d.operatorTag)
 }
 
 // deployOperatorFromCSV deploys the operator from CSV

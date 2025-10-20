@@ -22,7 +22,7 @@ func ConvertMainTagToOperatorTag(mainTag string) string {
 	}
 
 	operatorTag := strings.ReplaceAll(mainTag, "-dirty", "")
-	operatorTag = "v" + strings.ReplaceAll(operatorTag, ".x", ".0")
+	operatorTag = strings.ReplaceAll(operatorTag, ".x", ".0")
 
 	return operatorTag
 }
