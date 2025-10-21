@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	defaultMainImageTag = "4.8.2"
+	defaultMainImageTag = "4.8.4"
 )
 
 func LookupMainImageTag() string {
