@@ -44,4 +44,5 @@ func init() {
 	rootCmd.AddCommand(newDeployCmd())
 	rootCmd.AddCommand(newTeardownCmd())
 	rootCmd.AddCommand(newVersionCmd())
+	rootCmd.AddCommand(newEnvCmd())
 }
