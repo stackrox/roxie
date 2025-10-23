@@ -9,6 +9,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/stackrox/roxie-golang/pkg/deployer"
+	"github.com/stackrox/roxie-golang/pkg/env"
 	"github.com/stackrox/roxie-golang/pkg/logger"
 )
 
@@ -65,7 +66,7 @@ func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
 		}
 	}
 
-	printBanner(exposure, haproxyAvailable, haproxyStarted)
+	printBanner(endpoint, exposure, haproxyAvailable, haproxyStarted)
 
 	shellCmd := exec.Command(shellPath, "-i")
 	shellCmd.Env = env
@@ -167,7 +168,7 @@ func isHAProxyAvailable() bool {
 	return err == nil
 }
 
-func printBanner(exposure string, haproxyAvailable, haproxyStarted bool) {
+func printBanner(endpoint, exposure string, haproxyAvailable, haproxyStarted bool) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	cyan.Println("\n[roxie] Entering a subshell with ACS environment variables set.")
 	cyan.Println("[roxie]")
@@ -180,10 +181,9 @@ func printBanner(exposure string, haproxyAvailable, haproxyStarted bool) {
 	if haproxyStarted {
 		cyan.Println("[roxie] Central UI: http://localhost:8080 (username: admin, password: see $ROX_ADMIN_PASSWORD)")
 	} else if exposure != "none" && exposure != "" {
-		cyan.Println("[roxie] Central UI: Access via external endpoint (see $ROX_BASE_URL)")
-	} else {
-		cyan.Println("[roxie] Note: Installing haproxy enables HTTP access at http://localhost:8080")
-		cyan.Println("[roxie]       Install: 'brew install haproxy' (macOS) or 'apt-get install haproxy' (Linux)")
+		cyan.Printf("[roxie] Central UI: https://%s", endpoint)
+	} else if !env.RunningInContainer {
+		cyan.Println("[roxie] Note: Installing haproxy enables automatic HTTP access to Central at http://localhost:8080")
 	}
 
 	cyan.Println("")
