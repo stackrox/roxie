@@ -1,0 +1,47 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+roxie
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Dependencies (will be downloaded during build)
+vendor/
+
+# CI/CD
+.github/
+
+# Test files
+*_test.go
+tests/
+
+# Configuration
+.envrc
+*.yaml
+*.yml
+!flake.nix
+
+# Cache files
+.roxie.image_cache
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db

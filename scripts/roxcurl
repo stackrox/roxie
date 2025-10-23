@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+# Curls StackRox Central at the specified endpoint
+# Uses ROX_API_TOKEN for authentication
+# Falls back to reading default admin password if no token is set
+
+set -eu
+
+: ${ROX_BASE_URL:=https://localhost:8000}
+
+# Validate input
+if [[ $# -lt 1 ]]; then
+    echo "Usage: $0 url [curl options...]" >&2
+    echo "" >&2
+    echo "Environment variables:" >&2
+    echo "  ROX_BASE_URL     - Base URL for Central (default: https://localhost:8000)" >&2
+    echo "  ROX_API_TOKEN    - API token for authentication" >&2
+    echo "  ROX_AUTH_TOKEN   - Alternative name for API token" >&2
+    echo "  ROX_PASSWORD     - Admin password (used if no token is set)" >&2
+    exit 2
+fi
+
+url="$1"
+shift
+
+# Construct full URL if not fully qualified
+if [[ ! "$url" =~ ^https?:// ]]; then
+    url="${ROX_BASE_URL%/}/${url#/}"
+fi
+
+# Handle authentication
+auth=()
+token="${ROX_API_TOKEN:-${ROX_AUTH_TOKEN:-}}"
+if [[ -n "${token}" ]]; then
+    # Use token-based authentication
+    auth=(-H "Authorization: Bearer ${token}")
+elif [[ -n "${ROX_PASSWORD:-}" ]]; then
+    # Use basic authentication with provided password
+    auth=(-u "admin:${ROX_PASSWORD}")
+else
+    # Try to read password from default location
+    # This matches the behavior of roxctl and other StackRox tools
+    password_file="${HOME}/.roxie/admin-password"
+    if [[ -f "${password_file}" ]]; then
+        password=$(cat "${password_file}")
+        auth=(-u "admin:${password}")
+    else
+        echo "Error: No authentication method available." >&2
+        echo "Please set ROX_API_TOKEN, ROX_PASSWORD, or create ${password_file}" >&2
+        exit 1
+    fi
+fi
+
+# Execute curl with appropriate authentication
+exec curl -sSk "${auth[@]}" "$url" "$@"

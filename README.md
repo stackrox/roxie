@@ -19,6 +19,37 @@ roxie has been authored with significant AI contributions.
 
 ## Quick start
 
+### Option 1: Container Image (Recommended for non-developers)
+
+**Requirements:** Only Docker/Podman and a kubeconfig!
+
+```bash
+# Build the image (current platform)
+make docker-build
+
+# This creates two tags:
+#   - roxie:latest
+#   - roxie:0.1-<git-commit> (e.g., roxie:0.1-4469692)
+
+# Build for multiple architectures (amd64 + arm64)
+make docker-build-multiarch
+
+# Deploy ACS
+make docker-deploy COMPONENT=both
+
+# Deploy with specific version tag (recommended for production)
+make docker-deploy DOCKER_TAG=0.1-4469692 COMPONENT=both
+```
+
+**Supported architectures:** linux/amd64, linux/arm64
+
+**Version Tags:** Every build automatically creates a version-tagged image (VERSION-COMMIT format) alongside `latest`. This enables:
+- **Reproducible deployments** - Pin exact versions in CI/CD
+- **Easy rollbacks** - Revert to any previous build
+- **Version tracking** - Know exactly what code is running
+
+### Option 2: Local Build (For development)
+
 Prerequisites:
 - `kubectl` configured to point at your target cluster
 - The `roxctl` CLI installed
