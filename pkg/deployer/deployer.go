@@ -14,6 +14,7 @@ import (
 
 	"github.com/stackrox/roxie-golang/pkg/clusterdefaults"
 	"github.com/stackrox/roxie-golang/pkg/dockerauth"
+	"github.com/stackrox/roxie-golang/pkg/env"
 	"github.com/stackrox/roxie-golang/pkg/helpers"
 	"github.com/stackrox/roxie-golang/pkg/imagecache"
 	"github.com/stackrox/roxie-golang/pkg/logger"
@@ -473,6 +474,69 @@ func (d *Deployer) GetDeploymentInfo() (endpoint, password, caCertFile, kubeCont
 	return d.centralEndpoint, d.centralPassword, d.roxCACertFile, d.kubeContext, d.exposure
 }
 
+// WaitForCentral waits for Central to be ready and responding on its endpoint
+// Returns true if Central is ready, false if timeout occurs
+func (d *Deployer) WaitForCentral(timeout time.Duration) bool {
+	if d.centralEndpoint == "" {
+		d.logger.Dim("No Central endpoint configured, skipping readiness check")
+		return false
+	}
+
+	d.logger.Infof("⏳ Waiting for Central to be ready at %s (timeout: %v)", d.centralEndpoint, timeout)
+
+	deadline := time.Now().Add(timeout)
+	checkInterval := 5 * time.Second
+	progressInterval := 30 * time.Second
+	lastProgressReport := time.Now()
+
+	for time.Now().Before(deadline) {
+		// Try to connect to Central
+		if d.isCentralReady() {
+			d.logger.Success("✓ Central is ready and responding!")
+			return true
+		}
+
+		// Report progress periodically
+		if time.Since(lastProgressReport) >= progressInterval {
+			elapsed := time.Since(deadline.Add(-timeout))
+			remaining := timeout - elapsed
+			d.logger.Dim(fmt.Sprintf("  ⋯ Still waiting for Central... (%v elapsed, %v remaining)",
+				elapsed.Round(time.Second), remaining.Round(time.Second)))
+			lastProgressReport = time.Now()
+		}
+
+		time.Sleep(checkInterval)
+	}
+
+	d.logger.Warning("⚠️  Central did not become ready within the timeout period")
+	d.logger.Warning("   This is not necessarily an error - Central may still be initializing")
+	d.logger.Warning("   You can check Central status manually or wait a bit longer")
+	return false
+}
+
+// isCentralReady checks if Central is responding to HTTP requests
+func (d *Deployer) isCentralReady() bool {
+	// Use exec to run curl with a short timeout
+	// We use -k to skip TLS verification
+	endpoint := fmt.Sprintf("https://%s", d.centralEndpoint)
+	cmd := exec.Command("curl", "-k", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+		"--connect-timeout", "3", "--max-time", "5", endpoint)
+
+	output, _ := cmd.Output()
+	// Even if curl exits with error, we might have gotten a status code
+	statusCode := strings.TrimSpace(string(output))
+
+	if len(statusCode) == 0 {
+		return false
+	}
+
+	// Central returns 200 for the UI root, or possibly 401/403 if auth is required
+	// We consider any successful HTTP response (2xx, 3xx, 4xx) as "ready"
+	// Only connection failures (empty response or network errors) mean "not ready"
+	firstChar := statusCode[0]
+	return firstChar >= '2' && firstChar <= '4'
+}
+
 // cleanupTempDir safely removes a temporary directory with logging
 func (d *Deployer) cleanupTempDir(path string, description string) {
 	if path == "" {
@@ -559,6 +623,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
+	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.CurrentClusterType.String()))
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 	log.Info(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]))
@@ -719,6 +784,7 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
+	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.CurrentClusterType.String()))
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 	log.Info(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]))

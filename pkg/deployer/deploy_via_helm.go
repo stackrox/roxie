@@ -344,10 +344,39 @@ func (d *Deployer) getCentralResourcesHelm(resourcesName string) map[string]inte
 			},
 		},
 	}
+
+	resourcesMedium := map[string]interface{}{
+		"central": map[string]interface{}{
+			"resources": centralResourcesMedium,
+			"db": map[string]interface{}{
+				"resources": centralDbResourcesMedium,
+			},
+		},
+		"scanner": map[string]interface{}{
+			"resources": centralScannerResourcesMedium,
+			"dbResources": map[string]interface{}{
+				"resources": centralScannerDbResourcesMedium,
+			},
+		},
+		"scannerV4": map[string]interface{}{
+			"indexer": map[string]interface{}{
+				"resources": centralScannerV4IndexerResourcesMedium,
+			},
+			"matcher": map[string]interface{}{
+				"resources": centralScannerV4MatcherResourcesMedium,
+			},
+			"db": map[string]interface{}{
+				"resources": centralScannerV4DbResourcesMedium,
+			},
+		},
+	}
+
 	var resources map[string]interface{}
 
 	if resourcesName == "small" {
 		resources = resourcesSmall
+	} else if resourcesName == "medium" {
+		resources = resourcesMedium
 	}
 
 	return resources
@@ -366,10 +395,25 @@ func (d *Deployer) getSecuredClusterResourcesHelm(resourcesName string) map[stri
 			"disable": true,
 		},
 	}
+
+	resourcesMedium := map[string]interface{}{
+		"sensor": map[string]interface{}{
+			"resources": securedClusterSensorResourcesMedium,
+		},
+		"scanner": map[string]interface{}{
+			"disable": true,
+		},
+		"scannerV4": map[string]interface{}{
+			"disable": true,
+		},
+	}
+
 	var resources map[string]interface{}
 
 	if resourcesName == "small" {
 		resources = resourcesSmall
+	} else if resourcesName == "medium" {
+		resources = resourcesMedium
 	}
 
 	return resources

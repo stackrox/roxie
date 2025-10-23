@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stackrox/roxie-golang/pkg/env"
 	"github.com/stackrox/roxie-golang/pkg/helpers"
 	"gopkg.in/yaml.v3"
 )
@@ -119,6 +120,16 @@ func (d *Deployer) prepareNamespace(ctx context.Context, namespace string) error
 		return err
 	}
 
+	if env.CurrentClusterType != env.InfraOpenShift4 {
+		if err := d.ensurePullSecretExists(ctx, namespace); err != nil {
+			return fmt.Errorf("could not create pull secret: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (d *Deployer) ensurePullSecretExists(ctx context.Context, namespace string) error {
 	pullSecretYAML, err := d.dockerAuth.CreatePullSecretYAML(namespace)
 	if err != nil {
 		return fmt.Errorf("could not create pull secret: %w", err)
@@ -252,10 +263,37 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 		},
 	}
 
+	resourcesMedium := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"central": map[string]interface{}{
+				"resources": centralResourcesMedium,
+				"db": map[string]interface{}{
+					"resources": centralDbResourcesMedium,
+				},
+			},
+			"scanner": map[string]interface{}{
+				"scannerComponent": "Disabled",
+			},
+			"scannerV4": map[string]interface{}{
+				"db": map[string]interface{}{
+					"resources": centralScannerV4DbResourcesMedium,
+				},
+				"indexer": map[string]interface{}{
+					"resources": centralScannerV4IndexerResourcesMedium,
+				},
+				"matcher": map[string]interface{}{
+					"resources": centralScannerV4MatcherResourcesMedium,
+				},
+			},
+		},
+	}
+
 	var resources map[string]interface{}
 
 	if resourcesName == "small" {
 		resources = resourcesSmall
+	} else if resourcesName == "medium" {
+		resources = resourcesMedium
 	}
 
 	return resources
@@ -606,10 +644,27 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 			},
 		},
 	}
+
+	resourcesMedium := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"sensor": map[string]interface{}{
+				"resources": securedClusterSensorResourcesMedium,
+			},
+			"scanner": map[string]interface{}{
+				"scannerComponent": "Disabled",
+			},
+			"scannerV4": map[string]interface{}{
+				"scannerComponent": "Disabled",
+			},
+		},
+	}
+
 	var resources map[string]interface{}
 
 	if resourcesName == "small" {
 		resources = resourcesSmall
+	} else if resourcesName == "medium" {
+		resources = resourcesMedium
 	}
 
 	return resources
