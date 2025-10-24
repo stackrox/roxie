@@ -94,9 +94,9 @@ Teardown:
 
 ## Development
 
-Enter the dev shell (pins Python, kubectl, helm, pytest, etc.):
+Enter the dev shell:
 ```bash
-./shell.sh
+nix develop
 ```
 
 Common tasks:
