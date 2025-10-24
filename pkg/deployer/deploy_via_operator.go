@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stackrox/roxie-golang/pkg/env"
-	"github.com/stackrox/roxie-golang/pkg/helpers"
+	"github.com/stackrox/roxie/pkg/env"
+	"github.com/stackrox/roxie/pkg/helpers"
 	"gopkg.in/yaml.v3"
 )
 

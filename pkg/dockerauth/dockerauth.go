@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/stackrox/roxie-golang/pkg/logger"
+	"github.com/stackrox/roxie/pkg/logger"
 )
 
 // DockerAuth handles Docker authentication and pull secret management

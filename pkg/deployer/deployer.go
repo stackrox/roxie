@@ -12,13 +12,13 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/stackrox/roxie-golang/pkg/clusterdefaults"
-	"github.com/stackrox/roxie-golang/pkg/dockerauth"
-	"github.com/stackrox/roxie-golang/pkg/env"
-	"github.com/stackrox/roxie-golang/pkg/helpers"
-	"github.com/stackrox/roxie-golang/pkg/imagecache"
-	"github.com/stackrox/roxie-golang/pkg/logger"
-	"github.com/stackrox/roxie-golang/pkg/portforward"
+	"github.com/stackrox/roxie/pkg/clusterdefaults"
+	"github.com/stackrox/roxie/pkg/dockerauth"
+	"github.com/stackrox/roxie/pkg/env"
+	"github.com/stackrox/roxie/pkg/helpers"
+	"github.com/stackrox/roxie/pkg/imagecache"
+	"github.com/stackrox/roxie/pkg/logger"
+	"github.com/stackrox/roxie/pkg/portforward"
 )
 
 var (

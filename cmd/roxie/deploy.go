@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/stackrox/roxie-golang/pkg/deployer"
-	"github.com/stackrox/roxie-golang/pkg/env"
-	"github.com/stackrox/roxie-golang/pkg/logger"
+	"github.com/stackrox/roxie/pkg/deployer"
+	"github.com/stackrox/roxie/pkg/env"
+	"github.com/stackrox/roxie/pkg/logger"
 )
 
 func newDeployCmd() *cobra.Command {

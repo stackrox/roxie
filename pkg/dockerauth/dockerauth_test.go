@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stackrox/roxie-golang/pkg/logger"
+	"github.com/stackrox/roxie/pkg/logger"
 )
 
 func TestCreatePullSecretYAMLFromEnv(t *testing.T) {

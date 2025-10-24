@@ -1,6 +1,6 @@
 # Tests
 
-This directory contains tests for the roxie-golang project.
+This directory contains tests for the roxie project.
 
 ## Structure
 
@@ -85,7 +85,7 @@ package mypackage
 
 import (
     "testing"
-    "github.com/stackrox/roxie-golang/tests/testhelpers"
+    "github.com/stackrox/roxie/tests/testhelpers"
 )
 
 func TestMyFunction(t *testing.T) {

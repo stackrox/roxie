@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/stackrox/roxie-golang/pkg/helpers"
-	"github.com/stackrox/roxie-golang/pkg/logger"
+	"github.com/stackrox/roxie/pkg/helpers"
+	"github.com/stackrox/roxie/pkg/logger"
 )
 
 // ImageCache manages cache of verified pullable Docker images

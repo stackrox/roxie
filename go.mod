@@ -1,4 +1,4 @@
-module github.com/stackrox/roxie-golang
+module github.com/stackrox/roxie
 
 go 1.22
 

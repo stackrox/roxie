@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stackrox/roxie-golang/pkg/logger"
+	"github.com/stackrox/roxie/pkg/logger"
 )
 
 // Manager manages a kubectl port-forward subprocess and exposes a localhost endpoint

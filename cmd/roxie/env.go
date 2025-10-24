@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/stackrox/roxie-golang/pkg/env"
+	"github.com/stackrox/roxie/pkg/env"
 )
 
 func newEnvCmd() *cobra.Command {

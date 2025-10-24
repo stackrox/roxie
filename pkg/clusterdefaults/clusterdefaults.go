@@ -3,7 +3,7 @@ package clusterdefaults
 import (
 	"strings"
 
-	"github.com/stackrox/roxie-golang/pkg/logger"
+	"github.com/stackrox/roxie/pkg/logger"
 )
 
 // ClusterType represents different types of Kubernetes clusters

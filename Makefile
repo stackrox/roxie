@@ -1,4 +1,4 @@
-# Makefile for roxie-golang - Advanced Cluster Security Deployment Tool
+# Makefile for roxie - Advanced Cluster Security Deployment Tool
 
 # Default target
 .DEFAULT_GOAL := build

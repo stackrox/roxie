@@ -3,7 +3,7 @@ package env_test
 import (
 	"fmt"
 
-	"github.com/stackrox/roxie-golang/pkg/env"
+	"github.com/stackrox/roxie/pkg/env"
 )
 
 // ExampleDetectClusterType demonstrates how to use the cluster type detection

@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/stackrox/roxie-golang/pkg/containerutil"
+	"github.com/stackrox/roxie/pkg/containerutil"
 )
 
 var (

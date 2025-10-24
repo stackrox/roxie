@@ -15,7 +15,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/stackrox/roxie-golang/pkg/helpers"
+	"github.com/stackrox/roxie/pkg/helpers"
 )
 
 const (
