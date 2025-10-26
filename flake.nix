@@ -45,7 +45,7 @@
             "-X main.buildDate=1970-01-01T00:00:00Z"
           ];
 
-          subPackages = [ "cmd/roxie" ];
+          subPackages = [ "cmd" ];
 
           meta = with pkgs.lib; {
             description = "Fast, developer-friendly CLI to deploy and manage Red Hat Advanced Cluster Security (ACS)";

@@ -30,7 +30,7 @@ RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags "-w -s -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" \
     -o roxie \
-    ./cmd/roxie
+    ./cmd
 
 # Stage 2: Runtime image based on Red Hat UBI Minimal
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
