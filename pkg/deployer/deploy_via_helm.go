@@ -373,9 +373,10 @@ func (d *Deployer) getCentralResourcesHelm(resourcesName string) map[string]inte
 
 	var resources map[string]interface{}
 
-	if resourcesName == "small" {
+	switch resourcesName {
+	case "small":
 		resources = resourcesSmall
-	} else if resourcesName == "medium" {
+	case "medium":
 		resources = resourcesMedium
 	}
 
@@ -410,9 +411,10 @@ func (d *Deployer) getSecuredClusterResourcesHelm(resourcesName string) map[stri
 
 	var resources map[string]interface{}
 
-	if resourcesName == "small" {
+	switch resourcesName {
+	case "small":
 		resources = resourcesSmall
-	} else if resourcesName == "medium" {
+	case "medium":
 		resources = resourcesMedium
 	}
 

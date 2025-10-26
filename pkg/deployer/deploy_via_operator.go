@@ -290,9 +290,10 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 
 	var resources map[string]interface{}
 
-	if resourcesName == "small" {
+	switch resourcesName {
+	case "small":
 		resources = resourcesSmall
-	} else if resourcesName == "medium" {
+	case "medium":
 		resources = resourcesMedium
 	}
 
@@ -661,9 +662,10 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 
 	var resources map[string]interface{}
 
-	if resourcesName == "small" {
+	switch resourcesName {
+	case "small":
 		resources = resourcesSmall
-	} else if resourcesName == "medium" {
+	case "medium":
 		resources = resourcesMedium
 	}
 
