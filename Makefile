@@ -11,7 +11,6 @@ GOVET := $(GOCMD) vet
 GOFMT := gofmt
 GOLINT := golangci-lint
 BINARY_NAME := roxie
-CMD_PATH := ./cmd/roxie
 PKG_LIST := $(shell $(GOCMD) list ./... | grep -v /vendor/)
 
 # Build output
@@ -28,7 +27,7 @@ LDFLAGS := -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.bu
 .PHONY: build
 build: ## Build the roxie binary
 	@echo "🔨 Building roxie..."
-	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BINARY) $(CMD_PATH)
+	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd
 	@echo "✅ Build complete: $(BINARY)"
 
 .PHONY: build-all

@@ -1,4 +1,5 @@
 # Binaries
+/roxie
 *.exe
 *.exe~
 *.dll
