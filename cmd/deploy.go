@@ -30,6 +30,7 @@ Examples:
 	}
 
 	cmd.Flags().BoolVar(&helm, "helm", false, "Deploy using Helm charts instead of operator")
+	cmd.Flags().BoolVar(&olm, "olm", false, "Deploy operator via OLM (requires OLM installed)")
 	cmd.Flags().BoolVar(&portForwarding, "port-forwarding", false, "Enable localhost port-forward for Central")
 	cmd.Flags().StringVar(&overrideFile, "override", "", "Path to YAML file with overrides")
 	cmd.Flags().StringArrayVar(&overrideSetExpressions, "set", []string{}, "Set override values (can specify multiple times, e.g., --set foo.bar=val)")
@@ -105,8 +106,18 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		d.SetEnvrcFile(envrc)
 	}
 
+	if helm && olm {
+		return errors.New("cannot use both --helm and --olm flags together")
+	}
+
 	if helm {
 		if err := d.SetUseHelm(true); err != nil {
+			return err
+		}
+	}
+
+	if olm {
+		if err := d.SetUseOLM(true); err != nil {
 			return err
 		}
 	}

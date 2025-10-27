@@ -51,6 +51,7 @@ type Deployer struct {
 	overrideSetExpressions []string
 	envrcFile              string
 	useHelm                bool
+	useOLM                 bool
 	verbose                bool
 	earlyReadiness         bool
 }
@@ -462,6 +463,11 @@ func (d *Deployer) SetUseHelm(useHelm bool) error {
 	return nil
 }
 
+func (d *Deployer) SetUseOLM(useOLM bool) error {
+	d.useOLM = useOLM
+	return nil
+}
+
 func (d *Deployer) SetVerbose(verbose bool) {
 	d.verbose = verbose
 }
@@ -571,6 +577,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 	component := "Central"
 	mainImageTag := d.mainImageTag
 	helm := d.useHelm
+	olm := d.useOLM
 	exposure := d.exposure
 	portForwarding := d.portForwardEnabled
 	log := d.logger
@@ -627,6 +634,11 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 	log.Info(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]))
+
+	if olm {
+		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes"))
+	}
+
 	log.Info(cyan.Sprint("│") + createRow("Exposure", exposure))
 
 	if portForwarding || exposure == "none" {
@@ -734,6 +746,7 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	component := "Secured Cluster"
 	mainImageTag := d.mainImageTag
 	helm := d.useHelm
+	olm := d.useOLM
 	log := d.logger
 	kubeContext := d.kubeContext
 
@@ -788,6 +801,10 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 	log.Info(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]))
+
+	if olm {
+		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes"))
+	}
 
 	log.Info(cyan.Sprint("└" + strings.Repeat("─", boxWidth) + "┘"))
 	log.Info("")

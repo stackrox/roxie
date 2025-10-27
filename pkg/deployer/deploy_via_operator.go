@@ -14,31 +14,74 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// deployCentralOperator deploys Central using the operator
-func (d *Deployer) deployCentralOperator(ctx context.Context, resources, exposure string) error {
-	d.logger.Info("🚀 Deploying Central via Operator...")
-
+// ensureOperatorDeployed ensures the operator is deployed with the correct version and mode
+func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	if err := d.ensureCRDsInstalled(ctx); err != nil {
 		return fmt.Errorf("failed to ensure CRDs installed: %w", err)
 	}
 
-	operatorDeployed := d.isOperatorDeployed(ctx)
-	needsDeployment := !operatorDeployed
+	// Detect current operator deployment mode
+	operatorExists, currentMode := d.detectOperatorDeploymentMode(ctx)
+	needsDeployment := false
+	needsTeardown := false
 
-	if operatorDeployed {
-		// Operator exists, check if version is correct
+	if !operatorExists {
+		needsDeployment = true
+	} else if d.useOLM && currentMode == OperatorModeNonOLM {
+		// Switching from non-OLM to OLM
+		d.logger.Info("🔄 Switching operator from non-OLM to OLM mode...")
+		needsTeardown = true
+		needsDeployment = true
+	} else if !d.useOLM && currentMode == OperatorModeOLM {
+		// Switching from OLM to non-OLM
+		d.logger.Info("🔄 Switching operator from OLM to non-OLM mode...")
+		needsTeardown = true
+		needsDeployment = true
+	} else {
+		// Same mode, check version
 		if d.isOperatorVersionCorrect(ctx) {
 			d.logger.Info("✓ Operator already deployed with correct version")
 		} else {
 			d.logger.Info("🔄 Operator version mismatch, redeploying...")
+			needsTeardown = true
 			needsDeployment = true
 		}
 	}
 
-	if needsDeployment {
-		if err := d.deployOperator(ctx); err != nil {
-			return fmt.Errorf("failed to deploy operator: %w", err)
+	if needsTeardown {
+		// Perform teardown for the current mode
+		if currentMode == OperatorModeOLM {
+			if err := d.teardownOperatorOLM(ctx); err != nil {
+				return fmt.Errorf("failed to teardown OLM operator: %w", err)
+			}
+		} else {
+			if err := d.teardownOperatorNonOLM(ctx); err != nil {
+				return fmt.Errorf("failed to teardown non-OLM operator: %w", err)
+			}
 		}
+	}
+
+	if needsDeployment {
+		if d.useOLM {
+			if err := d.deployOperatorViaOLM(ctx); err != nil {
+				return fmt.Errorf("failed to deploy operator via OLM: %w", err)
+			}
+		} else {
+			if err := d.deployOperator(ctx); err != nil {
+				return fmt.Errorf("failed to deploy operator: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// deployCentralOperator deploys Central using the operator
+func (d *Deployer) deployCentralOperator(ctx context.Context, resources, exposure string) error {
+	d.logger.Info("🚀 Deploying Central via Operator...")
+
+	if err := d.ensureOperatorDeployed(ctx); err != nil {
+		return err
 	}
 
 	if err := d.prepareNamespace(ctx, d.centralNamespace); err != nil {
@@ -63,14 +106,6 @@ func (d *Deployer) deployCentralOperator(ctx context.Context, resources, exposur
 	}
 
 	return d.configureCentralEndpoint(ctx, exposure)
-}
-
-// isOperatorDeployed checks if the operator is already deployed
-func (d *Deployer) isOperatorDeployed(ctx context.Context) bool {
-	_, err := d.runKubectl(ctx, KubectlOptions{
-		Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace},
-	})
-	return err == nil
 }
 
 // isOperatorVersionCorrect checks if the deployed operator matches the desired version
@@ -520,31 +555,12 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context, exposure string
 	return nil
 }
 
-// deploySecuredClusterOperator deploys SecuredCluster using the operator
+// deploySecuredClusterOperator deploys SecuredCluster using the operator.
 func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources string) error {
 	d.logger.Info("🚀 Deploying SecuredCluster via Operator...")
 
-	if err := d.ensureCRDsInstalled(ctx); err != nil {
-		return fmt.Errorf("failed to ensure CRDs installed: %w", err)
-	}
-
-	operatorDeployed := d.isOperatorDeployed(ctx)
-	needsDeployment := !operatorDeployed
-
-	if operatorDeployed {
-		// Operator exists, check if version is correct
-		if d.isOperatorVersionCorrect(ctx) {
-			d.logger.Info("✓ Operator already deployed with correct version")
-		} else {
-			d.logger.Info("🔄 Operator version mismatch, redeploying...")
-			needsDeployment = true
-		}
-	}
-
-	if needsDeployment {
-		if err := d.deployOperator(ctx); err != nil {
-			return fmt.Errorf("failed to deploy operator: %w", err)
-		}
+	if err := d.ensureOperatorDeployed(ctx); err != nil {
+		return err
 	}
 
 	if err := d.prepareNamespace(ctx, d.sensorNamespace); err != nil {
@@ -579,7 +595,7 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources s
 	return nil
 }
 
-// createSecuredClusterCR creates the SecuredCluster custom resource
+// createSecuredClusterCR creates the SecuredCluster custom resource.
 func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[string]interface{}, error) {
 	base := map[string]interface{}{
 		"apiVersion": "platform.stackrox.io/v1alpha1",
