@@ -41,18 +41,41 @@ make test-e2e
 
 Or directly with go:
 ```bash
-go test -v -tags=e2e -timeout=30m ./tests/e2e/...
+# Note: -parallel=1 ensures tests run sequentially to avoid conflicts
+go test -v -tags=e2e -timeout=30m -parallel=1 ./tests/e2e/...
 ```
 
 ### Environment Variables for E2E Tests
 
 - `MAIN_IMAGE_TAG` - ACS image tag to use (default: "4.8.2")
 - `SKIP_OPERATOR_TESTS` - Skip operator-based tests if set
+- `SKIP_OLM_TESTS` - Skip OLM-specific tests if set (useful when OLM is not available)
 - `SKIP_IMAGE_VERIFICATION` - Skip image verification if set to "true"
 
 Example:
 ```bash
 MAIN_IMAGE_TAG=4.9.0 make test-e2e
+```
+
+### Running OLM Switching Tests
+
+The OLM switching tests verify that roxie can properly switch between OLM and non-OLM operator deployment modes. These tests:
+- Require OLM installed in the cluster
+- Require sufficient cluster resources
+- Test all switching scenarios: OLM↔non-OLM, version upgrades, multi-component deployments
+
+Run OLM tests:
+```bash
+# Run all OLM tests (they run sequentially via -parallel=1)
+go test -v -tags=e2e -timeout=120m -parallel=1 ./tests/e2e/ -run TestOLM
+
+# Run specific OLM test
+go test -v -tags=e2e -timeout=60m -parallel=1 ./tests/e2e/ -run TestOLMToNonOLMSwitch
+```
+
+Skip OLM tests if OLM is not available:
+```bash
+SKIP_OLM_TESTS=1 go test -v -tags=e2e -timeout=30m -parallel=1 ./tests/e2e/
 ```
 
 ## Test Organization
@@ -108,9 +131,13 @@ func TestMyFunction(t *testing.T) {
 package e2e
 
 import (
+    "os"
     "testing"
     "time"
 )
+
+// Note: All e2e tests run sequentially via the -parallel=1 flag in the Makefile
+// to prevent conflicts when modifying shared cluster resources.
 
 func TestDeployment(t *testing.T) {
     if os.Getenv("SKIP_OPERATOR_TESTS") != "" {

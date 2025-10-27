@@ -90,7 +90,7 @@ test-e2e: build ## Run end-to-end tests (requires kubectl context and cluster ac
 		echo "❌ skopeo not found. Please install skopeo for E2E tests."; \
 		exit 1; \
 	fi
-	$(GOTEST) -v -tags=e2e -timeout=120m ./tests/e2e/...
+	$(GOTEST) -v -tags=e2e -timeout=120m -parallel=1 ./tests/e2e/...
 
 .PHONY: test-all
 test-all: test test-e2e ## Run all tests (unit + e2e)

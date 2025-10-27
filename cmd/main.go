@@ -12,6 +12,7 @@ var (
 	verbose                bool
 	earlyReadiness         bool
 	helm                   bool
+	olm                    bool
 	portForwarding         bool
 	overrideFile           string
 	overrideSetExpressions []string

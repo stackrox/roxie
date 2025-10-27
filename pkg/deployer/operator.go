@@ -514,3 +514,36 @@ func generateClusterName() string {
 	n, _ := rand.Int(rand.Reader, big.NewInt(9000))
 	return fmt.Sprintf("sensor-%d", n.Int64()+1000)
 }
+
+// teardownOperatorNonOLM removes the operator when installed without OLM.
+func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
+	d.logger.Info("🧹 Tearing down operator deployed without OLM...")
+
+	// Delete operator namespace.
+	d.runKubectl(ctx, KubectlOptions{
+		Args:         []string{"delete", "namespace", operatorNamespace, "--wait=false"},
+		IgnoreErrors: true,
+	})
+
+	// Delete cluster-scoped resources created by non-OLM flow.
+	clusterResources := []struct {
+		name string
+		kind string
+	}{
+		{name: "rhacs-operator-manager-rolebinding", kind: "clusterrolebinding"},
+		{name: "rhacs-operator-manager-role", kind: "clusterrole"},
+	}
+	for _, resource := range clusterResources {
+		d.runKubectl(ctx, KubectlOptions{
+			Args:         []string{"delete", resource.kind, resource.name, "--ignore-not-found=true"},
+			IgnoreErrors: true,
+		})
+	}
+
+	if err := d.waitForNamespaceDeletion(operatorNamespace); err != nil {
+		d.logger.Warningf("Namespace %s deletion incomplete: %v", operatorNamespace, err)
+	}
+
+	d.logger.Success("✓ Non-OLM operator resources removed")
+	return nil
+}
