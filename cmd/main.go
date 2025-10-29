@@ -46,4 +46,5 @@ func init() {
 	rootCmd.AddCommand(newTeardownCmd())
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newEnvCmd())
+	rootCmd.AddCommand(newLogsCmd())
 }
