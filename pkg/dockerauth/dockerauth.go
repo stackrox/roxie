@@ -13,64 +13,79 @@ import (
 	"github.com/stackrox/roxie/pkg/logger"
 )
 
-// DockerAuth handles Docker authentication and pull secret management
+const (
+	acsImageRegistry = "quay.io"
+)
+
+// DockerAuth handles Docker authentication and pull secret management.
 type DockerAuth struct {
-	logger       *logger.Logger
-	cacheEnabled bool
-	authCache    map[string]string
+	logger *logger.Logger
 }
 
-// DockerConfig represents Docker configuration structure
+// DockerConfig represents Docker configuration structure.
 type DockerConfig struct {
 	Auths       map[string]AuthEntry `json:"auths,omitempty"`
 	CredHelpers map[string]string    `json:"credHelpers,omitempty"`
+	CredsStore  string               `json:"credsStore,omitempty"`
 }
 
-// AuthEntry represents a single auth entry in Docker config
+// AuthEntry represents a single auth entry in Docker config.
 type AuthEntry struct {
 	Auth string `json:"auth,omitempty"`
 }
 
-// CredentialData represents credential data from credential helper
+// CredentialData represents credential data from credential helper.
 type CredentialData struct {
 	Username string `json:"Username"`
 	Secret   string `json:"Secret"`
 }
 
-// New creates a new DockerAuth instance
-func New(log *logger.Logger, cacheEnabled bool) *DockerAuth {
+// New creates a new DockerAuth instance.
+func New(log *logger.Logger) *DockerAuth {
 	return &DockerAuth{
-		logger:       log,
-		cacheEnabled: cacheEnabled,
-		authCache:    make(map[string]string),
+		logger: log,
 	}
 }
 
 // GetDockerAuthString generates Docker authentication string for image pull secrets
 func (d *DockerAuth) GetDockerAuthString(_, _ string) (string, error) {
-	// Try environment variables first
-	username := os.Getenv("REGISTRY_USERNAME")
-	password := os.Getenv("REGISTRY_PASSWORD")
+	var username, password string
 
-	if username != "" && password != "" {
-		// Use credentials from environment
-	} else {
-		// Try to get from Docker config file
+	// Try environment variables first.
+	username = os.Getenv("REGISTRY_USERNAME")
+	password = os.Getenv("REGISTRY_PASSWORD")
+
+	if username != "" && password == "" {
+		return "", errors.New("REGISTRY_USERNAME set but REGISTRY_PASSWORD is empty")
+	}
+	if username == "" && password != "" {
+		return "", errors.New("REGISTRY_PASSWORD set but REGISTRY_USERNAME is empty")
+	}
+
+	if username == "" {
+		// Try to get from Docker config file.
 		dockerConfigPath := filepath.Join(os.Getenv("HOME"), ".docker", "config.json")
+		d.logger.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain Docker credentials from config file: %s", dockerConfigPath)
 		if _, err := os.Stat(dockerConfigPath); err == nil {
-			return d.getDockerConfigAuth(dockerConfigPath)
+			var err error
+			username, password, err = d.getCredentialsFromDockerConfig(dockerConfigPath)
+			if err != nil {
+				return "", err
+			}
 		}
+	}
 
+	if username == "" || password == "" {
 		return "", errors.New("no Docker credentials found")
 	}
 
-	// Create auth string
+	// Create auth string.
 	authString := fmt.Sprintf("%s:%s", username, password)
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
 
 	dockerConfig := DockerConfig{
 		Auths: map[string]AuthEntry{
-			"quay.io": {Auth: encodedAuth},
+			acsImageRegistry: {Auth: encodedAuth},
 		},
 	}
 
@@ -82,68 +97,82 @@ func (d *DockerAuth) GetDockerAuthString(_, _ string) (string, error) {
 	return string(jsonData), nil
 }
 
-// getDockerConfigAuth extracts auth from existing Docker config
-func (d *DockerAuth) getDockerConfigAuth(configPath string) (string, error) {
+// getCredentialsFromDockerConfig extracts credentials from existing Docker config.
+func (d *DockerAuth) getCredentialsFromDockerConfig(configPath string) (string, string, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read Docker config: %w", err)
+		return "", "", fmt.Errorf("failed to read Docker config: %w", err)
 	}
 
 	var config DockerConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		return "", fmt.Errorf("failed to parse Docker config: %w", err)
+		return "", "", fmt.Errorf("failed to parse Docker config: %w", err)
 	}
 
-	// Check for existing auths
-	if len(config.Auths) > 0 {
-		result := DockerConfig{Auths: config.Auths}
-		jsonData, err := json.Marshal(result)
+	// Check for existing auths for the ACS image registry.
+	if authEntry, ok := config.Auths[acsImageRegistry]; ok && authEntry.Auth != "" {
+		// Decode the base64 auth string to get username:password
+		decoded, err := base64.StdEncoding.DecodeString(authEntry.Auth)
 		if err != nil {
-			return "", fmt.Errorf("failed to marshal auths: %w", err)
+			return "", "", fmt.Errorf("failed to decode auth string: %w", err)
 		}
-		return string(jsonData), nil
+		parts := bytes.SplitN(decoded, []byte(":"), 2)
+		if len(parts) != 2 {
+			return "", "", errors.New("invalid auth format")
+		}
+		return string(parts[0]), string(parts[1]), nil
 	}
 
-	// Check for credential helpers
-	if len(config.CredHelpers) > 0 {
-		for registry, helper := range config.CredHelpers {
-			cmd := exec.Command(fmt.Sprintf("docker-credential-%s", helper), "get")
-			cmd.Stdin = bytes.NewBufferString(registry)
-
-			output, err := cmd.Output()
-			if err != nil {
-				d.logger.Warningf("Credential helper '%s' for '%s' failed: %v", helper, registry, err)
-				continue
-			}
-
-			var credData CredentialData
-			if err := json.Unmarshal(output, &credData); err != nil {
-				continue
-			}
-
-			if credData.Username != "" && credData.Secret != "" {
-				authString := fmt.Sprintf("%s:%s", credData.Username, credData.Secret)
-				encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
-
-				result := DockerConfig{
-					Auths: map[string]AuthEntry{
-						registry: {Auth: encodedAuth},
-					},
-				}
-
-				jsonData, err := json.Marshal(result)
-				if err != nil {
-					return "", fmt.Errorf("failed to marshal credential helper result: %w", err)
-				}
-				return string(jsonData), nil
-			}
-		}
+	// Try credential helper specifically configured for the ACS image registry
+	helper := d.lookupCredentialHelperForRegistry(&config, acsImageRegistry)
+	if helper == "" {
+		return "", "", fmt.Errorf("no Docker credentials found in config for ACS image registry (%s)", acsImageRegistry)
 	}
 
-	return "", errors.New("no Docker credentials found in config")
+	credData, err := d.getCredentialFromHelper(helper, acsImageRegistry)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get credentials from helper '%s' for '%s': %w", helper, acsImageRegistry, err)
+	}
+
+	return credData.Username, credData.Secret, nil
 }
 
-// CreatePullSecretYAML creates Kubernetes pull secret YAML
+// lookupCredentialHelperForRegistry returns the credential helper name for a given registry
+// by checking registry-specific credHelpers first, then falling back to the global credsStore.
+// Returns empty string if no helper is configured.
+func (d *DockerAuth) lookupCredentialHelperForRegistry(config *DockerConfig, registry string) string {
+	// First check for registry-specific credential helper
+	if helper, ok := config.CredHelpers[registry]; ok {
+		return helper
+	}
+
+	// Fall back to global credential store
+	return config.CredsStore
+}
+
+// getCredentialFromHelper retrieves credentials from a credential helper.
+func (d *DockerAuth) getCredentialFromHelper(helperName, registry string) (*CredentialData, error) {
+	cmd := exec.Command(fmt.Sprintf("docker-credential-%s", helperName), "get")
+	cmd.Stdin = bytes.NewBufferString(registry)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("credential helper '%s' for '%s' failed: %w", helperName, registry, err)
+	}
+
+	var credData CredentialData
+	if err := json.Unmarshal(output, &credData); err != nil {
+		return nil, fmt.Errorf("failed to parse credential helper output: %w", err)
+	}
+
+	if credData.Username == "" || credData.Secret == "" {
+		return nil, errors.New("credential helper returned empty credentials")
+	}
+
+	return &credData, nil
+}
+
+// CreatePullSecretYAML creates Kubernetes pull secret YAML.
 func (d *DockerAuth) CreatePullSecretYAML(namespace string) (string, error) {
 	dockerConfigJSON, err := d.GetDockerAuthString("", "")
 	if err != nil {

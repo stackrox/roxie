@@ -82,7 +82,7 @@ func New(log *logger.Logger, overrideFile string, overrideSetExpressions []strin
 		overrideSetExpressions: overrideSetExpressions,
 	}
 
-	d.dockerAuth = dockerauth.New(log, true)
+	d.dockerAuth = dockerauth.New(log)
 	d.imageCache = imagecache.New(log, "", 20)
 	d.portForward = portforward.New(kubectl, log)
 	d.clusterDefaults = clusterdefaults.NewManager(log)

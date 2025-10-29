@@ -20,7 +20,7 @@ func TestCreatePullSecretYAMLFromEnv(t *testing.T) {
 	}()
 
 	log := logger.New()
-	da := New(log, true)
+	da := New(log)
 
 	yamlText, err := da.CreatePullSecretYAML("ns")
 	if err != nil {
@@ -94,7 +94,7 @@ func TestCreatePullSecretYAMLNoCredentials(t *testing.T) {
 	}()
 
 	log := logger.New()
-	da := New(log, true)
+	da := New(log)
 
 	_, err := da.CreatePullSecretYAML("ns")
 	if err == nil {
