@@ -10,7 +10,7 @@ import (
 	"github.com/stackrox/roxie/pkg/logger"
 )
 
-func TestCreatePullSecretYAMLFromEnv(t *testing.T) {
+func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	// Set environment variables for test
 	os.Setenv("REGISTRY_USERNAME", "user")
 	os.Setenv("REGISTRY_PASSWORD", "pass")
@@ -21,11 +21,22 @@ func TestCreatePullSecretYAMLFromEnv(t *testing.T) {
 
 	log := logger.New()
 	da := New(log)
+	da.skipCredVerification = true // Skip verification in tests
 
-	yamlText, err := da.CreatePullSecretYAML("ns")
+	creds, err := da.GetAndVerifyCredentials()
 	if err != nil {
-		t.Fatalf("CreatePullSecretYAML failed: %v", err)
+		t.Fatalf("GetAndVerifyCredentials failed: %v", err)
 	}
+
+	if creds.Username != "user" {
+		t.Errorf("Expected username 'user', got '%s'", creds.Username)
+	}
+	if creds.Password != "pass" {
+		t.Errorf("Expected password 'pass', got '%s'", creds.Password)
+	}
+
+	// Test creating YAML from credentials
+	yamlText := da.CreatePullSecretYAMLFromCredentials(creds, "ns")
 
 	// Verify YAML structure
 	if !strings.Contains(yamlText, "apiVersion: v1") {
@@ -71,7 +82,7 @@ func TestCreatePullSecretYAMLFromEnv(t *testing.T) {
 	}
 }
 
-func TestCreatePullSecretYAMLNoCredentials(t *testing.T) {
+func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	// Ensure no credentials are set
 	os.Unsetenv("REGISTRY_USERNAME")
 	os.Unsetenv("REGISTRY_PASSWORD")
@@ -95,8 +106,9 @@ func TestCreatePullSecretYAMLNoCredentials(t *testing.T) {
 
 	log := logger.New()
 	da := New(log)
+	da.skipCredVerification = true // Skip verification in tests
 
-	_, err := da.CreatePullSecretYAML("ns")
+	_, err := da.GetAndVerifyCredentials()
 	if err == nil {
 		t.Error("Expected error when no credentials are available")
 	}

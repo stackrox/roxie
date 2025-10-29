@@ -54,6 +54,7 @@ type Deployer struct {
 	useOLM                 bool
 	verbose                bool
 	earlyReadiness         bool
+	dockerCreds            *dockerauth.Credentials
 }
 
 func New(log *logger.Logger, overrideFile string, overrideSetExpressions []string) (*Deployer, error) {
@@ -140,6 +141,11 @@ func (d *Deployer) Deploy(ctx context.Context, component, resources, exposure st
 	d.portForwardEnabled = adjustedPortForward
 	d.exposure = exposure
 
+	// Prepare and verify credentials early to fail fast
+	if err := d.prepareCredentials(); err != nil {
+		return fmt.Errorf("failed to prepare credentials: %w", err)
+	}
+
 	d.logger.Infof("Initiating deployment of %s", formatComponentName(component))
 
 	switch component {
@@ -155,6 +161,24 @@ func (d *Deployer) Deploy(ctx context.Context, component, resources, exposure st
 	default:
 		return fmt.Errorf("unknown component: %s", component)
 	}
+}
+
+// prepareCredentials prepares and verifies Docker credentials early to fail fast.
+// The verified credentials are stored for later use.
+func (d *Deployer) prepareCredentials() error {
+	d.logger.Dimf("Preparing and verifying Docker credentials...")
+
+	// This will retrieve and verify credentials, returning error if invalid
+	creds, err := d.dockerAuth.GetAndVerifyCredentials()
+	if err != nil {
+		return err
+	}
+
+	// Store the verified credentials
+	d.dockerCreds = creds
+
+	d.logger.Dimf("Docker credentials verified successfully")
+	return nil
 }
 
 func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string) error {

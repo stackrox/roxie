@@ -19,7 +19,8 @@ const (
 
 // DockerAuth handles Docker authentication and pull secret management.
 type DockerAuth struct {
-	logger *logger.Logger
+	logger               *logger.Logger
+	skipCredVerification bool
 }
 
 // DockerConfig represents Docker configuration structure.
@@ -40,6 +41,12 @@ type CredentialData struct {
 	Secret   string `json:"Secret"`
 }
 
+// Credentials represents verified Docker credentials.
+type Credentials struct {
+	Username string
+	Password string
+}
+
 // New creates a new DockerAuth instance.
 func New(log *logger.Logger) *DockerAuth {
 	return &DockerAuth{
@@ -47,8 +54,9 @@ func New(log *logger.Logger) *DockerAuth {
 	}
 }
 
-// GetDockerAuthString generates Docker authentication string for image pull secrets
-func (d *DockerAuth) GetDockerAuthString(_, _ string) (string, error) {
+// GetAndVerifyCredentials retrieves and verifies Docker credentials.
+// This should be called early to fail fast if credentials are invalid.
+func (d *DockerAuth) GetAndVerifyCredentials() (*Credentials, error) {
 	var username, password string
 
 	// Try environment variables first.
@@ -56,10 +64,10 @@ func (d *DockerAuth) GetDockerAuthString(_, _ string) (string, error) {
 	password = os.Getenv("REGISTRY_PASSWORD")
 
 	if username != "" && password == "" {
-		return "", errors.New("REGISTRY_USERNAME set but REGISTRY_PASSWORD is empty")
+		return nil, errors.New("REGISTRY_USERNAME set but REGISTRY_PASSWORD is empty")
 	}
 	if username == "" && password != "" {
-		return "", errors.New("REGISTRY_PASSWORD set but REGISTRY_USERNAME is empty")
+		return nil, errors.New("REGISTRY_PASSWORD set but REGISTRY_USERNAME is empty")
 	}
 
 	if username == "" {
@@ -70,31 +78,26 @@ func (d *DockerAuth) GetDockerAuthString(_, _ string) (string, error) {
 			var err error
 			username, password, err = d.getCredentialsFromDockerConfig(dockerConfigPath)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 		}
 	}
 
 	if username == "" || password == "" {
-		return "", errors.New("no Docker credentials found")
+		return nil, errors.New("no Docker credentials found")
 	}
 
-	// Create auth string.
-	authString := fmt.Sprintf("%s:%s", username, password)
-	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
-
-	dockerConfig := DockerConfig{
-		Auths: map[string]AuthEntry{
-			acsImageRegistry: {Auth: encodedAuth},
-		},
+	// Verify credentials.
+	if !d.skipCredVerification {
+		if err := d.VerifyCredentials(username, password); err != nil {
+			return nil, fmt.Errorf("credentials are invalid: %w", err)
+		}
 	}
 
-	jsonData, err := json.Marshal(dockerConfig)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal Docker config: %w", err)
-	}
-
-	return string(jsonData), nil
+	return &Credentials{
+		Username: username,
+		Password: password,
+	}, nil
 }
 
 // getCredentialsFromDockerConfig extracts credentials from existing Docker config.
@@ -172,14 +175,60 @@ func (d *DockerAuth) getCredentialFromHelper(helperName, registry string) (*Cred
 	return &credData, nil
 }
 
-// CreatePullSecretYAML creates Kubernetes pull secret YAML.
-func (d *DockerAuth) CreatePullSecretYAML(namespace string) (string, error) {
-	dockerConfigJSON, err := d.GetDockerAuthString("", "")
+// VerifyCredentials attempts to verify that the credentials work by making a request to the registry.
+// This uses a read-only HTTP request.
+// It mimics what the kubelet would do when pulling images.
+func (d *DockerAuth) VerifyCredentials(username, password string) error {
+	// Create auth header for Basic authentication
+	authString := fmt.Sprintf("%s:%s", username, password)
+	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
+
+	// Try to get a token from quay.io's OAuth2 endpoint for a specific repository
+	// This mimics what kubelet does when pulling images - it requests a token with pull scope
+	// for the specific repository.
+	repository := "rhacs-eng/main"
+	authURL := fmt.Sprintf("https://%s/v2/auth?service=%s&scope=repository:%s:pull",
+		acsImageRegistry, acsImageRegistry, repository)
+
+	cmd := exec.Command("curl", "-s", "-f",
+		"-H", fmt.Sprintf("Authorization: Basic %s", encodedAuth),
+		authURL)
+
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		d.logger.Warningf("Failed to verify credentials for %s: %v", acsImageRegistry, err)
+		d.logger.Dimf("Verification output: %s", string(output))
+		return fmt.Errorf("credential verification failed for %s: %w", acsImageRegistry, err)
 	}
 
-	encodedConfig := base64.StdEncoding.EncodeToString([]byte(dockerConfigJSON))
+	// Check if we got a valid JSON response with a token
+	var tokenResponse map[string]interface{}
+	if err := json.Unmarshal(output, &tokenResponse); err != nil {
+		return fmt.Errorf("credential verification failed: invalid response from %s: %w", acsImageRegistry, err)
+	}
+
+	if _, ok := tokenResponse["token"]; !ok {
+		return fmt.Errorf("credential verification failed: no token received from %s", acsImageRegistry)
+	}
+
+	d.logger.Dimf("Successfully verified credentials for %s (repository: %s)", acsImageRegistry, repository)
+	return nil
+}
+
+// CreatePullSecretYAMLFromCredentials creates Kubernetes pull secret YAML from verified credentials.
+func (d *DockerAuth) CreatePullSecretYAMLFromCredentials(creds *Credentials, namespace string) string {
+	// Create auth string
+	authString := fmt.Sprintf("%s:%s", creds.Username, creds.Password)
+	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
+
+	dockerConfig := DockerConfig{
+		Auths: map[string]AuthEntry{
+			acsImageRegistry: {Auth: encodedAuth},
+		},
+	}
+
+	jsonData, _ := json.Marshal(dockerConfig)
+	encodedConfig := base64.StdEncoding.EncodeToString(jsonData)
 
 	secretYAML := fmt.Sprintf(`apiVersion: v1
 kind: Secret
@@ -191,5 +240,5 @@ data:
   .dockerconfigjson: %s
 `, namespace, encodedConfig)
 
-	return secretYAML, nil
+	return secretYAML
 }
