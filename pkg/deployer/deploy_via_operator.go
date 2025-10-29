@@ -157,7 +157,7 @@ func (d *Deployer) prepareNamespace(ctx context.Context, namespace string) error
 
 	if env.CurrentClusterType != env.InfraOpenShift4 {
 		if err := d.ensurePullSecretExists(ctx, namespace); err != nil {
-			return fmt.Errorf("could not create pull secret: %w", err)
+			return fmt.Errorf("ensuring image pull secret exists: %w", err)
 		}
 	}
 
@@ -165,12 +165,10 @@ func (d *Deployer) prepareNamespace(ctx context.Context, namespace string) error
 }
 
 func (d *Deployer) ensurePullSecretExists(ctx context.Context, namespace string) error {
-	pullSecretYAML, err := d.dockerAuth.CreatePullSecretYAML(namespace)
-	if err != nil {
-		return fmt.Errorf("could not create pull secret: %w", err)
-	}
+	// Assemble pull secret YAML from pre-verified credentials
+	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(d.dockerCreds, namespace)
 
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err := d.runKubectl(ctx, KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: strings.NewReader(pullSecretYAML),
 	})
