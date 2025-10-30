@@ -78,7 +78,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 
 		// On infra OpenShift we already get image pull secrets for Quay automatically.
-		if env.CurrentClusterType != env.InfraOpenShift4 {
+		if env.GetCurrentClusterType() != env.InfraOpenShift4 {
 			if os.Getenv("REGISTRY_USERNAME") == "" || os.Getenv("REGISTRY_PASSWORD") == "" {
 				return errors.New("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables")
 			}
@@ -129,7 +129,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	// Resolve "auto" resources based on cluster type
 	resolvedResources := resources
 	if resources == "auto" {
-		resolvedResources = resolveAutoResources(env.CurrentClusterType, log)
+		resolvedResources = resolveAutoResources(env.GetCurrentClusterType(), log)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
