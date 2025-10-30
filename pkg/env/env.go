@@ -29,13 +29,16 @@ const (
 )
 
 var (
-	// CurrentClusterType holds the detected cluster type for the current kubectl context
-	// This is automatically populated during package initialization
-	CurrentClusterType ClusterType
+	// currentClusterType holds the detected cluster type for the current kubectl context
+	// This is lazily populated on first access via GetCurrentClusterType()
+	currentClusterType ClusterType
 
-	// CurrentContext holds the name of the current kubectl context
-	// This is automatically populated during package initialization
-	CurrentContext string
+	// currentContext holds the name of the current kubectl context
+	// This is lazily populated on first access via GetCurrentContext()
+	currentContext string
+
+	// initialized tracks whether we've performed the lazy initialization
+	initialized bool
 )
 
 func init() {
@@ -43,10 +46,30 @@ func init() {
 	if RunningInContainer {
 		os.Setenv("KUBECONFIG", "/kubeconfig")
 	}
-	kubeConfig := fetchKubeConfig()
-	CurrentContext = kubeConfig.CurrentContext
-	apiResources := fetchAPIResources()
-	CurrentClusterType = detectClusterType(kubeConfig, apiResources)
+}
+
+// ensureInitialized performs lazy initialization of cluster information
+// This avoids contacting the cluster on package import
+func ensureInitialized() {
+	if !initialized {
+		kubeConfig := fetchKubeConfig()
+		currentContext = kubeConfig.CurrentContext
+		apiResources := fetchAPIResources()
+		currentClusterType = detectClusterType(kubeConfig, apiResources)
+		initialized = true
+	}
+}
+
+// GetCurrentClusterType returns the current cluster type, initializing if needed
+func GetCurrentClusterType() ClusterType {
+	ensureInitialized()
+	return currentClusterType
+}
+
+// GetCurrentContext returns the current kubectl context, initializing if needed
+func GetCurrentContext() string {
+	ensureInitialized()
+	return currentContext
 }
 
 // String returns the string representation of a ClusterType

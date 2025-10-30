@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -53,8 +55,13 @@ func runLogsOperator(cmd *cobra.Command, args []string) error {
 		kubectlArgs = append(kubectlArgs, "-f")
 	}
 
-	// Create kubectl command
-	kubectlCmd := exec.Command("kubectl", kubectlArgs...)
+	// Create context with timeout for initial connection
+	// Use a longer timeout (30s) to allow for cluster connection
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create kubectl command with context
+	kubectlCmd := exec.CommandContext(ctx, "kubectl", kubectlArgs...)
 
 	// Get stdout pipe for streaming
 	stdout, err := kubectlCmd.StdoutPipe()
@@ -75,6 +82,10 @@ func runLogsOperator(cmd *cobra.Command, args []string) error {
 
 	// Wait for command to complete
 	if err := kubectlCmd.Wait(); err != nil {
+		// Check if it was a timeout
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("timeout connecting to cluster - ensure your kubeconfig is correct and the cluster is reachable")
+		}
 		// Don't return error if kubectl was interrupted (e.g., Ctrl+C)
 		if _, ok := err.(*exec.ExitError); ok {
 			return nil

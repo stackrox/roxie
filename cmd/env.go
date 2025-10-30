@@ -23,6 +23,6 @@ func runEnv(cmd *cobra.Command, args []string) {
 	fmt.Println("Roxie Environment Information:")
 	fmt.Println("==============================")
 	fmt.Printf("Running in Container: %v\n", env.RunningInContainer)
-	fmt.Printf("Current Context:      %s\n", env.CurrentContext)
-	fmt.Printf("Cluster Type:         %s\n", env.CurrentClusterType.String())
+	fmt.Printf("Current Context:      %s\n", env.GetCurrentContext())
+	fmt.Printf("Cluster Type:         %s\n", env.GetCurrentClusterType().String())
 }
