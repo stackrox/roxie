@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stackrox/roxie/pkg/logger"
+	"github.com/stackrox/roxie/internal/logger"
 )
 
 func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {

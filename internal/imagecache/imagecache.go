@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/stackrox/roxie/pkg/helpers"
-	"github.com/stackrox/roxie/pkg/logger"
+	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/logger"
 )
 
 // ImageCache manages cache of verified pullable Docker images

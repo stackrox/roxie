@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/stackrox/roxie/pkg/containerutil"
+	"github.com/stackrox/roxie/internal/containerutil"
 )
 
 var (

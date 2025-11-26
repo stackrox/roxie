@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stackrox/roxie/pkg/env"
-	"github.com/stackrox/roxie/pkg/helpers"
+	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/helpers"
 	"gopkg.in/yaml.v3"
 )
 

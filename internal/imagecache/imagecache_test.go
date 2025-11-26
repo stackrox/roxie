@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stackrox/roxie/pkg/logger"
+	"github.com/stackrox/roxie/internal/logger"
 )
 
 func TestImageCacheLoadSaveRoundtrip(t *testing.T) {

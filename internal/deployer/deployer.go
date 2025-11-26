@@ -12,13 +12,13 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/stackrox/roxie/pkg/clusterdefaults"
-	"github.com/stackrox/roxie/pkg/dockerauth"
-	"github.com/stackrox/roxie/pkg/env"
-	"github.com/stackrox/roxie/pkg/helpers"
-	"github.com/stackrox/roxie/pkg/imagecache"
-	"github.com/stackrox/roxie/pkg/logger"
-	"github.com/stackrox/roxie/pkg/portforward"
+	"github.com/stackrox/roxie/internal/clusterdefaults"
+	"github.com/stackrox/roxie/internal/dockerauth"
+	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/imagecache"
+	"github.com/stackrox/roxie/internal/logger"
+	"github.com/stackrox/roxie/internal/portforward"
 )
 
 var (
