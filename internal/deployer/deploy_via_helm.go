@@ -11,7 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/stackrox/roxie/pkg/helpers"
+	"github.com/stackrox/roxie/internal/helpers"
 )
 
 // deployCentralHelm deploys Central using Helm charts

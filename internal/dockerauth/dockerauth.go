@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/stackrox/roxie/pkg/logger"
+	"github.com/stackrox/roxie/internal/logger"
 )
 
 const (

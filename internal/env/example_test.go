@@ -3,7 +3,7 @@ package env_test
 import (
 	"fmt"
 
-	"github.com/stackrox/roxie/pkg/env"
+	"github.com/stackrox/roxie/internal/env"
 )
 
 // ExampleDetectClusterType demonstrates how to use the cluster type detection

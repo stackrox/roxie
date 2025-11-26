@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/stackrox/roxie/pkg/deployer"
-	"github.com/stackrox/roxie/pkg/logger"
+	"github.com/stackrox/roxie/internal/deployer"
+	"github.com/stackrox/roxie/internal/logger"
 )
 
 func newTeardownCmd() *cobra.Command {

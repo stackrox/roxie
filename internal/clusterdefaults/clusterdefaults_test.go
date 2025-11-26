@@ -3,7 +3,7 @@ package clusterdefaults
 import (
 	"testing"
 
-	"github.com/stackrox/roxie/pkg/logger"
+	"github.com/stackrox/roxie/internal/logger"
 )
 
 func TestDefaultDetector_Detect(t *testing.T) {
