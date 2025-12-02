@@ -43,7 +43,7 @@ Examples:
 }
 
 func runDeploy(cmd *cobra.Command, args []string) error {
-	log := logger.New()
+	log := logger.NewWithTimestamps()
 
 	if env.RunningInContainer {
 		log.Dim("Running containerized.")
@@ -156,7 +156,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 }
 
 // resolveAutoResources determines the appropriate resource tier based on cluster type
-func resolveAutoResources(clusterType env.ClusterType, log *logger.Logger) string {
+func resolveAutoResources(clusterType env.ClusterType, log logger.Logger) string {
 	var resolvedResources string
 
 	switch clusterType {

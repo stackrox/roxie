@@ -16,7 +16,7 @@ type ImageCache struct {
 	cacheFile  string
 	maxEntries int
 	cache      []string
-	logger     *logger.Logger
+	logger     logger.Logger
 	mu         sync.Mutex
 }
 
@@ -26,7 +26,7 @@ type CacheData struct {
 }
 
 // New creates a new ImageCache instance
-func New(log *logger.Logger, cacheFile string, maxEntries int) *ImageCache {
+func New(log logger.Logger, cacheFile string, maxEntries int) *ImageCache {
 	if cacheFile == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {

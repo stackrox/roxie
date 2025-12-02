@@ -29,7 +29,7 @@ var (
 
 // Deployer is the base deployer for ACS
 type Deployer struct {
-	logger                 *logger.Logger
+	logger                 logger.Logger
 	startTime              time.Time
 	dockerAuth             *dockerauth.DockerAuth
 	imageCache             *imagecache.ImageCache
@@ -57,7 +57,7 @@ type Deployer struct {
 	dockerCreds            *dockerauth.Credentials
 }
 
-func New(log *logger.Logger, overrideFile string, overrideSetExpressions []string) (*Deployer, error) {
+func New(log logger.Logger, overrideFile string, overrideSetExpressions []string) (*Deployer, error) {
 	// Check required tools first
 	if err := checkRequiredTools(); err != nil {
 		return nil, err

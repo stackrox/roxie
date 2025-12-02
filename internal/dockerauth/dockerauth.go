@@ -19,7 +19,7 @@ const (
 
 // DockerAuth handles Docker authentication and pull secret management.
 type DockerAuth struct {
-	logger               *logger.Logger
+	logger               logger.Logger
 	skipCredVerification bool
 }
 
@@ -48,7 +48,7 @@ type Credentials struct {
 }
 
 // New creates a new DockerAuth instance.
-func New(log *logger.Logger) *DockerAuth {
+func New(log logger.Logger) *DockerAuth {
 	return &DockerAuth{
 		logger: log,
 	}

@@ -13,7 +13,7 @@ import (
 	"github.com/stackrox/roxie/internal/logger"
 )
 
-func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
+func spawnSubshell(d *deployer.Deployer, log logger.Logger) error {
 	shellPath := shell
 	if shellPath == "" {
 		shellPath = os.Getenv("ROXIE_USER_SHELL")
@@ -98,7 +98,7 @@ func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
 	return nil
 }
 
-func startHAProxy(endpoint, caCertFile string, log *logger.Logger) (*exec.Cmd, string, error) {
+func startHAProxy(endpoint, caCertFile string, log logger.Logger) (*exec.Cmd, string, error) {
 	configFile, err := os.CreateTemp("", "roxie-haproxy-*.cfg")
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create temp config: %w", err)
