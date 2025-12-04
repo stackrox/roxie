@@ -14,6 +14,7 @@ var (
 	helm                   bool
 	olm                    bool
 	portForwarding         bool
+	pauseReconciliation    bool
 	overrideFile           string
 	overrideSetExpressions []string
 	exposure               string

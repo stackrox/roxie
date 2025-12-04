@@ -46,6 +46,7 @@ type Deployer struct {
 	roxCACertFile          string
 	kubeContext            string
 	portForwardEnabled     bool
+	pauseReconciliation    bool
 	exposure               string
 	overrideFile           string
 	overrideSetExpressions []string
@@ -260,6 +261,9 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 
 	d.portForward.Stop()
 
+	// Remove pause-reconcile annotation before deleting to allow operator to clean up properly
+	d.removePauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.centralNamespace)
+
 	d.logger.Info("Deleting Central custom resource")
 	d.runKubectl(ctx, KubectlOptions{
 		Args:         []string{"delete", "central", "stackrox-central-services", "-n", d.centralNamespace, "--wait=false"},
@@ -291,6 +295,9 @@ func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
 		d.logger.Infof("Namespace %s doesn't exist, skipping", d.sensorNamespace)
 		return nil
 	}
+
+	// Remove pause-reconcile annotation before deleting to allow operator to clean up properly
+	d.removePauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace)
 
 	d.logger.Info("Deleting SecuredCluster custom resource")
 	d.runKubectl(ctx, KubectlOptions{
@@ -498,6 +505,51 @@ func (d *Deployer) SetVerbose(verbose bool) {
 
 func (d *Deployer) SetEarlyReadiness(enabled bool) {
 	d.earlyReadiness = enabled
+}
+
+func (d *Deployer) SetPauseReconciliation(enabled bool) {
+	d.pauseReconciliation = enabled
+}
+
+// addPauseReconcileAnnotation adds the stackrox.io/pause-reconcile annotation to a custom resource
+func (d *Deployer) addPauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
+	if !d.pauseReconciliation {
+		return nil
+	}
+
+	d.logger.Infof("Adding pause-reconcile annotation to %s/%s", resourceType, resourceName)
+
+	_, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{
+			"annotate", resourceType, resourceName,
+			"-n", namespace,
+			"stackrox.io/pause-reconcile=true",
+			"--overwrite",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add pause-reconcile annotation: %w", err)
+	}
+
+	d.logger.Successf("✓ Added pause-reconcile annotation to %s/%s", resourceType, resourceName)
+	return nil
+}
+
+// removePauseReconcileAnnotation removes the stackrox.io/pause-reconcile annotation from a custom resource
+func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) {
+	d.logger.Dimf("Removing pause-reconcile annotation from %s/%s", resourceType, resourceName)
+
+	_, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{
+			"annotate", resourceType, resourceName,
+			"-n", namespace,
+			"stackrox.io/pause-reconcile-",
+		},
+		IgnoreErrors: true,
+	})
+	if err != nil {
+		d.logger.Dimf("Could not remove pause-reconcile annotation (may not exist): %v", err)
+	}
 }
 
 func (d *Deployer) GetDeploymentInfo() (endpoint, password, caCertFile, kubeContext, exposure string) {
