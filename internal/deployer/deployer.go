@@ -25,6 +25,9 @@ var (
 	centralNamespace = "acs-central"
 	sensorNamespace  = "acs-sensor"
 	defaultExposure  = "loadbalancer"
+
+	// Pick a reasonable box width, suitable for infra default cluster names.
+	deploymentPlanBoxWidth = 90
 )
 
 // Deployer is the base deployer for ACS
@@ -606,9 +609,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 	portForwarding := d.portForwardEnabled
 	log := d.logger
 	kubeContext := d.kubeContext
-
-	// Calculate box width
-	boxWidth := 60
+	boxWidth := deploymentPlanBoxWidth
 
 	// Helper function to truncate long values
 	truncate := func(s string, maxLen int) string {
@@ -634,11 +635,11 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 		content := fmt.Sprintf(" %s%s: %s", strings.Repeat(" ", labelPadding), label, truncatedValue)
 
 		// Pad to box width
-		padding := boxWidth - len(content) - 1
+		padding := boxWidth - len(content)
 		if padding < 0 {
 			padding = 0
 		}
-		return content + strings.Repeat(" ", padding) + " │"
+		return content + strings.Repeat(" ", padding)
 	}
 
 	// Print the box
@@ -647,26 +648,26 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 	log.Info("")
 	log.Info(cyan.Sprint("┌" + strings.Repeat("─", boxWidth) + "┐"))
 
-	title := " Deployment Configuration"
+	title := " Central Deployment Configuration"
 	titlePadding := boxWidth - len(title)
 	log.Info(cyan.Sprint("│") + title + strings.Repeat(" ", titlePadding) + cyan.Sprint("│"))
 	log.Info(cyan.Sprint("├" + strings.Repeat("─", boxWidth) + "┤"))
 
 	// Deployment details
-	log.Info(cyan.Sprint("│") + createRow("Component", component))
-	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()))
-	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
-	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
-	log.Info(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]))
+	log.Info(cyan.Sprint("│") + createRow("Component", component) + cyan.Sprint("│"))
+	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()) + cyan.Sprint("│"))
+	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag) + cyan.Sprint("│"))
+	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext) + cyan.Sprint("│"))
+	log.Info(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]) + cyan.Sprint("│"))
 
 	if olm {
-		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes"))
+		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes") + cyan.Sprint("│"))
 	}
 
-	log.Info(cyan.Sprint("│") + createRow("Exposure", exposure))
+	log.Info(cyan.Sprint("│") + createRow("Exposure", exposure) + cyan.Sprint("│"))
 
 	if portForwarding || exposure == "none" {
-		log.Info(cyan.Sprint("│") + createRow("Port Forwarding", "Enabled (localhost:8443)"))
+		log.Info(cyan.Sprint("│") + createRow("Port Forwarding", "Enabled (localhost:8443)") + cyan.Sprint("│"))
 	}
 
 	log.Info(cyan.Sprint("└" + strings.Repeat("─", boxWidth) + "┘"))
@@ -773,9 +774,7 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	olm := d.useOLM
 	log := d.logger
 	kubeContext := d.kubeContext
-
-	// Calculate box width
-	boxWidth := 60
+	boxWidth := deploymentPlanBoxWidth
 
 	// Helper function to truncate long values
 	truncate := func(s string, maxLen int) string {
@@ -801,11 +800,11 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 		content := fmt.Sprintf(" %s%s: %s", strings.Repeat(" ", labelPadding), label, truncatedValue)
 
 		// Pad to box width
-		padding := boxWidth - len(content) - 1
+		padding := boxWidth - len(content)
 		if padding < 0 {
 			padding = 0
 		}
-		return content + strings.Repeat(" ", padding) + " │"
+		return content + strings.Repeat(" ", padding)
 	}
 
 	// Print the box
@@ -814,20 +813,20 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	log.Info("")
 	log.Info(cyan.Sprint("┌" + strings.Repeat("─", boxWidth) + "┐"))
 
-	title := " Deployment Configuration"
+	title := " Secured ClusterDeployment Configuration"
 	titlePadding := boxWidth - len(title)
 	log.Info(cyan.Sprint("│") + title + strings.Repeat(" ", titlePadding) + cyan.Sprint("│"))
 	log.Info(cyan.Sprint("├" + strings.Repeat("─", boxWidth) + "┤"))
 
 	// Deployment details
-	log.Info(cyan.Sprint("│") + createRow("Component", component))
-	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()))
-	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
-	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
-	log.Info(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]))
+	log.Info(cyan.Sprint("│") + createRow("Component", component) + cyan.Sprint("│"))
+	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()) + cyan.Sprint("│"))
+	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag) + cyan.Sprint("│"))
+	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext) + cyan.Sprint("│"))
+	log.Info(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]) + cyan.Sprint("│"))
 
 	if olm {
-		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes"))
+		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes") + cyan.Sprint("│"))
 	}
 
 	log.Info(cyan.Sprint("└" + strings.Repeat("─", boxWidth) + "┘"))
