@@ -31,6 +31,7 @@ Examples:
 
 	cmd.Flags().BoolVar(&helm, "helm", false, "Deploy using Helm charts instead of operator")
 	cmd.Flags().BoolVar(&olm, "olm", false, "Deploy operator via OLM (requires OLM installed)")
+	cmd.Flags().BoolVar(&deployOperator, "deploy-operator", true, "Deploy and check operator (set to false to skip operator deployment/checks)")
 	cmd.Flags().BoolVar(&portForwarding, "port-forwarding", false, "Enable localhost port-forward for Central")
 	cmd.Flags().BoolVar(&pauseReconciliation, "pause-reconciliation", false, "Pause reconciliation after deployment")
 	cmd.Flags().StringVar(&overrideFile, "override", "", "Path to YAML file with overrides")
@@ -91,6 +92,15 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		os.Setenv("KUBECONFIG", "/kubeconfig")
 	}
 
+	// Validate flag combinations early
+	if helm && olm {
+		return errors.New("cannot use both --helm and --olm flags together")
+	}
+
+	if !deployOperator && olm {
+		return errors.New("cannot use --deploy-operator=false with --olm (OLM requires operator deployment)")
+	}
+
 	d, err := deployer.New(log, overrideFile, overrideSetExpressions)
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
@@ -107,10 +117,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		d.SetEnvrcFile(envrc)
 	}
 
-	if helm && olm {
-		return errors.New("cannot use both --helm and --olm flags together")
-	}
-
 	if helm {
 		if err := d.SetUseHelm(true); err != nil {
 			return err
@@ -122,6 +128,8 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
+
+	d.SetDeployOperator(deployOperator)
 
 	d.SetVerbose(verbose)
 	d.SetEarlyReadiness(earlyReadiness)

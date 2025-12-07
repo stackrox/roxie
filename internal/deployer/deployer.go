@@ -55,6 +55,7 @@ type Deployer struct {
 	envrcFile              string
 	useHelm                bool
 	useOLM                 bool
+	shouldDeployOperator   bool
 	verbose                bool
 	earlyReadiness         bool
 	dockerCreds            *dockerauth.Credentials
@@ -84,6 +85,7 @@ func New(log *logger.Logger, overrideFile string, overrideSetExpressions []strin
 		exposure:               defaultExposure,
 		overrideFile:           overrideFile,
 		overrideSetExpressions: overrideSetExpressions,
+		shouldDeployOperator:   true,
 	}
 
 	d.dockerAuth = dockerauth.New(log)
@@ -551,6 +553,10 @@ func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceT
 	if err != nil {
 		d.logger.Dimf("Could not remove pause-reconcile annotation (expected if CR does not exist): %v", err)
 	}
+}
+
+func (d *Deployer) SetDeployOperator(deployOperator bool) {
+	d.shouldDeployOperator = deployOperator
 }
 
 func (d *Deployer) GetDeploymentInfo() (endpoint, password, caCertFile, kubeContext, exposure string) {

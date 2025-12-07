@@ -16,6 +16,13 @@ import (
 
 // ensureOperatorDeployed ensures the operator is deployed with the correct version and mode
 func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
+	// Skip operator deployment/checks if flag is set to false
+	if !d.shouldDeployOperator {
+		d.logger.Info("ℹ️  Skipping operator deployment checks (--deploy-operator=false)")
+		d.logger.Info("   Assuming operator is already running...")
+		return nil
+	}
+
 	if err := d.ensureCRDsInstalled(ctx); err != nil {
 		return fmt.Errorf("failed to ensure CRDs installed: %w", err)
 	}

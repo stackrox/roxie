@@ -13,6 +13,7 @@ var (
 	earlyReadiness         bool
 	helm                   bool
 	olm                    bool
+	deployOperator         bool
 	portForwarding         bool
 	pauseReconciliation    bool
 	overrideFile           string
