@@ -270,13 +270,14 @@ func (d *Deployer) createCentralCR(resources, exposure string) (map[string]inter
 	}
 
 	resourcesOverlay := d.getCentralResourcesOperator(resources)
+	imageOverlay := d.getCentralImageOverlays()
 
 	overrides, err := GetOverrides(d.overrideFile, d.overrideSetExpressions)
 	if err != nil {
 		return nil, fmt.Errorf("failed construct Central CR overrides: %w", err)
 	}
 
-	merged := helpers.MergeMaps(base, resourcesOverlay, overrides)
+	merged := helpers.MergeMaps(base, resourcesOverlay, imageOverlay, overrides)
 
 	return merged, nil
 }
@@ -342,6 +343,100 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 	}
 
 	return resources
+}
+
+// getCentralImageOverlays returns image tag overlays for Central components
+func (d *Deployer) getCentralImageOverlays() map[string]interface{} {
+	if d.mainImageTag == "" {
+		return map[string]interface{}{}
+	}
+
+	// Create overlays to set the image tag for all Central deployments.
+	overlays := []map[string]interface{}{
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"name":       "central",
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.containers[name:central].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+				},
+			},
+		},
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"name":       "config-controller",
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.containers[name:manager].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+				},
+			},
+		},
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"name":       "central-db",
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.containers[name:central-db].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/central-db:%s", d.mainImageTag),
+				},
+				{
+					"path":  "spec.template.spec.initContainers[name:init-db].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/central-db:%s", d.mainImageTag),
+				},
+			},
+		},
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"name":       "scanner-v4-indexer",
+			"optional":   true,
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.containers[name:indexer].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/scanner-v4:%s", d.mainImageTag),
+				},
+			},
+		},
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"name":       "scanner-v4-matcher",
+			"optional":   true,
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.containers[name:matcher].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/scanner-v4:%s", d.mainImageTag),
+				},
+			},
+		},
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"name":       "scanner-v4-db",
+			"optional":   true,
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.initContainers[name:init-db].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/scanner-v4-db:%s", d.mainImageTag),
+				},
+				{
+					"path":  "spec.template.spec.containers[name:db].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/scanner-v4-db:%s", d.mainImageTag),
+				},
+			},
+		},
+	}
+
+	return map[string]interface{}{
+		"spec": map[string]interface{}{
+			"overlays": overlays,
+		},
+	}
 }
 
 // getCentralExposureConfig returns the exposure configuration
@@ -649,13 +744,14 @@ func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[st
 	}
 
 	resourcesOverlay := d.getSecuredClusterResourcesOperator(resources)
+	imageOverlay := d.getSecuredClusterImageOverlays()
 
 	overrides, err := GetOverrides(d.overrideFile, d.overrideSetExpressions)
 	if err != nil {
 		return nil, fmt.Errorf("failed construct Central CR overrides: %w", err)
 	}
 
-	merged := helpers.MergeMaps(base, resourcesOverlay, overrides)
+	merged := helpers.MergeMaps(base, resourcesOverlay, imageOverlay, overrides)
 
 	return merged, nil
 }
@@ -699,6 +795,88 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 	}
 
 	return resources
+}
+
+// getSecuredClusterImageOverlays returns image tag overlays for SecuredCluster components
+func (d *Deployer) getSecuredClusterImageOverlays() map[string]interface{} {
+	if d.mainImageTag == "" {
+		return map[string]interface{}{}
+	}
+
+	// Create overlays to set the image tag for all SecuredCluster deployments.
+	overlays := []map[string]interface{}{
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"name":       "sensor",
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.containers[name:sensor].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+				},
+			},
+		},
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"name":       "admission-control",
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.containers[name:admission-control].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+				},
+			},
+		},
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "DaemonSet",
+			"name":       "collector",
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.containers[name:collector].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+				},
+				{
+					"path":  "spec.template.spec.containers[name:compliance].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+				},
+			},
+		},
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"name":       "scanner-v4-indexer",
+			"optional":   true,
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.containers[name:indexer].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/scanner-v4:%s", d.mainImageTag),
+				},
+			},
+		},
+		{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"name":       "scanner-v4-db",
+			"optional":   true,
+			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.initContainers[name:init-db].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/scanner-v4-db:%s", d.mainImageTag),
+				},
+				{
+					"path":  "spec.template.spec.containers[name:db].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/scanner-v4-db:%s", d.mainImageTag),
+				},
+			},
+		},
+	}
+
+	return map[string]interface{}{
+		"spec": map[string]interface{}{
+			"overlays": overlays,
+		},
+	}
 }
 
 // applySecuredClusterCR applies the SecuredCluster CR to the cluster
