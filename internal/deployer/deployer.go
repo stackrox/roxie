@@ -25,6 +25,8 @@ var (
 	centralNamespace = "acs-central"
 	sensorNamespace  = "acs-sensor"
 	defaultExposure  = "loadbalancer"
+
+	pauseReconcileAnnotationKey = "stackrox.io/pause-reconcile"
 )
 
 // Deployer is the base deployer for ACS
@@ -523,7 +525,7 @@ func (d *Deployer) addPauseReconcileAnnotation(ctx context.Context, resourceType
 		Args: []string{
 			"annotate", resourceType, resourceName,
 			"-n", namespace,
-			"stackrox.io/pause-reconcile=true",
+			pauseReconcileAnnotationKey,
 			"--overwrite",
 		},
 	})
@@ -543,7 +545,7 @@ func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceT
 		Args: []string{
 			"annotate", resourceType, resourceName,
 			"-n", namespace,
-			"stackrox.io/pause-reconcile-",
+			fmt.Sprintf("%s-", pauseReconcileAnnotationKey),
 		},
 	})
 	if err != nil {
