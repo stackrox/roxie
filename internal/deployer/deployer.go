@@ -547,7 +547,7 @@ func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceT
 		},
 	})
 	if err != nil {
-		d.logger.Dimf("Could not remove pause-reconcile annotation (may not exist): %v", err)
+		d.logger.Dimf("Could not remove pause-reconcile annotation (expected if CR does not exist): %v", err)
 	}
 }
 
