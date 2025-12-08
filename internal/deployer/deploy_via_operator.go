@@ -105,7 +105,7 @@ func (d *Deployer) deployCentralOperator(ctx context.Context, resources, exposur
 		return fmt.Errorf("failed waiting for Central: %w", err)
 	}
 
-	if err := d.addPauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.centralNamespace); err != nil {
+	if err := d.maybeAddPauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.centralNamespace); err != nil {
 		d.logger.Warningf("failed to add pause-reconcile annotation: %v", err)
 	}
 
@@ -593,7 +593,7 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources s
 		return fmt.Errorf("failed waiting for SecuredCluster: %w", err)
 	}
 
-	if err := d.addPauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace); err != nil {
+	if err := d.maybeAddPauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace); err != nil {
 		d.logger.Warningf("failed to add pause-reconcile annotation: %v", err)
 	}
 

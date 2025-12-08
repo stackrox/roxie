@@ -513,8 +513,8 @@ func (d *Deployer) SetPauseReconciliation(enabled bool) {
 	d.pauseReconciliation = enabled
 }
 
-// addPauseReconcileAnnotation adds the stackrox.io/pause-reconcile annotation to a custom resource
-func (d *Deployer) addPauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
+// maybeAddPauseReconcileAnnotation adds the stackrox.io/pause-reconcile annotation to a custom resource
+func (d *Deployer) maybeAddPauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
 	if !d.pauseReconciliation {
 		return nil
 	}
