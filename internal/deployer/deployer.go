@@ -545,7 +545,6 @@ func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceT
 			"-n", namespace,
 			"stackrox.io/pause-reconcile-",
 		},
-		IgnoreErrors: true,
 	})
 	if err != nil {
 		d.logger.Dimf("Could not remove pause-reconcile annotation (may not exist): %v", err)
