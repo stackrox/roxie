@@ -32,6 +32,7 @@ Examples:
 	cmd.Flags().BoolVar(&helm, "helm", false, "Deploy using Helm charts instead of operator")
 	cmd.Flags().BoolVar(&olm, "olm", false, "Deploy operator via OLM (requires OLM installed)")
 	cmd.Flags().BoolVar(&portForwarding, "port-forwarding", false, "Enable localhost port-forward for Central")
+	cmd.Flags().BoolVar(&pauseReconciliation, "pause-reconciliation", false, "Pause reconciliation after deployment")
 	cmd.Flags().StringVar(&overrideFile, "override", "", "Path to YAML file with overrides")
 	cmd.Flags().StringArrayVar(&overrideSetExpressions, "set", []string{}, "Set override values (can specify multiple times, e.g., --set foo.bar=val)")
 	cmd.Flags().StringVar(&exposure, "exposure", "loadbalancer", "Central exposure backend (loadbalancer, none)")
@@ -125,6 +126,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	d.SetVerbose(verbose)
 	d.SetEarlyReadiness(earlyReadiness)
 	d.SetPortForwardingEnabled(portForwardEnabledFinal)
+	d.SetPauseReconciliation(pauseReconciliation)
 
 	// Resolve "auto" resources based on cluster type
 	resolvedResources := resources

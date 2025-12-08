@@ -6,6 +6,7 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -296,7 +297,8 @@ func TestDeployBothComponentsTogether(t *testing.T) {
 	defer os.Remove(envrcPath)
 
 	t.Log("=== Deploying both components ===")
-	args := append([]string{roxieBinary, "deploy", "both", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	// We also test --pause-reconciliation flag here.
+	args := append([]string{roxieBinary, "deploy", "both", "--early-readiness", "--pause-reconciliation", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout*2, nil, args...)
 
 	t.Log("Verifying namespace: acs-central")
@@ -304,6 +306,15 @@ func TestDeployBothComponentsTogether(t *testing.T) {
 
 	t.Log("Verifying namespace: acs-sensor")
 	verifyNamespaceExists(t, "acs-sensor")
+
+	// Verify Central has the pause-reconcile annotation.
+	t.Log("Verifying pause-reconcile annotation on Central CR")
+	verifyAnnotation(t, "central", "stackrox-central-services", "acs-central", "stackrox.io/pause-reconcile", "true")
+
+	// Verify SecuredCluster has the pause-reconcile annotation.
+	t.Log("Verifying pause-reconcile annotation on SecuredCluster CR")
+	verifyAnnotation(t, "securedcluster", "stackrox-secured-cluster-services", "acs-sensor", "stackrox.io/pause-reconcile", "true")
+
 }
 
 func TestDeployCentralAndSecuredClusterViaHelm(t *testing.T) {
@@ -336,4 +347,27 @@ func TestDeployCentralAndSecuredClusterViaHelm(t *testing.T) {
 
 	t.Log("Verifying namespace: acs-sensor")
 	verifyNamespaceExists(t, "acs-sensor")
+}
+
+func verifyAnnotation(t *testing.T, resourceType, resourceName, namespace, annotationKey, expectedValue string) {
+	t.Helper()
+
+	cmd := exec.Command("kubectl", "get", resourceType, resourceName, "-n", namespace, "-o", "jsonpath={.metadata.annotations}")
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to get annotation %s on %s/%s in namespace %s: %v", annotationKey, resourceType, resourceName, namespace, err)
+	}
+
+	annotations := make(map[string]string)
+	err = json.Unmarshal(output, &annotations)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal JSON: %v", err)
+	}
+
+	currentValue := annotations[annotationKey]
+	if currentValue != expectedValue {
+		t.Fatalf("Annotation %s on %s/%s has incorrect value. Expected: %s, Got: %s", annotationKey, resourceType, resourceName, expectedValue, currentValue)
+	}
+
+	t.Logf("✓ Annotation %s=%s verified on %s/%s", annotationKey, expectedValue, resourceType, resourceName)
 }
