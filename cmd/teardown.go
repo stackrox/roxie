@@ -31,7 +31,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		component = args[0]
 	}
 
-	log := logger.New()
+	log := logger.NewWithTimestamps()
 
 	log.Infof("Tearing down %s", component)
 

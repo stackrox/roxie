@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/stackrox/roxie/internal/logger"
 )
 
 var (
@@ -43,7 +45,38 @@ func newLogsOperatorCmd() *cobra.Command {
 	return cmd
 }
 
-func runLogsOperator(cmd *cobra.Command, args []string) error {
+// validateClusterConnection checks if the cluster is reachable.
+func validateClusterConnection(logger logger.Logger, ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "kubectl", "get", "namespaces")
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = io.Discard
+
+	if err := cmd.Run(); err != nil {
+		for _, stderrLine := range strings.Split(stderr.String(), "\n") {
+			logger.Dim(stderrLine)
+		}
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("timeout connecting to cluster - ensure your kubeconfig is correct and the cluster is reachable")
+		}
+		return fmt.Errorf("failed to connect to cluster: %w", err)
+	}
+	return nil
+}
+
+func runLogsOperator(_ *cobra.Command, args []string) error {
+	logger := logger.New()
+
+	// Validate cluster connection first (fast-fail)
+	validateCtx, validateCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer validateCancel()
+
+	if err := validateClusterConnection(logger, validateCtx); err != nil {
+		validateCancel()
+		return err
+	}
+
 	// Build kubectl command
 	kubectlArgs := []string{
 		"-n", "rhacs-operator-system",
@@ -55,13 +88,8 @@ func runLogsOperator(cmd *cobra.Command, args []string) error {
 		kubectlArgs = append(kubectlArgs, "-f")
 	}
 
-	// Create context with timeout for initial connection
-	// Use a longer timeout (30s) to allow for cluster connection
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Create kubectl command with context
-	kubectlCmd := exec.CommandContext(ctx, "kubectl", kubectlArgs...)
+	// Create kubectl command without context - allows indefinite streaming.
+	kubectlCmd := exec.Command("kubectl", kubectlArgs...)
 
 	// Get stdout pipe for streaming
 	stdout, err := kubectlCmd.StdoutPipe()
@@ -82,10 +110,6 @@ func runLogsOperator(cmd *cobra.Command, args []string) error {
 
 	// Wait for command to complete
 	if err := kubectlCmd.Wait(); err != nil {
-		// Check if it was a timeout
-		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("timeout connecting to cluster - ensure your kubeconfig is correct and the cluster is reachable")
-		}
 		// Don't return error if kubectl was interrupted (e.g., Ctrl+C)
 		if _, ok := err.(*exec.ExitError); ok {
 			return nil

@@ -62,11 +62,11 @@ type Applicator interface {
 type Manager struct {
 	detector   Detector
 	applicator Applicator
-	logger     *logger.Logger
+	logger     logger.Logger
 }
 
 // NewManager creates a new cluster defaults manager
-func NewManager(log *logger.Logger) *Manager {
+func NewManager(log logger.Logger) *Manager {
 	return &Manager{
 		detector:   &defaultDetector{},
 		applicator: &defaultApplicator{},

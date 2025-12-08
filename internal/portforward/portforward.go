@@ -13,13 +13,13 @@ import (
 // Manager manages a kubectl port-forward subprocess and exposes a localhost endpoint
 type Manager struct {
 	kubectl   string
-	logger    *logger.Logger
+	logger    logger.Logger
 	proc      *exec.Cmd
 	localPort int
 }
 
 // New creates a new PortForwardManager
-func New(kubectl string, log *logger.Logger) *Manager {
+func New(kubectl string, log logger.Logger) *Manager {
 	return &Manager{
 		kubectl:   kubectl,
 		logger:    log,
