@@ -834,7 +834,7 @@ func (d *Deployer) getSecuredClusterImageOverlays() map[string]interface{} {
 			"patches": []map[string]interface{}{
 				{
 					"path":  "spec.template.spec.containers[name:collector].image",
-					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+					"value": fmt.Sprintf("quay.io/rhacs-eng/collector:%s", d.mainImageTag),
 				},
 				{
 					"path":  "spec.template.spec.containers[name:compliance].image",
