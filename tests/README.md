@@ -31,7 +31,6 @@ make test-short
 E2E tests require:
 - A running Kubernetes cluster
 - `kubectl` configured with the target cluster context
-- `skopeo` for image verification
 - The roxie binary built (`make build`)
 
 Run E2E tests:

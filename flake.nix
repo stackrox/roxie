@@ -95,7 +95,7 @@
               echo "  - helm ($(helm version --short 2>/dev/null || echo 'unknown'))"
               echo "  - Go $(go version | cut -d' ' -f3)"
               echo ""
-              echo "💡 For container tools (skopeo, podman), use:"
+              echo "💡 For full set of pre-installed tooling use:"
               echo "   nix develop .#full"
               echo ""
               echo "Run 'roxie --help' to get started"
@@ -120,8 +120,7 @@
               k9s
               stern
 
-              # Container tools (heavy dependencies!)
-              skopeo
+              # Container tools:
               podman
 
               # Load balancer
@@ -135,7 +134,6 @@
               echo "  - roxie ($(roxie version))"
               echo "  - kubectl ($(kubectl version --client --short 2>/dev/null || echo 'not configured'))"
               echo "  - helm ($(helm version --short 2>/dev/null || echo 'unknown'))"
-              echo "  - skopeo ($(skopeo --version | head -n1))"
               echo "  - podman ($(podman --version | head -n1))"
               echo "  - haproxy ($(haproxy -v | head -n1))"
               echo ""

@@ -35,11 +35,6 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if err := requireBinary("skopeo"); err != nil {
-		fmt.Fprintf(os.Stderr, "skopeo not found: %v\n", err)
-		os.Exit(1)
-	}
-
 	// Set default MAIN_IMAGE_TAG if not set
 	if os.Getenv("MAIN_IMAGE_TAG") == "" {
 		os.Setenv("MAIN_IMAGE_TAG", defaultMainImageTag)
