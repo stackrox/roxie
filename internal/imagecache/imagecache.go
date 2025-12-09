@@ -132,11 +132,10 @@ func (ic *ImageCache) VerifyImagePullable(imageRef string) bool {
 		return true
 	}
 
-	// Use skopeo to check if image is pullable
 	_, stderr, err := helpers.RunCommandWithOutput(
 		"Verifying image pullability",
-		"skopeo",
-		[]string{"inspect", "--raw", fmt.Sprintf("docker://%s", imageRef)},
+		"podman",
+		[]string{"manifest", "inspect", imageRef},
 	)
 
 	if err == nil {

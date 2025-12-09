@@ -44,7 +44,7 @@ LABEL maintainer="StackRox" \
       io.k8s.display-name="roxie ACS Deployment Tool"
 
 # Install required tools via microdnf
-# kubectl, helm, skopeo are available in RHEL repos
+# kubectl, helm are available in RHEL repos
 # Note: UBI minimal comes with curl pre-installed, which is sufficient for our needs
 RUN microdnf install -y \
     # Core utilities
@@ -53,7 +53,7 @@ RUN microdnf install -y \
     unzip \
     ca-certificates \
     # Container tools
-    skopeo \
+    podman \
     # Python (required for gcloud SDK)
     python3 \
     # Clean up
