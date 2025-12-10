@@ -811,6 +811,14 @@ func (d *Deployer) getSecuredClusterImageOverlays() map[string]interface{} {
 			"name":       "sensor",
 			"patches": []map[string]interface{}{
 				{
+					"path":  "spec.template.spec.initContainers[name:crs].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+				},
+				{
+					"path":  "spec.template.spec.initContainers[name:init-tls-certs].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+				},
+				{
 					"path":  "spec.template.spec.containers[name:sensor].image",
 					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
 				},
@@ -833,8 +841,8 @@ func (d *Deployer) getSecuredClusterImageOverlays() map[string]interface{} {
 			"name":       "collector",
 			"patches": []map[string]interface{}{
 				{
-					"path":  "spec.template.spec.containers[name:collector].image",
-					"value": fmt.Sprintf("quay.io/rhacs-eng/collector:%s", d.mainImageTag),
+					"path":  "spec.template.spec.initContainers[name:init-tls-certs].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
 				},
 				{
 					"path":  "spec.template.spec.containers[name:compliance].image",
@@ -849,6 +857,10 @@ func (d *Deployer) getSecuredClusterImageOverlays() map[string]interface{} {
 			"optional":   true,
 			"patches": []map[string]interface{}{
 				{
+					"path":  "spec.template.spec.initContainers[name:init-tls-certs].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+				},
+				{
 					"path":  "spec.template.spec.containers[name:indexer].image",
 					"value": fmt.Sprintf("quay.io/rhacs-eng/scanner-v4:%s", d.mainImageTag),
 				},
@@ -860,6 +872,10 @@ func (d *Deployer) getSecuredClusterImageOverlays() map[string]interface{} {
 			"name":       "scanner-v4-db",
 			"optional":   true,
 			"patches": []map[string]interface{}{
+				{
+					"path":  "spec.template.spec.initContainers[name:init-tls-certs].image",
+					"value": fmt.Sprintf("quay.io/rhacs-eng/main:%s", d.mainImageTag),
+				},
 				{
 					"path":  "spec.template.spec.initContainers[name:init-db].image",
 					"value": fmt.Sprintf("quay.io/rhacs-eng/scanner-v4-db:%s", d.mainImageTag),
