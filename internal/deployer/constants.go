@@ -1,8 +1,8 @@
 package deployer
 
-var (
-	internalCentralEndpoint = "central.acs-central.svc:443"
+import "fmt"
 
+var (
 	centralResourcesSmall = map[string]interface{}{
 		"requests": map[string]string{
 			"memory": "1Gi",
@@ -183,3 +183,7 @@ var (
 		},
 	}
 )
+
+func internalCentralEndpoint(namespace string) string {
+	return fmt.Sprintf("central.%s.svc:443", namespace)
+}

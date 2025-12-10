@@ -21,6 +21,7 @@ func newTeardownCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&helm, "helm", false, "Force teardown of Helm deployment")
+	cmd.Flags().BoolVar(&singleNamespace, "single-namespace", false, "Deploy all components in a single namespace ('stackrox' by default)")
 
 	return cmd
 }
@@ -39,6 +40,8 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
 	}
+
+	d.SetSingleNamespace(singleNamespace)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()

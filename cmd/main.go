@@ -22,6 +22,7 @@ var (
 	resources              string
 	shell                  string
 	envrc                  string
+	singleNamespace        bool
 )
 
 func main() {

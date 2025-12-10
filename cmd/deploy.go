@@ -40,6 +40,7 @@ Examples:
 	cmd.Flags().StringVar(&resources, "resources", "auto", "Resource sizing preset (auto=cluster-based, medium, small)")
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to spawn after Central deployment")
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
+	cmd.Flags().BoolVar(&singleNamespace, "single-namespace", false, "Deploy all components in a single namespace ('stackrox' by default)")
 
 	return cmd
 }
@@ -135,6 +136,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	d.SetEarlyReadiness(earlyReadiness)
 	d.SetPortForwardingEnabled(portForwardEnabledFinal)
 	d.SetPauseReconciliation(pauseReconciliation)
+	d.SetSingleNamespace(singleNamespace)
 
 	// Resolve "auto" resources based on cluster type
 	resolvedResources := resources
