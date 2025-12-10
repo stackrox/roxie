@@ -25,7 +25,7 @@ func TestDeployBothSimple(t *testing.T) {
 	defer os.Remove(envrcPath)
 
 	t.Log("=== Deploying both components together ===")
-	args := append([]string{roxieBinary, "deploy", "both", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "--early-readiness", "both", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout*2, nil, args...)
 
 	// Verify namespaces exist
@@ -43,8 +43,7 @@ func TestDeployBothSimple(t *testing.T) {
 	teardownArgs := []string{roxieBinary, "teardown", "both"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	// Verify namespaces are deleted
-	t.Log("Verifying namespaces are removed")
-	verifyNamespaceAbsent(t, "acs-central")
-	verifyNamespaceAbsent(t, "acs-sensor")
+	t.Log("Verifying components are removed")
+	verifyCentralNotInstalled(t, "acs-central")
+	verifySecuredClusterNotInstalled(t, "acs-sensor")
 }
