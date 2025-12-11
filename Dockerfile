@@ -176,6 +176,7 @@ USER roxie
 
 # Set environment variables
 ENV HOME=/ \
+    KUBECONFIG=/kubeconfig \
     PATH=/usr/local/bin:$PATH
 
 # Display version information on container start
