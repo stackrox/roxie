@@ -22,77 +22,67 @@ roxie has been authored with significant AI contributions.
 
 ## Quick start
 
-### Option 1: Container Image (Recommended for non-developers)
+### Option 1: Deploying using Docker image (Recommended for non-developers)
 
-**Requirements:** Only Docker/Podman and a kubeconfig!
+**Requirements:**
+* Working Docker setup
+* kubeconfig configuration file
+* quay.io registry credentials in the environment variables REGISTRY_USERNAME and REGISTRY_PASSWORD.
 
+Note that **Podman is currently not supported** for running
+containerized roxie due to incomplete mapping of user IDs on macOS. This prevents the passing-in of the gcloud
+configuration directory to be functional within the container, which is required for interacting with GKE clusters.
+
+Example for deploying Central and SecuredCluster to the current Kubernetes cluster context:
 ```bash
-# Build the image (current platform)
-make docker-build
-
-# This creates two tags:
-#   - roxie:latest
-#   - roxie:0.1-<git-commit> (e.g., roxie:0.1-4469692)
-
-# Build for multiple architectures (amd64 + arm64)
-make docker-build-multiarch
-
-# Deploy ACS
-make docker-deploy COMPONENT=both
-
-# Deploy with specific version tag (recommended for production)
-make docker-deploy DOCKER_TAG=0.1-4469692 COMPONENT=both
+docker run --rm -it --privileged \
+    -v ~/.config/gcloud:/.config/gcloud \
+    -v $KUBECONFIG:/kubeconfig \
+    -e REGISTRY_USERNAME=$REGISTRY_USERNAME \
+    -e REGISTRY_PASSWORD=$REGISTRY_PASSWORD \
+    ghcr.io/stackrox/roxie:latest deploy
 ```
 
-**Supported architectures:** linux/amd64, linux/arm64
+A new roxie image for the current platform can be built using:
 
-**Version Tags:** Every build automatically creates a version-tagged image (VERSION-COMMIT format) alongside `latest`. This enables:
-- **Reproducible deployments** - Pin exact versions in CI/CD
-- **Easy rollbacks** - Revert to any previous build
-- **Version tracking** - Know exactly what code is running
+```bash
+make docker-build
+```
 
-### Option 2: Local Build (For development)
+This creates two tags:
+- `localhost/roxie:latest`
+- `localhost/roxie:<version-tag>`
+
+Docker images can be built for the platforms `linux/amd64` and `linux/arm64`. See the `Makefile` for more
+docker related targets.
+
+### Option 2: Deploying using local build
 
 Prerequisites:
 - `kubectl` configured to point at your target cluster
-- The `roxctl` CLI installed
+- `podman` is set up and available
+- The `roxctl` CLI
 - The `roxie` branch forked and cloned to your local machine
 
+Built using:
+```bash
+make build
+```
 
 Get help:
 ```bash
-./bin/roxie --help
+./roxie --help
 ```
 
-Deploy Central (via operator):
+Deploy using:
 ```bash
-./bin/roxie deploy central
+./roxie deploy [ <component> ]
 ```
+where `component` can be `central` or `sensor`. If not specified, both components will be deployed.
 
-Deploy Secured Cluster (via operator):
+Similarly, the deployment(s) can be torn down using:
 ```bash
-# Ensure Central is reachable; roxie discovers and wires the endpoint
-./bin/roxie deploy secured-cluster
-```
-
-Deploy both in one go:
-```bash
-./bin/roxie deploy both
-```
-
-Use Helm instead of Operator:
-```bash
-./bin/roxie deploy central --helm
-./bin/roxie deploy secured-cluster --helm
-# or
-./bin/roxie deploy both --helm
-```
-
-Teardown:
-```bash
-./bin/roxie teardown central
-./bin/roxie teardown secured-cluster
-./bin/roxie teardown both
+./bin/roxie teardown [ <component> ]
 ```
 
 ## Development
