@@ -763,6 +763,7 @@ func (d *Deployer) mainImageOverlays(apiVersion, kind, name string, containerIma
 		"apiVersion": apiVersion,
 		"kind":       kind,
 		"name":       name,
+		"optional":   true,
 		"patches":    patches,
 	}
 }
