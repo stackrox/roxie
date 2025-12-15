@@ -353,23 +353,23 @@ func (d *Deployer) getCentralImageOverlays() map[string]interface{} {
 
 	// Create overlays to set the image tag for all Central deployments.
 	overlays := []map[string]interface{}{
-		d.mainImageOverlays("apps/v1", "Deployment", "central", map[string]string{
+		d.mainImageOverlays("Deployment", "central", map[string]string{
 			"central": "main",
 		}),
-		d.mainImageOverlays("apps/v1", "Deployment", "config-controller", map[string]string{
+		d.mainImageOverlays("Deployment", "config-controller", map[string]string{
 			"manager": "main",
 		}),
-		d.mainImageOverlays("apps/v1", "Deployment", "central-db", map[string]string{
+		d.mainImageOverlays("Deployment", "central-db", map[string]string{
 			"init:init-db": "central-db",
 			"central-db":   "central-db",
 		}),
-		d.mainImageOverlays("apps/v1", "Deployment", "scanner-v4-indexer", map[string]string{
+		d.mainImageOverlays("Deployment", "scanner-v4-indexer", map[string]string{
 			"indexer": "scanner-v4",
 		}),
-		d.mainImageOverlays("apps/v1", "Deployment", "scanner-v4-matcher", map[string]string{
+		d.mainImageOverlays("Deployment", "scanner-v4-matcher", map[string]string{
 			"matcher": "scanner-v4",
 		}),
-		d.mainImageOverlays("apps/v1", "Deployment", "scanner-v4-db", map[string]string{
+		d.mainImageOverlays("Deployment", "scanner-v4-db", map[string]string{
 			"init:init-db": "scanner-v4-db",
 			"db":           "scanner-v4-db",
 		}),
@@ -740,7 +740,7 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 	return resources
 }
 
-func (d *Deployer) mainImageOverlays(apiVersion, kind, name string, containerImages map[string]string) map[string]interface{} {
+func (d *Deployer) mainImageOverlays(kind, name string, containerImages map[string]string) map[string]interface{} {
 	patches := make([]map[string]interface{}, 0, len(containerImages))
 	for containerName, containerImage := range containerImages {
 		containerType := "containers"
@@ -760,7 +760,7 @@ func (d *Deployer) mainImageOverlays(apiVersion, kind, name string, containerIma
 		})
 	}
 	return map[string]interface{}{
-		"apiVersion": apiVersion,
+		"apiVersion": "apps/v1",
 		"kind":       kind,
 		"name":       name,
 		"optional":   true,
@@ -776,32 +776,32 @@ func (d *Deployer) getSecuredClusterImageOverlays() map[string]interface{} {
 
 	// Create overlays to set the image tag for all SecuredCluster deployments.
 	overlays := []map[string]interface{}{
-		d.mainImageOverlays("apps/v1", "Deployment", "sensor", map[string]string{
+		d.mainImageOverlays("Deployment", "sensor", map[string]string{
 			"init:crs":            "main",
 			"init:init-tls-certs": "main",
 			"sensor":              "main",
 		}),
-		d.mainImageOverlays("apps/v1", "Deployment", "admission-control", map[string]string{
+		d.mainImageOverlays("Deployment", "admission-control", map[string]string{
 			"init:init-tls-certs": "main",
 			"admission-control":   "main",
 		}),
-		d.mainImageOverlays("apps/v1", "DaemonSet", "collector", map[string]string{
+		d.mainImageOverlays("DaemonSet", "collector", map[string]string{
 			"init:init-tls-certs": "main",
 			"compliance":          "main",
 		}),
-		d.mainImageOverlays("apps/v1", "Deployment", "scanner-v4-indexer", map[string]string{
+		d.mainImageOverlays("Deployment", "scanner-v4-indexer", map[string]string{
 			"init:init-tls-certs": "main",
 			"indexer":             "scanner-v4",
 		}),
-		d.mainImageOverlays("apps/v1", "Deployment", "scanner-v4-db", map[string]string{
+		d.mainImageOverlays("Deployment", "scanner-v4-db", map[string]string{
 			"init:init-tls-certs": "main",
 			"init:init-db":        "scanner-v4-db",
 			"db":                  "scanner-v4-db",
 		}),
-		d.mainImageOverlays("apps/v1", "Deployment", "scanner", map[string]string{
+		d.mainImageOverlays("Deployment", "scanner", map[string]string{
 			"init:init-tls-certs": "main",
 		}),
-		d.mainImageOverlays("apps/v1", "Deployment", "scanner-db", map[string]string{
+		d.mainImageOverlays("Deployment", "scanner-db", map[string]string{
 			"init:init-tls-certs": "main",
 		}),
 	}
