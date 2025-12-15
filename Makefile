@@ -18,10 +18,24 @@ BUILD_DIR := .
 BINARY := $(BUILD_DIR)/$(BINARY_NAME)
 
 # Version information
-VERSION := 0.1
-GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
+# Convention is that the git tags are of the form
+#      v<major>.<minor>.<patch>-<build-number>-<commit-hash>[-dirty]
+#   or v<major>.<minor>.<patch>
+#
+# We use sed to drop the initial 'v' in case the whole tag matches any of the above patterns.
+# Hence, the resulting version string will simply be
+#
+#     <major>.<minor>.<patch> or <major>.<minor>.<patch>-<build-number>-<commit-hash>[-dirty]
+#
+# This will also become the tag of the docker images.
+VERSION := $(shell git describe --tags --always --dirty | sed -E 's/^v([0-9]+\.[0-9]+\.[0-9]+-[0-9]+-[a-z0-9]+(-dirty)?$$)/\1/')
 BUILD_DATE := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildDate=$(BUILD_DATE)
+
+.PHONY: version
+version:
+	@echo $(VERSION)
 
 # Build targets
 .PHONY: build
@@ -147,9 +161,8 @@ all: clean deps check test build ## Run full development workflow
 # Docker/Container targets
 DOCKER_IMAGE := roxie
 DOCKER_TAG := latest
-DOCKER_VERSION_TAG := $(VERSION)-$(GIT_COMMIT)
 DOCKER_FULL_IMAGE := $(DOCKER_IMAGE):$(DOCKER_TAG)
-DOCKER_VERSION_IMAGE := $(DOCKER_IMAGE):$(DOCKER_VERSION_TAG)
+DOCKER_VERSION_IMAGE := $(DOCKER_IMAGE):$(VERSION)
 CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
 
 # Multi-architecture support
