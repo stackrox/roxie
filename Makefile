@@ -159,7 +159,7 @@ validate: ## Validate go.mod and check for issues
 all: clean deps check test build ## Run full development workflow
 
 # Docker/Container targets
-DOCKER_IMAGE := roxie
+DOCKER_IMAGE := localhost/roxie
 DOCKER_TAG := latest
 DOCKER_FULL_IMAGE := $(DOCKER_IMAGE):$(DOCKER_TAG)
 DOCKER_VERSION_IMAGE := $(DOCKER_IMAGE):$(VERSION)
