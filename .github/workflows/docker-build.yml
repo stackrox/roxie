@@ -46,8 +46,8 @@ jobs:
         id: build-meta
         run: |
           echo "version=$(make version)" >> $GITHUB_OUTPUT
-          echo "git_commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-          echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+          echo "git_commit=$(make get-commit-hash)" >> $GITHUB_OUTPUT
+          echo "build_date=$(make get-build-date)" >> $GITHUB_OUTPUT
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
