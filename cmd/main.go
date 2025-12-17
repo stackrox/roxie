@@ -43,7 +43,7 @@ Red Hat Advanced Cluster Security (ACS) on any Kubernetes/OpenShift cluster.`,
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output (show CRs and Helm values)")
-	rootCmd.PersistentFlags().BoolVar(&earlyReadiness, "early-readiness", false, "Only wait for essential workloads (central/sensor), not all workloads")
+	rootCmd.PersistentFlags().BoolVar(&earlyReadiness, "early-readiness", true, "Only wait for essential workloads (central/sensor) to be ready")
 	rootCmd.AddCommand(newDeployCmd())
 	rootCmd.AddCommand(newTeardownCmd())
 	rootCmd.AddCommand(newVersionCmd())

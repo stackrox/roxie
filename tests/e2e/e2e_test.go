@@ -23,9 +23,10 @@ const (
 )
 
 var (
-	commonDeployArgs              = []string{"--port-forwarding", "--exposure=none", "--resources=small", "--early-readiness"}
-	commonDeployArgsNoPortForward = []string{"--exposure=loadbalancer", "--resources=small", "--early-readiness"}
-	roxieBinary                   string
+	commonDeployArgs              = []string{"--port-forwarding", "--exposure=none", "--resources=small"}
+	commonDeployArgsNoPortForward = []string{"--exposure=loadbalancer", "--resources=small"}
+
+	roxieBinary string
 )
 
 func TestMain(m *testing.M) {
@@ -293,7 +294,7 @@ func TestDeployBothComponentsTogether(t *testing.T) {
 
 	t.Log("=== Deploying both components ===")
 	// We also test --pause-reconciliation flag here.
-	args := append([]string{roxieBinary, "deploy", "both", "--early-readiness", "--pause-reconciliation", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "both", "--pause-reconciliation", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout*2, nil, args...)
 
 	t.Log("Verifying namespace: acs-central")
