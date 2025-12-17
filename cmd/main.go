@@ -23,6 +23,7 @@ var (
 	shell                  string
 	envrc                  string
 	singleNamespace        bool
+	featureFlagsSlice      []string
 )
 
 func main() {

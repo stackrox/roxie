@@ -42,6 +42,8 @@ Examples:
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to spawn after Central deployment")
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
 	cmd.Flags().BoolVar(&singleNamespace, "single-namespace", false, "Deploy all components in a single namespace ('stackrox' by default)")
+	cmd.Flags().StringArrayVar(&featureFlagsSlice, "features", []string{}, "Feature flag settings")
+	cmd.Flags().StringArrayVar(&featureFlagsSlice, "feature", []string{}, "(alias for --features)")
 
 	return cmd
 }
@@ -144,6 +146,12 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("looking up main image tag: %w", err)
 	}
 	d.SetMainImageTag(mainImageTag)
+
+	featureFlags := deployer.NewFeatureFlags()
+	if err := featureFlags.ParseAndSetFromSlice(featureFlagsSlice); err != nil {
+		return fmt.Errorf("failed to parse feature flags: %w", err)
+	}
+	d.SetFeatureFlags(featureFlags)
 
 	// Resolve "auto" resources based on cluster type
 	resolvedResources := resources

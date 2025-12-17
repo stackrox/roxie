@@ -224,6 +224,10 @@ func (d *Deployer) createAdminPasswordSecret(ctx context.Context) error {
 
 // createCentralCR creates the Central custom resource
 func (d *Deployer) createCentralCR(resources, exposure string) (map[string]interface{}, error) {
+	featureFlags := d.featureFlags.ToEnvVars()
+	for _, featureFlag := range featureFlags {
+		d.logger.Dimf("Setting Feature flag: %s=%s", featureFlag.Name, featureFlag.Value)
+	}
 	base := map[string]interface{}{
 		"apiVersion": "platform.stackrox.io/v1alpha1",
 		"kind":       "Central",
@@ -265,6 +269,9 @@ func (d *Deployer) createCentralCR(resources, exposure string) (map[string]inter
 						"replicas":    1,
 					},
 				},
+			},
+			"customize": map[string]interface{}{
+				"envVars": featureFlags,
 			},
 		},
 	}

@@ -117,6 +117,7 @@ type Deployer struct {
 	earlyReadiness         bool
 	dockerCreds            *dockerauth.Credentials
 	clusterResourceKinds   map[string]struct{}
+	featureFlags           FeatureFlags
 }
 
 type ResourceKindWithName struct {
@@ -709,6 +710,7 @@ func (d *Deployer) SetPauseReconciliation(enabled bool) {
 	d.pauseReconciliation = enabled
 }
 
+<<<<<<< HEAD
 func (d *Deployer) SetSingleNamespace(enabled bool) {
 	if enabled {
 		d.centralNamespace = sharedNamespace
@@ -721,6 +723,14 @@ func (d *Deployer) SetMainImageTag(tag string) {
 	d.operatorTag = helpers.ConvertMainTagToOperatorTag(d.mainImageTag)
 }
 
+||||||| parent of 78da95e (Integrate into deployer)
+=======
+func (d *Deployer) SetFeatureFlags(featureFlags FeatureFlags) error {
+	d.featureFlags = featureFlags
+	return nil
+}
+
+>>>>>>> 78da95e (Integrate into deployer)
 // maybeAddPauseReconcileAnnotation adds the stackrox.io/pause-reconcile annotation to a custom resource
 func (d *Deployer) maybeAddPauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
 	if !d.pauseReconciliation {
