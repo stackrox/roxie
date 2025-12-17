@@ -617,6 +617,10 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources s
 
 // createSecuredClusterCR creates the SecuredCluster custom resource.
 func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[string]interface{}, error) {
+	featureFlags := d.featureFlags.ToEnvVars()
+	for _, featureFlag := range featureFlags {
+		d.logger.Dimf("Setting Feature flag: %s=%s", featureFlag.Name, featureFlag.Value)
+	}
 	base := map[string]interface{}{
 		"apiVersion": "platform.stackrox.io/v1alpha1",
 		"kind":       "SecuredCluster",
@@ -651,6 +655,9 @@ func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[st
 						"replicas":    1,
 					},
 				},
+			},
+			"customize": map[string]interface{}{
+				"envVars": featureFlags,
 			},
 		},
 	}
