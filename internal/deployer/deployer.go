@@ -22,11 +22,68 @@ import (
 )
 
 var (
+	sharedNamespace  = "stackrox"
 	centralNamespace = "acs-central"
 	sensorNamespace  = "acs-sensor"
 	defaultExposure  = "loadbalancer"
 
 	pauseReconcileAnnotationKey = "stackrox.io/pause-reconcile"
+
+	allInstallableCentralResourceKinds = []string{
+		"applications",
+		"clusterroles",
+		"configmaps",
+		"deployments",
+		"destinationrules",
+		"endpoints",
+		"endpointslices",
+		"horizontalpodautoscalers",
+		"networkpolicys",
+		"leases",
+		"persistentvolumes",
+		"persistentvolumeclaims",
+		"pods",
+		"podsecuritypolicys",
+		"prometheusrules",
+		"roles",
+		"rolebindings",
+		"replicasets",
+		"routes",
+		"secrets",
+		"services",
+		"serviceaccounts",
+		"servicemonitors",
+		"storageclasses",
+	}
+
+	allInstallableSecuredClusterResourceKinds = []string{
+		"clusterroles",
+		"clusterrolebindings",
+		"configmaps",
+		"controllerrevisions",
+		"daemonsets",
+		"deployments",
+		"endpoints",
+		"endpointslices",
+		"destinationrules",
+		"horizontalpodautoscalers",
+		"networkpolicys",
+		"leases",
+		"persistentvolumes",
+		"persistentvolumeclaims",
+		"pods",
+		"podsecuritypolicys",
+		"prometheusrules",
+		"replicasets",
+		"roles",
+		"rolebindings",
+		"secrets",
+		"services",
+		"serviceaccounts",
+		"servicemonitors",
+		"storageclasses",
+		"validatingwebhookconfigurations",
+	}
 )
 
 // Deployer is the base deployer for ACS
@@ -59,6 +116,159 @@ type Deployer struct {
 	verbose                bool
 	earlyReadiness         bool
 	dockerCreds            *dockerauth.Credentials
+	clusterResourceKinds   map[string]struct{}
+}
+
+type ResourceKindWithName struct {
+	Kind string
+	Name string
+}
+
+func (d *Deployer) filterResourceKinds(resourceKinds []string) []string {
+	filteredResourceKinds := make([]string, 0, len(resourceKinds))
+	for _, resourceKind := range resourceKinds {
+		if _, ok := d.clusterResourceKinds[resourceKind]; ok {
+			filteredResourceKinds = append(filteredResourceKinds, resourceKind)
+		}
+	}
+	return filteredResourceKinds
+}
+
+func (d *Deployer) deleteResource(ctx context.Context, namespace, resourceType, resourceName string, args ...string) error {
+	finalArgs := []string{
+		"-n", namespace,
+		"delete",
+		resourceType,
+		resourceName,
+		"--ignore-not-found",
+		"--force",
+		"--grace-period=0",
+	}
+	finalArgs = append(finalArgs, args...)
+	_, err := d.runKubectl(ctx, KubectlOptions{Args: finalArgs})
+	return err
+}
+
+func (d *Deployer) deleteResources(ctx context.Context, namespace string, resourceTypes []string, args ...string) error {
+	resourceTypesString := strings.Join(resourceTypes, ",")
+	finalArgs := []string{
+		"-n", namespace,
+		"delete",
+		resourceTypesString,
+		"--ignore-not-found",
+		"--force",
+		"--grace-period=0",
+	}
+	finalArgs = append(finalArgs, args...)
+	_, err := d.runKubectl(ctx, KubectlOptions{Args: finalArgs})
+	return err
+}
+
+func (d *Deployer) deleteFinalizers(ctx context.Context, namespace, resourceType, resourceName string) error {
+	_, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{
+			"-n", namespace, "patch", resourceType, resourceName,
+			"-p", "{\"metadata\":{\"finalizers\":null}}",
+			"--type=merge",
+		},
+	})
+	return err
+}
+
+func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error {
+	d.logger.Info("Deleting Central resources")
+	var crExists bool
+
+	if d.doesResourceExist(ctx, "central", "stackrox-central-services", d.centralNamespace) {
+		crExists = true
+
+		// Trigger async deletion of the Central CR.
+		err := d.deleteResource(ctx, d.centralNamespace, "central", "stackrox-central-services", "--wait=false")
+		if err != nil {
+			return fmt.Errorf("failed to asynchronously delete Central CR: %w", err)
+		}
+
+		err = d.deleteFinalizers(ctx, d.centralNamespace, "central", "stackrox-central-services")
+		if err != nil {
+			return fmt.Errorf("failed to delete finalizers on Central CR: %w", err)
+		}
+
+	}
+
+	// In the meantime, delete other resources by brute force.
+	resourceKinds := d.filterResourceKinds(allInstallableCentralResourceKinds)
+	err := d.deleteResources(ctx, d.centralNamespace, resourceKinds, "-l=app.kubernetes.io/part-of=stackrox-central-services")
+	if err != nil {
+		return err
+	}
+
+	for _, resource := range []ResourceKindWithName{
+		{Name: "central-db", Kind: "pvc"},
+		{Name: "central-db-backup", Kind: "pvc"},
+		{Name: "admin-password", Kind: "secret"},
+	} {
+		err := d.deleteResource(ctx, d.centralNamespace, resource.Kind, resource.Name)
+		if err != nil {
+			return fmt.Errorf("failed to delete %s/%s: %w", resource.Kind, resource.Name, err)
+		}
+	}
+
+	if crExists {
+		// Now delete the Central CR synchronously.
+		err := d.deleteResource(ctx, d.centralNamespace, "central", "stackrox-central-services")
+		if err != nil {
+			return fmt.Errorf("failed to delete Central CR: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (d *Deployer) deleteSecuredClusterResources(ctx context.Context, wait bool) error {
+	d.logger.Info("Deleting SecuredCluster resources")
+	var crExists bool
+
+	if d.doesResourceExist(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace) {
+		crExists = true
+
+		// Trigger async deletion of the SecuredCluster CR.
+		err := d.deleteResource(ctx, d.sensorNamespace, "securedcluster", "stackrox-secured-cluster-services", "--wait=false")
+		if err != nil {
+			return err
+		}
+
+		err = d.deleteFinalizers(ctx, d.sensorNamespace, "securedcluster", "stackrox-secured-cluster-services")
+		if err != nil {
+			return fmt.Errorf("failed to delete finalizers on SecuredCluster CR: %w", err)
+		}
+	}
+
+	// In the meantime, delete other resources by brute force.
+	resourceKinds := d.filterResourceKinds(allInstallableSecuredClusterResourceKinds)
+	err := d.deleteResources(ctx, d.sensorNamespace, resourceKinds, "-l=app.kubernetes.io/part-of=stackrox-secured-cluster-services")
+	if err != nil {
+		return err
+	}
+
+	for _, resource := range []ResourceKindWithName{
+		{Name: "cluster-registration-secret", Kind: "secret"},
+		{Name: "scanner-db-password", Kind: "secret"},
+	} {
+		err := d.deleteResource(ctx, d.sensorNamespace, resource.Kind, resource.Name)
+		if err != nil {
+			return fmt.Errorf("failed to delete %s/%s: %w", resource.Kind, resource.Name, err)
+		}
+	}
+
+	if crExists {
+		// Now delete the SecuredCluster CR synchronously.
+		err := d.deleteResource(ctx, d.sensorNamespace, "securedcluster", "stackrox-secured-cluster-services")
+		if err != nil {
+			return fmt.Errorf("failed to delete SecuredCluster CR: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func New(log *logger.Logger, overrideFile string, overrideSetExpressions []string) (*Deployer, error) {
@@ -114,10 +324,37 @@ func New(log *logger.Logger, overrideFile string, overrideSetExpressions []strin
 	}
 	d.kubeContext = ctx
 
+	clusterResourceKinds, err := d.getClusterResourceKinds()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster resource kinds: %w", err)
+	}
+	d.clusterResourceKinds = clusterResourceKinds
+
 	log.Success("🚀 ACS Deployer initialized")
 	log.Infof("roxctl version: %s", d.roxctlVersion)
 
 	return d, nil
+}
+
+func (d *Deployer) getClusterResourceKinds() (map[string]struct{}, error) {
+	result, err := d.runKubectl(context.Background(), KubectlOptions{
+		Args: []string{"api-resources", "-o", "name"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster resource kinds: %w", err)
+	}
+	kinds := make(map[string]struct{})
+	lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
+	for _, line := range lines {
+		fields := strings.SplitN(line, ".", 2)
+		if len(fields) == 0 || fields[0] == "" {
+			continue
+		}
+		kind := fields[0]
+		kinds[kind] = struct{}{}
+	}
+
+	return kinds, nil
 }
 
 func formatComponentName(component string) string {
@@ -187,13 +424,11 @@ func (d *Deployer) prepareCredentials() error {
 }
 
 func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string) error {
+	d.logger.Infof("Deploying Central to namespace %s", d.centralNamespace)
 	if d.namespaceExists(d.centralNamespace) {
 		d.logger.Info("Existing Central deployment found, tearing down...")
 		if err := d.teardownCentral(ctx); err != nil {
 			d.logger.Warningf("Error during teardown: %v", err)
-		}
-		if err := d.waitForNamespaceDeletion(d.centralNamespace); err != nil {
-			return fmt.Errorf("failed waiting for namespace deletion: %w", err)
 		}
 	}
 
@@ -221,13 +456,11 @@ func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string
 }
 
 func (d *Deployer) deploySecuredCluster(ctx context.Context, resources string) error {
+	d.logger.Infof("Deploying SecuredCluster to namespace %s", d.sensorNamespace)
 	if d.namespaceExists(d.sensorNamespace) {
 		d.logger.Info("Existing SecuredCluster deployment found, tearing down...")
 		if err := d.teardownSecuredCluster(ctx); err != nil {
 			d.logger.Warningf("Error during teardown: %v", err)
-		}
-		if err := d.waitForNamespaceDeletion(d.sensorNamespace); err != nil {
-			return fmt.Errorf("failed waiting for namespace deletion: %w", err)
 		}
 	}
 
@@ -265,30 +498,20 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 
 	d.portForward.Stop()
 
-	// Remove pause-reconcile annotation before deleting to allow operator to clean up properly
-	d.removePauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.centralNamespace)
+	// Add pause-reconcile annotation to not have the operator interfere during resource deletion.
+	if d.doesResourceExist(ctx, "central", "stackrox-central-services", d.centralNamespace) {
+		if err := d.addPauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.centralNamespace); err != nil {
+			d.logger.Warningf("Error adding pause-reconcile annotation: %v", err)
+		}
+	}
 
-	d.logger.Info("Deleting Central custom resource")
-	d.runKubectl(ctx, KubectlOptions{
-		Args:         []string{"delete", "central", "stackrox-central-services", "-n", d.centralNamespace, "--wait=false"},
-		IgnoreErrors: true,
-	})
-
-	time.Sleep(2 * time.Second)
-
-	_, err := d.runKubectl(ctx, KubectlOptions{
-		Args: []string{"delete", "namespace", d.centralNamespace, "--wait=false"},
-	})
+	d.logger.Info("⏳ Waiting for Central resources to be fully deleted...")
+	err := d.deleteCentralResources(ctx, true)
 	if err != nil {
-		return fmt.Errorf("failed to delete namespace: %w", err)
+		return fmt.Errorf("failed to delete Central resources: %w", err)
 	}
 
-	d.logger.Info("⏳ Waiting for namespace to be fully deleted...")
-	if err := d.waitForNamespaceDeletion(d.centralNamespace); err != nil {
-		return fmt.Errorf("failed waiting for namespace deletion: %w", err)
-	}
-
-	d.logger.Successf("✓ %s has been deleted", d.centralNamespace)
+	d.logger.Successf("✓ Central resources in namespace %s have been deleted", d.centralNamespace)
 	return nil
 }
 
@@ -300,41 +523,24 @@ func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
 		return nil
 	}
 
-	// Remove pause-reconcile annotation before deleting to allow operator to clean up properly
-	d.removePauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace)
+	if d.doesResourceExist(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace) {
+		// Add pause-reconcile annotation to not have the operator interfere during resource deletion.
+		if err := d.addPauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace); err != nil {
+			d.logger.Warningf("Error adding pause-reconcile annotation: %v", err)
+		}
+	}
 
-	d.logger.Info("Deleting SecuredCluster custom resource")
-	d.runKubectl(ctx, KubectlOptions{
-		Args:         []string{"delete", "securedcluster", "stackrox-secured-cluster-services", "-n", d.sensorNamespace, "--wait=false"},
-		IgnoreErrors: true,
-	})
-
-	time.Sleep(2 * time.Second)
-
-	_, err := d.runKubectl(ctx, KubectlOptions{
-		Args: []string{"delete", "namespace", d.sensorNamespace, "--wait=false"},
-	})
+	d.logger.Info("⏳ Waiting for SecuredCluster resources to be fully deleted...")
+	err := d.deleteSecuredClusterResources(ctx, true)
 	if err != nil {
-		return fmt.Errorf("failed to delete namespace: %w", err)
+		return fmt.Errorf("failed to delete SecuredCluster resources: %w", err)
 	}
 
-	d.logger.Info("⏳ Waiting for namespace to be fully deleted...")
-	if err := d.waitForNamespaceDeletion(d.sensorNamespace); err != nil {
-		return fmt.Errorf("failed waiting for namespace deletion: %w", err)
-	}
-
-	d.logger.Successf("✓ %s has been deleted", d.sensorNamespace)
+	d.logger.Successf("✓ SecuredCluster resources in namespace %s have been deleted", d.sensorNamespace)
 	return nil
 }
 
 func (d *Deployer) ensureNamespaceExists(namespace string) error {
-	if d.isNamespaceTerminating(namespace) {
-		d.logger.Infof("Namespace %s is terminating, waiting for deletion to complete...", namespace)
-		if err := d.waitForNamespaceDeletion(namespace); err != nil {
-			return fmt.Errorf("failed waiting for namespace deletion: %w", err)
-		}
-	}
-
 	if d.namespaceExists(namespace) {
 		return nil
 	}
@@ -356,16 +562,6 @@ func (d *Deployer) namespaceExists(namespace string) bool {
 		Args: []string{"get", "namespace", namespace},
 	})
 	return err == nil
-}
-
-func (d *Deployer) isNamespaceTerminating(namespace string) bool {
-	result, err := d.runKubectl(context.Background(), KubectlOptions{
-		Args: []string{"get", "namespace", namespace, "-o", "jsonpath={.status.phase}"},
-	})
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(result.Stdout) == "Terminating"
 }
 
 func (d *Deployer) waitForNamespaceDeletion(namespace string) error {
@@ -515,6 +711,13 @@ func (d *Deployer) SetPauseReconciliation(enabled bool) {
 	d.pauseReconciliation = enabled
 }
 
+func (d *Deployer) SetSingleNamespace(enabled bool) {
+	if enabled {
+		d.centralNamespace = sharedNamespace
+		d.sensorNamespace = sharedNamespace
+	}
+}
+
 // maybeAddPauseReconcileAnnotation adds the stackrox.io/pause-reconcile annotation to a custom resource
 func (d *Deployer) maybeAddPauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
 	if !d.pauseReconciliation {
@@ -523,11 +726,31 @@ func (d *Deployer) maybeAddPauseReconcileAnnotation(ctx context.Context, resourc
 
 	d.logger.Infof("Adding pause-reconcile annotation to %s/%s", resourceType, resourceName)
 
+	err := d.addPauseReconcileAnnotation(ctx, resourceType, resourceName, namespace)
+	if err != nil {
+		return err
+	}
+
+	d.logger.Successf("✓ Added pause-reconcile annotation to %s/%s", resourceType, resourceName)
+	return nil
+}
+
+func (d *Deployer) doesResourceExist(ctx context.Context, resourceType, resourceName, namespace string) bool {
+	_, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{
+			"get", resourceType, resourceName,
+			"-n", namespace,
+		},
+	})
+	return err == nil
+}
+
+func (d *Deployer) addPauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
 	_, err := d.runKubectl(ctx, KubectlOptions{
 		Args: []string{
 			"annotate", resourceType, resourceName,
 			"-n", namespace,
-			pauseReconcileAnnotationKey,
+			fmt.Sprintf("%s=%s", pauseReconcileAnnotationKey, "true"),
 			"--overwrite",
 		},
 	})
@@ -535,24 +758,7 @@ func (d *Deployer) maybeAddPauseReconcileAnnotation(ctx context.Context, resourc
 		return fmt.Errorf("failed to add pause-reconcile annotation: %w", err)
 	}
 
-	d.logger.Successf("✓ Added pause-reconcile annotation to %s/%s", resourceType, resourceName)
 	return nil
-}
-
-// removePauseReconcileAnnotation removes the stackrox.io/pause-reconcile annotation from a custom resource
-func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) {
-	d.logger.Dimf("Removing pause-reconcile annotation from %s/%s", resourceType, resourceName)
-
-	_, err := d.runKubectl(ctx, KubectlOptions{
-		Args: []string{
-			"annotate", resourceType, resourceName,
-			"-n", namespace,
-			fmt.Sprintf("%s-", pauseReconcileAnnotationKey),
-		},
-	})
-	if err != nil {
-		d.logger.Dimf("Could not remove pause-reconcile annotation (expected if CR does not exist): %v", err)
-	}
 }
 
 func (d *Deployer) SetDeployOperator(deployOperator bool) {

@@ -113,7 +113,7 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 	teardownArgs := []string{roxieBinary, "teardown", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	verifyNamespaceAbsent(t, "acs-central")
+	verifyCentralNotInstalled(t, "acs-central")
 }
 
 // TestNonOLMToOLMSwitch tests switching from non-OLM operator to OLM operator
@@ -165,7 +165,7 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 	teardownArgs := []string{roxieBinary, "teardown", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	verifyNamespaceAbsent(t, "acs-central")
+	verifyCentralNotInstalled(t, "acs-central")
 }
 
 // TestOLMOperatorVersionUpgrade tests that OLM operator version mismatches trigger teardown and redeploy
@@ -231,7 +231,7 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	teardownArgs := []string{roxieBinary, "teardown", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	verifyNamespaceAbsent(t, "acs-central")
+	verifyCentralNotInstalled(t, "acs-central")
 }
 
 // TestSecuredClusterWithOLMSwitch tests that secured-cluster deployment also respects OLM mode switches
@@ -251,7 +251,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Step 1: Deploy central with OLM
 	t.Log("=== Step 1: Deploy central with OLM ===")
-	args := append([]string{roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "--early-readiness", "central", "--olm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	verifyOperatorMode(t, true)
@@ -265,7 +265,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Step 2: Deploy secured-cluster (should reuse OLM operator)
 	t.Log("=== Step 2: Deploy secured-cluster (should reuse OLM operator) ===")
-	args = append([]string{roxieBinary, "deploy", "secured-cluster", "--olm"}, commonDeployArgsNoPortForward...)
+	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster", "--olm"}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout, envrcEnv, args...)
 
 	// Verify operator is still in OLM mode
@@ -274,7 +274,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Step 3: Switch to non-OLM by redeploying secured-cluster without --olm
 	t.Log("=== Step 3: Redeploy secured-cluster without OLM (triggering mode switch) ===")
-	args = append([]string{roxieBinary, "deploy", "secured-cluster"}, commonDeployArgsNoPortForward...)
+	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster"}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout, envrcEnv, args...)
 
 	// Verify operator switched to non-OLM mode
@@ -286,6 +286,6 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 	teardownArgs := []string{roxieBinary, "teardown", "both"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	verifyNamespaceAbsent(t, "acs-central")
-	verifyNamespaceAbsent(t, "acs-sensor")
+	verifyCentralNotInstalled(t, "acs-central")
+	verifySecuredClusterNotInstalled(t, "acs-sensor")
 }

@@ -622,7 +622,7 @@ func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[st
 		},
 		"spec": map[string]interface{}{
 			"clusterName":     clusterName,
-			"centralEndpoint": internalCentralEndpoint,
+			"centralEndpoint": internalCentralEndpoint(d.centralNamespace),
 			"imagePullSecrets": []map[string]string{
 				{"name": "stackrox"},
 			},

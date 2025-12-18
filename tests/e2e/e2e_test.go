@@ -57,8 +57,42 @@ func TestMain(m *testing.M) {
 	}
 	fmt.Printf("Using roxie binary: %s\n", roxieBinary)
 
+	// Teardown all deployments before running tests
+	if err := teardownAllDeployments(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: teardown all deployments failed: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Run tests
 	os.Exit(m.Run())
+}
+
+func teardownAllDeployments() error {
+	fmt.Println("=== Tearing down all deployments before running tests ===")
+
+	ctx, cancel := context.WithTimeout(context.Background(), teardownTimeout)
+	defer cancel()
+
+	// Teardown standard deployments
+	cmd := exec.CommandContext(ctx, roxieBinary, "teardown")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("Warning: teardown command failed: %w", err)
+	}
+
+	// Teardown single-namespace deployments
+	ctx, cancel = context.WithTimeout(context.Background(), teardownTimeout)
+	defer cancel()
+	cmd = exec.CommandContext(ctx, roxieBinary, "teardown", "--single-namespace")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("Warning: teardown --single-namespace command failed: %w", err)
+	}
+
+	fmt.Println("=== All deployments have been torn down ===")
+	return nil
 }
 
 func requireBinary(name string) error {
@@ -162,29 +196,15 @@ func verifyNamespaceExists(t *testing.T, namespace string) {
 	}
 }
 
-func verifyNamespaceAbsent(t *testing.T, namespace string) {
+func doesDeploymentExist(t *testing.T, namespace string, name string) bool {
 	t.Helper()
 
-	// Wait up to 5 minutes for namespace to be deleted
-	// Kubernetes namespace deletion can take time, especially with finalizers
-	timeout := time.After(5 * time.Minute)
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout:
-			t.Fatalf("Timeout waiting for namespace %s to be deleted", namespace)
-		case <-ticker.C:
-			cmd := exec.Command("kubectl", "get", "namespace", namespace)
-			err := cmd.Run()
-			if err != nil {
-				// Namespace is gone - success!
-				return
-			}
-			// Still exists, keep waiting
-		}
+	cmd := exec.Command("kubectl", "-n", namespace, "get", "deployments", "-o", "name")
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to get deployments in namespace %s: %v", namespace, err)
 	}
+	return strings.Contains(string(output), name)
 }
 
 func loadEnvrcFile(path string) (map[string]string, error) {
@@ -238,7 +258,7 @@ func TestDeployCentralAndSecuredCluster(t *testing.T) {
 
 	// Deploy central
 	t.Log("=== Deploying central ===")
-	args := append([]string{roxieBinary, "deploy", "central", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "--early-readiness", "central", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Load environment from envrc file for secured-cluster deployment
@@ -249,7 +269,7 @@ func TestDeployCentralAndSecuredCluster(t *testing.T) {
 	t.Log("Loaded environment from envrc file for secured-cluster")
 
 	t.Log("=== Deploying secured-cluster ===")
-	args = append([]string{roxieBinary, "deploy", "secured-cluster"}, commonDeployArgsNoPortForward...)
+	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster"}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout, envrcEnv, args...)
 
 	// Verify namespaces
@@ -272,10 +292,41 @@ func TestTeardownCentralAndSecuredCluster(t *testing.T) {
 	args := []string{roxieBinary, "teardown", "both"}
 	runCommand(t, teardownTimeout, nil, args...)
 
-	// Verify namespaces are deleted
-	t.Log("Verifying namespaces are removed")
-	verifyNamespaceAbsent(t, "acs-central")
-	verifyNamespaceAbsent(t, "acs-sensor")
+	t.Log("Verifying components are removed")
+	verifyCentralNotInstalled(t, "acs-central")
+	verifySecuredClusterNotInstalled(t, "acs-sensor")
+}
+
+func verifyCentralInstalled(t *testing.T, namespace string) {
+	t.Helper()
+
+	if !doesDeploymentExist(t, namespace, "central") {
+		t.Fatalf("Central is not installed in namespace %s", namespace)
+	}
+}
+
+func verifySecuredClusterInstalled(t *testing.T, namespace string) {
+	t.Helper()
+
+	if !doesDeploymentExist(t, namespace, "sensor") {
+		t.Fatalf("Secured cluster is not installed in namespace %s", namespace)
+	}
+}
+
+func verifyCentralNotInstalled(t *testing.T, namespace string) {
+	t.Helper()
+
+	if doesDeploymentExist(t, namespace, "central") {
+		t.Fatalf("Central is installed in namespace %s", namespace)
+	}
+}
+
+func verifySecuredClusterNotInstalled(t *testing.T, namespace string) {
+	t.Helper()
+
+	if doesDeploymentExist(t, namespace, "sensor") {
+		t.Fatalf("Secured cluster is installed in namespace %s", namespace)
+	}
 }
 
 func TestDeployBothComponentsTogether(t *testing.T) {
@@ -313,6 +364,35 @@ func TestDeployBothComponentsTogether(t *testing.T) {
 
 }
 
+func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
+	if os.Getenv("SKIP_OPERATOR_TESTS") != "" {
+		t.Skip("SKIP_OPERATOR_TESTS is set")
+	}
+
+	// Create temporary envrc file.
+	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp envrc: %v", err)
+	}
+	envrcPath := envrcFile.Name()
+	envrcFile.Close()
+	defer os.Remove(envrcPath)
+
+	t.Log("=== Deploying both components in single namespace ===")
+	args := append([]string{roxieBinary, "deploy", "both", "--single-namespace", "--early-readiness", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	runCommand(t, deployTimeout*2, nil, args...)
+
+	verifyCentralInstalled(t, "stackrox")
+	verifySecuredClusterInstalled(t, "stackrox")
+
+	t.Log("=== Tearing down both components in single namespace ===")
+	args = []string{roxieBinary, "teardown", "--single-namespace"}
+	runCommand(t, teardownTimeout, nil, args...)
+
+	verifyCentralNotInstalled(t, "stackrox")
+	verifySecuredClusterNotInstalled(t, "stackrox")
+}
+
 func TestDeployCentralAndSecuredClusterViaHelm(t *testing.T) {
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
@@ -324,7 +404,7 @@ func TestDeployCentralAndSecuredClusterViaHelm(t *testing.T) {
 	defer os.Remove(envrcPath)
 
 	t.Log("=== Deploying central via Helm ===")
-	args := append([]string{roxieBinary, "deploy", "central", "--helm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "--early-readiness", "central", "--helm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout*2, nil, args...)
 
 	// Load environment from envrc file for secured-cluster deployment
@@ -335,7 +415,7 @@ func TestDeployCentralAndSecuredClusterViaHelm(t *testing.T) {
 	t.Log("Loaded environment from envrc file for secured-cluster")
 
 	t.Log("=== Deploying secured-cluster via Helm ===")
-	args = append([]string{roxieBinary, "deploy", "secured-cluster", "--helm"}, commonDeployArgsNoPortForward...)
+	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster", "--helm"}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout*2, envrcEnv, args...)
 
 	t.Log("Verifying namespace: acs-central")
