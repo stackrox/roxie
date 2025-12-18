@@ -291,7 +291,6 @@ func New(log *logger.Logger, overrideFile string, overrideSetExpressions []strin
 		roxctlVersion:          roxctlVersion,
 		centralNamespace:       centralNamespace,
 		sensorNamespace:        sensorNamespace,
-		mainImageTag:           helpers.LookupMainImageTag(),
 		exposure:               defaultExposure,
 		overrideFile:           overrideFile,
 		overrideSetExpressions: overrideSetExpressions,
@@ -302,7 +301,6 @@ func New(log *logger.Logger, overrideFile string, overrideSetExpressions []strin
 	d.imageCache = imagecache.New(log, "", 20)
 	d.portForward = portforward.New(kubectl, log)
 	d.clusterDefaults = clusterdefaults.NewManager(log)
-	d.operatorTag = helpers.ConvertMainTagToOperatorTag(d.mainImageTag)
 
 	if password := os.Getenv("ROX_ADMIN_PASSWORD"); password != "" {
 		d.centralPassword = password
@@ -716,6 +714,11 @@ func (d *Deployer) SetSingleNamespace(enabled bool) {
 		d.centralNamespace = sharedNamespace
 		d.sensorNamespace = sharedNamespace
 	}
+}
+
+func (d *Deployer) SetMainImageTag(tag string) {
+	d.mainImageTag = tag
+	d.operatorTag = helpers.ConvertMainTagToOperatorTag(d.mainImageTag)
 }
 
 // maybeAddPauseReconcileAnnotation adds the stackrox.io/pause-reconcile annotation to a custom resource

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/logger"
 )
 
@@ -137,6 +138,12 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	d.SetPortForwardingEnabled(portForwardEnabledFinal)
 	d.SetPauseReconciliation(pauseReconciliation)
 	d.SetSingleNamespace(singleNamespace)
+
+	mainImageTag, err := helpers.LookupMainImageTag(log)
+	if err != nil {
+		return fmt.Errorf("looking up main image tag: %w", err)
+	}
+	d.SetMainImageTag(mainImageTag)
 
 	// Resolve "auto" resources based on cluster type
 	resolvedResources := resources
