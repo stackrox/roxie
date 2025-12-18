@@ -327,10 +327,8 @@ func (d *Deployer) getCentralResourcesHelm(resourcesName string) map[string]inte
 			},
 		},
 		"scanner": map[string]interface{}{
-			"resources": centralScannerResourcesSmall,
-			"dbResources": map[string]interface{}{
-				"resources": centralScannerDbResourcesSmall,
-			},
+			"resources":   centralScannerResourcesSmall,
+			"dbResources": centralScannerDbResourcesSmall,
 		},
 		"scannerV4": map[string]interface{}{
 			"indexer": map[string]interface{}{
@@ -353,10 +351,8 @@ func (d *Deployer) getCentralResourcesHelm(resourcesName string) map[string]inte
 			},
 		},
 		"scanner": map[string]interface{}{
-			"resources": centralScannerResourcesMedium,
-			"dbResources": map[string]interface{}{
-				"resources": centralScannerDbResourcesMedium,
-			},
+			"resources":   centralScannerResourcesMedium,
+			"dbResources": centralScannerDbResourcesMedium,
 		},
 		"scannerV4": map[string]interface{}{
 			"indexer": map[string]interface{}{
