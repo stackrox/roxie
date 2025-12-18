@@ -18,10 +18,32 @@ BUILD_DIR := .
 BINARY := $(BUILD_DIR)/$(BINARY_NAME)
 
 # Version information
-VERSION := 0.1
-GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
+# Convention is that the git tags are of the form
+#      v<major>.<minor>.<patch>-<build-number>-<commit-hash>[-dirty]
+#   or v<major>.<minor>.<patch>
+#
+# We use sed to drop the initial 'v' in case the whole tag matches any of the above patterns.
+# Hence, the resulting version string will simply be
+#
+#     <major>.<minor>.<patch> or <major>.<minor>.<patch>-<build-number>-<commit-hash>[-dirty]
+#
+# This will also become the tag of the docker images.
+VERSION := $(shell git describe --tags --always --dirty | sed -E 's/^v([0-9]+\.[0-9]+\.[0-9]+-[0-9]+-[a-z0-9]+(-dirty)?$$)/\1/')
 BUILD_DATE := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildDate=$(BUILD_DATE)
+
+.PHONY: get-build-date
+get-build-date:
+	@echo $(BUILD_DATE)
+
+.PHONY: get-commit-hash
+get-commit-hash:
+	@echo $(GIT_COMMIT)
+
+.PHONY: version
+version:
+	@echo $(VERSION)
 
 # Build targets
 .PHONY: build
@@ -145,11 +167,11 @@ validate: ## Validate go.mod and check for issues
 all: clean deps check test build ## Run full development workflow
 
 # Docker/Container targets
-DOCKER_IMAGE := roxie
-DOCKER_TAG := latest
-DOCKER_VERSION_TAG := $(VERSION)-$(GIT_COMMIT)
-DOCKER_FULL_IMAGE := $(DOCKER_IMAGE):$(DOCKER_TAG)
-DOCKER_VERSION_IMAGE := $(DOCKER_IMAGE):$(DOCKER_VERSION_TAG)
+IMAGE_DEFAULT_REGISTRY := localhost
+IMAGE_REGISTRY := $(shell if [ -z "$(IMAGE_REGISTRY)" ]; then echo $(IMAGE_DEFAULT_REGISTRY); else echo $(IMAGE_REGISTRY); fi)
+IMAGE_NAME := roxie
+IMAGE_LATEST_TAG := $(IMAGE_REGISTRY)/$(IMAGE_NAME):latest
+IMAGE_VERSION_TAG := $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(VERSION)
 CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
 
 # Multi-architecture support
@@ -167,67 +189,13 @@ docker-build: ## Build roxie Docker image for current platform
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
-		-t $(DOCKER_FULL_IMAGE) \
-		-t $(DOCKER_VERSION_IMAGE) \
+		-t $(IMAGE_LATEST_TAG) \
+		-t $(IMAGE_VERSION_TAG) \
 		-f Dockerfile .
 	@echo "✅ Built container images:"
-	@echo "   - $(DOCKER_FULL_IMAGE)"
-	@echo "   - $(DOCKER_VERSION_IMAGE)"
+	@echo "   - $(IMAGE_LATEST_TAG)"
+	@echo "   - $(IMAGE_VERSION_TAG)"
 
-.PHONY: docker-build-multiarch
-docker-build-multiarch: ## Build multi-architecture images (amd64, arm64) using buildx
-	@echo "🏗️  Building multi-architecture roxie container images..."
-	@if ! command -v docker >/dev/null 2>&1; then \
-		echo "❌ Docker is required for multi-arch builds (buildx)"; \
-		exit 1; \
-	fi
-	@if ! docker buildx version >/dev/null 2>&1; then \
-		echo "❌ Docker buildx is required for multi-arch builds"; \
-		echo "Install: docker buildx install"; \
-		exit 1; \
-	fi
-	@echo "Creating/using buildx builder..."
-	@docker buildx create --name roxie-builder --use 2>/dev/null || docker buildx use roxie-builder
-	@echo "Building for platforms: $(PLATFORMS)"
-	docker buildx build \
-		--platform $(PLATFORMS) \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
-		--build-arg BUILD_DATE=$(BUILD_DATE) \
-		-t $(DOCKER_FULL_IMAGE) \
-		-t $(DOCKER_VERSION_IMAGE) \
-		--load \
-		-f Dockerfile .
-	@echo "✅ Built multi-arch images:"
-	@echo "   - $(DOCKER_FULL_IMAGE)"
-	@echo "   - $(DOCKER_VERSION_IMAGE)"
-
-.PHONY: docker-build-push-multiarch
-docker-build-push-multiarch: ## Build and push multi-arch images to registry (requires DOCKER_REGISTRY)
-	@echo "🚀 Building and pushing multi-architecture images..."
-	@if [ -z "$(DOCKER_REGISTRY)" ]; then \
-		echo "❌ DOCKER_REGISTRY is required. Example: make docker-build-push-multiarch DOCKER_REGISTRY=ghcr.io/myorg"; \
-		exit 1; \
-	fi
-	@if ! docker buildx version >/dev/null 2>&1; then \
-		echo "❌ Docker buildx is required for multi-arch builds"; \
-		exit 1; \
-	fi
-	@docker buildx create --name roxie-builder --use 2>/dev/null || docker buildx use roxie-builder
-	docker buildx build \
-		--platform $(PLATFORMS) \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
-		--build-arg BUILD_DATE=$(BUILD_DATE) \
-		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):$(DOCKER_TAG) \
-		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):$(DOCKER_VERSION_TAG) \
-		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):$(VERSION) \
-		--push \
-		-f Dockerfile .
-	@echo "✅ Pushed multi-arch images:"
-	@echo "   - $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):$(DOCKER_TAG)"
-	@echo "   - $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):$(DOCKER_VERSION_TAG)"
-	@echo "   - $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):$(VERSION)"
 
 .PHONY: docker-build-arm64
 docker-build-arm64: ## Build roxie Docker image for arm64
@@ -241,12 +209,12 @@ docker-build-arm64: ## Build roxie Docker image for arm64
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
-		-t $(DOCKER_IMAGE):$(DOCKER_TAG)-arm64 \
-		-t $(DOCKER_IMAGE):$(DOCKER_VERSION_TAG)-arm64 \
+		-t $(IMAGE_LATEST_TAG)-arm64 \
+		-t $(IMAGE_VERSION_TAG)-arm64 \
 		-f Dockerfile .
 	@echo "✅ Built arm64 images:"
-	@echo "   - $(DOCKER_IMAGE):$(DOCKER_TAG)-arm64"
-	@echo "   - $(DOCKER_IMAGE):$(DOCKER_VERSION_TAG)-arm64"
+	@echo "   - $(IMAGE_LATEST_TAG)-arm64"
+	@echo "   - $(IMAGE_VERSION_TAG)-arm64"
 
 .PHONY: docker-build-amd64
 docker-build-amd64: ## Build roxie Docker image for amd64
@@ -260,46 +228,12 @@ docker-build-amd64: ## Build roxie Docker image for amd64
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
-		-t $(DOCKER_IMAGE):$(DOCKER_TAG)-amd64 \
-		-t $(DOCKER_IMAGE):$(DOCKER_VERSION_TAG)-amd64 \
+		-t $(IMAGE_LATEST_TAG)-amd64 \
+		-t $(IMAGE_VERSION_TAG)-amd64 \
 		-f Dockerfile .
 	@echo "✅ Built amd64 images:"
-	@echo "   - $(DOCKER_IMAGE):$(DOCKER_TAG)-amd64"
-	@echo "   - $(DOCKER_IMAGE):$(DOCKER_VERSION_TAG)-amd64"
-
-.PHONY: docker-test-podman
-docker-test-podman: ## Test podman functionality inside the roxie container
-	@echo "🧪 Testing podman inside roxie container..."
-	@echo ""
-	@echo "1. Testing podman pull (operator bundle)..."
-	@$(CONTAINER_RUNTIME) run --rm \
-		--entrypoint podman \
-		$(DOCKER_FULL_IMAGE) \
-		pull quay.io/rhacs-eng/stackrox-operator-bundle:v4.4.3
-	@echo ""
-	@echo "2. Testing podman inspect..."
-	@$(CONTAINER_RUNTIME) run --rm \
-		--entrypoint podman \
-		$(DOCKER_FULL_IMAGE) \
-		inspect quay.io/rhacs-eng/stackrox-operator-bundle:v4.4.3 > /dev/null
-	@echo "✓ Podman can pull and inspect images successfully"
-	@echo ""
-	@echo "3. Cleaning up test image..."
-	@$(CONTAINER_RUNTIME) run --rm \
-		--entrypoint podman \
-		$(DOCKER_FULL_IMAGE) \
-		rmi quay.io/rhacs-eng/stackrox-operator-bundle:v4.4.3
-	@echo "✓ Podman test complete"
-
-.PHONY: docker-clean
-docker-clean: ## Remove roxie Docker images
-	@echo "🧹 Cleaning up roxie container images..."
-	@if [ -z "$(CONTAINER_RUNTIME)" ]; then \
-		echo "❌ No container runtime found. Please install docker or podman."; \
-		exit 1; \
-	fi
-	$(CONTAINER_RUNTIME) rmi $(DOCKER_FULL_IMAGE) 2>/dev/null || true
-	@echo "✅ Cleanup complete"
+	@echo "   - $(IMAGE_LATEST_TAG)-amd64"
+	@echo "   - $(IMAGE_VERSION_TAG)-amd64"
 
 # Quick targets
 .PHONY: quick

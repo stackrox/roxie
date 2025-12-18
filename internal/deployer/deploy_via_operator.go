@@ -270,14 +270,13 @@ func (d *Deployer) createCentralCR(resources, exposure string) (map[string]inter
 	}
 
 	resourcesOverlay := d.getCentralResourcesOperator(resources)
-	imageOverlay := d.getCentralImageOverlays()
 
 	overrides, err := GetOverrides(d.overrideFile, d.overrideSetExpressions)
 	if err != nil {
 		return nil, fmt.Errorf("failed construct Central CR overrides: %w", err)
 	}
 
-	merged := helpers.MergeMaps(base, resourcesOverlay, imageOverlay, overrides)
+	merged := helpers.MergeMaps(base, resourcesOverlay, overrides)
 
 	return merged, nil
 }
@@ -343,43 +342,6 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 	}
 
 	return resources
-}
-
-// getCentralImageOverlays returns image tag overlays for Central components
-func (d *Deployer) getCentralImageOverlays() map[string]interface{} {
-	if d.mainImageTag == "" {
-		return map[string]interface{}{}
-	}
-
-	// Create overlays to set the image tag for all Central deployments.
-	overlays := []map[string]interface{}{
-		d.mainImageOverlays("Deployment", "central", map[string]string{
-			"central": "main",
-		}),
-		d.mainImageOverlays("Deployment", "config-controller", map[string]string{
-			"manager": "main",
-		}),
-		d.mainImageOverlays("Deployment", "central-db", map[string]string{
-			"init:init-db": "central-db",
-			"central-db":   "central-db",
-		}),
-		d.mainImageOverlays("Deployment", "scanner-v4-indexer", map[string]string{
-			"indexer": "scanner-v4",
-		}),
-		d.mainImageOverlays("Deployment", "scanner-v4-matcher", map[string]string{
-			"matcher": "scanner-v4",
-		}),
-		d.mainImageOverlays("Deployment", "scanner-v4-db", map[string]string{
-			"init:init-db": "scanner-v4-db",
-			"db":           "scanner-v4-db",
-		}),
-	}
-
-	return map[string]interface{}{
-		"spec": map[string]interface{}{
-			"overlays": overlays,
-		},
-	}
 }
 
 // getCentralExposureConfig returns the exposure configuration
@@ -687,14 +649,13 @@ func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[st
 	}
 
 	resourcesOverlay := d.getSecuredClusterResourcesOperator(resources)
-	imageOverlay := d.getSecuredClusterImageOverlays()
 
 	overrides, err := GetOverrides(d.overrideFile, d.overrideSetExpressions)
 	if err != nil {
 		return nil, fmt.Errorf("failed construct Central CR overrides: %w", err)
 	}
 
-	merged := helpers.MergeMaps(base, resourcesOverlay, imageOverlay, overrides)
+	merged := helpers.MergeMaps(base, resourcesOverlay, overrides)
 
 	return merged, nil
 }
@@ -738,79 +699,6 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 	}
 
 	return resources
-}
-
-func (d *Deployer) mainImageOverlays(kind, name string, containerImages map[string]string) map[string]interface{} {
-	patches := make([]map[string]interface{}, 0, len(containerImages))
-	for containerName, containerImage := range containerImages {
-		containerType := "containers"
-		containerComponents := strings.SplitN(containerName, ":", 2)
-		if len(containerComponents) == 2 {
-			if containerComponents[0] == "init" {
-				containerType = "initContainers"
-				containerName = containerComponents[1]
-			} else {
-				panic(fmt.Sprintf("invalid container type: %s", containerComponents[0]))
-			}
-		}
-		patchPath := fmt.Sprintf("spec.template.spec.%s[name:%s].image", containerType, containerName)
-		patches = append(patches, map[string]interface{}{
-			"path":  patchPath,
-			"value": fmt.Sprintf("quay.io/rhacs-eng/%s:%s", containerImage, d.mainImageTag),
-		})
-	}
-	return map[string]interface{}{
-		"apiVersion": "apps/v1",
-		"kind":       kind,
-		"name":       name,
-		"optional":   true,
-		"patches":    patches,
-	}
-}
-
-// getSecuredClusterImageOverlays returns image tag overlays for SecuredCluster components
-func (d *Deployer) getSecuredClusterImageOverlays() map[string]interface{} {
-	if d.mainImageTag == "" {
-		return map[string]interface{}{}
-	}
-
-	// Create overlays to set the image tag for all SecuredCluster deployments.
-	overlays := []map[string]interface{}{
-		d.mainImageOverlays("Deployment", "sensor", map[string]string{
-			"init:crs":            "main",
-			"init:init-tls-certs": "main",
-			"sensor":              "main",
-		}),
-		d.mainImageOverlays("Deployment", "admission-control", map[string]string{
-			"init:init-tls-certs": "main",
-			"admission-control":   "main",
-		}),
-		d.mainImageOverlays("DaemonSet", "collector", map[string]string{
-			"init:init-tls-certs": "main",
-			"compliance":          "main",
-		}),
-		d.mainImageOverlays("Deployment", "scanner-v4-indexer", map[string]string{
-			"init:init-tls-certs": "main",
-			"indexer":             "scanner-v4",
-		}),
-		d.mainImageOverlays("Deployment", "scanner-v4-db", map[string]string{
-			"init:init-tls-certs": "main",
-			"init:init-db":        "scanner-v4-db",
-			"db":                  "scanner-v4-db",
-		}),
-		d.mainImageOverlays("Deployment", "scanner", map[string]string{
-			"init:init-tls-certs": "main",
-		}),
-		d.mainImageOverlays("Deployment", "scanner-db", map[string]string{
-			"init:init-tls-certs": "main",
-		}),
-	}
-
-	return map[string]interface{}{
-		"spec": map[string]interface{}{
-			"overlays": overlays,
-		},
-	}
 }
 
 // applySecuredClusterCR applies the SecuredCluster CR to the cluster
