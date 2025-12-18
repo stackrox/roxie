@@ -505,6 +505,7 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 		}
 	}
 
+	d.logger.Info("⏳ Waiting for Central resources to be fully deleted...")
 	err := d.deleteCentralResources(ctx, true)
 	if err != nil {
 		return fmt.Errorf("failed to delete Central resources: %w", err)
@@ -529,6 +530,7 @@ func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
 		}
 	}
 
+	d.logger.Info("⏳ Waiting for SecuredCluster resources to be fully deleted...")
 	err := d.deleteSecuredClusterResources(ctx, true)
 	if err != nil {
 		return fmt.Errorf("failed to delete SecuredCluster resources: %w", err)
