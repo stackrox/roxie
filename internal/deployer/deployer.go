@@ -710,8 +710,10 @@ func (d *Deployer) SetPauseReconciliation(enabled bool) {
 }
 
 func (d *Deployer) SetSingleNamespace(enabled bool) {
-	d.centralNamespace = sharedNamespace
-	d.sensorNamespace = sharedNamespace
+	if enabled {
+		d.centralNamespace = sharedNamespace
+		d.sensorNamespace = sharedNamespace
+	}
 }
 
 // maybeAddPauseReconcileAnnotation adds the stackrox.io/pause-reconcile annotation to a custom resource
