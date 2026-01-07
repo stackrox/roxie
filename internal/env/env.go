@@ -2,6 +2,7 @@ package env
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
@@ -219,4 +220,47 @@ func fetchAPIResources() []string {
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	return lines
+}
+
+func IsInStackroxRepository() bool {
+	cmd := exec.Command("git", "remote", "get-url", "origin")
+	outputBytes, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	outputLines := strings.Split(string(outputBytes), "\n")
+	if len(outputLines) == 0 {
+		return false
+	}
+	return outputLines[0] == "git@github.com:stackrox/stackrox.git"
+}
+
+func GetStackroxRepositoryTag() (string, error) {
+	topLevelDir, err := getStackRoxTopLevelDir()
+	if err != nil {
+		return "", fmt.Errorf("getting stackrox top level directory: %w", err)
+	}
+	cmd := exec.Command("make", "-s", "-C", topLevelDir, "tag")
+	outputBytes, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("retrieving stackrox repository tag: %w", err)
+	}
+	tag := strings.TrimSpace(string(outputBytes))
+	if strings.HasSuffix(tag, "-dirty") {
+		return "", fmt.Errorf("stackrox repository is dirty")
+	}
+	return tag, nil
+}
+
+func getStackRoxTopLevelDir() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	outputBytes, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("getting stackrox top level directory: %w", err)
+	}
+	topLevelDir := strings.TrimSpace(string(outputBytes))
+	if len(topLevelDir) == 0 {
+		return "", fmt.Errorf("stackrox top level directory is empty")
+	}
+	return topLevelDir, nil
 }
