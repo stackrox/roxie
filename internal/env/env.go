@@ -236,7 +236,11 @@ func IsInStackroxRepository() bool {
 }
 
 func GetStackroxRepositoryTag() (string, error) {
-	cmd := exec.Command("make", "tag")
+	topLevelDir, err := getStackRoxTopLevelDir()
+	if err != nil {
+		return "", fmt.Errorf("getting stackrox top level directory: %w", err)
+	}
+	cmd := exec.Command("make", "-s", "-C", topLevelDir, "tag")
 	outputBytes, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("retrieving stackrox repository tag: %w", err)
@@ -246,4 +250,17 @@ func GetStackroxRepositoryTag() (string, error) {
 		return "", fmt.Errorf("stackrox repository is dirty")
 	}
 	return tag, nil
+}
+
+func getStackRoxTopLevelDir() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	outputBytes, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("getting stackrox top level directory: %w", err)
+	}
+	topLevelDir := strings.TrimSpace(string(outputBytes))
+	if len(topLevelDir) == 0 {
+		return "", fmt.Errorf("stackrox top level directory is empty")
+	}
+	return topLevelDir, nil
 }
