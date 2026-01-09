@@ -9,10 +9,12 @@ import (
 	"strings"
 
 	"github.com/stackrox/roxie/internal/containerutil"
+	"golang.org/x/term"
 )
 
 var (
-	RunningInContainer bool
+	RunningInContainer   bool
+	RunningInteractively bool
 )
 
 // ClusterType represents different types of Kubernetes clusters
@@ -47,6 +49,18 @@ func init() {
 	if RunningInContainer {
 		os.Setenv("KUBECONFIG", "/kubeconfig")
 	}
+	RunningInteractively = isRunningInteractively()
+}
+
+// isRunningInteractively detects if roxie is running interactively
+// by checking if stdin, stdout, and stderr are all connected to a terminal.
+func isRunningInteractively() bool {
+	for _, f := range []*os.File{os.Stdin, os.Stdout, os.Stderr} {
+		if !term.IsTerminal(int(f.Fd())) {
+			return false
+		}
+	}
+	return true
 }
 
 // ensureInitialized performs lazy initialization of cluster information

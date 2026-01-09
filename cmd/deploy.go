@@ -53,6 +53,12 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		log.Dim("Running containerized.")
 	}
 
+	if env.RunningInteractively {
+		log.Dim("Running interactively.")
+	} else {
+		log.Dim("Running non-interactively.")
+	}
+
 	component := "both"
 	if len(args) > 0 {
 		component = args[0]
@@ -60,6 +66,10 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if (component == "central" || component == "both") && os.Getenv("ROXIE_SHELL") != "" {
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
+	}
+
+	if !env.RunningInteractively && envrc == "" {
+		return errors.New("running non-interactively requires --envrc to be set")
 	}
 
 	if envrc != "" && portForwarding {
@@ -116,6 +126,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	if envrc != "" {
+		log.Dimf("Writing environment variables to %s", envrc)
 		d.SetEnvrcFile(envrc)
 	}
 
