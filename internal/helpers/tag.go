@@ -30,7 +30,7 @@ func LookupMainImageTag(log *logger.Logger) (string, error) {
 
 	log.Warningf("No MAIN_IMAGE_TAG found in the environment, using default main image tag %s for deployment", defaultMainImageTag)
 	log.Warning("To use a different tag, set the MAIN_IMAGE_TAG environment variable")
-	log.Warning("Alternatively, execute roxie from within the stackrox repository, in which case the latest stackrox tag will be used")
+	log.Warning("Alternatively, execute roxie from within the stackrox repository, in which case the currently checked out stackrox tag will be used")
 
 	return defaultMainImageTag, nil
 }
