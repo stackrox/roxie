@@ -54,9 +54,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	if env.RunningInteractively {
-		log.Dim("Running interactively.")
+		log.Dim("Running with controlling terminal.")
 	} else {
-		log.Dim("Running non-interactively.")
+		log.Dim("Running without controlling terminal.")
 	}
 
 	component := "both"
