@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultMainImageTag = "4.8.4"
+	defaultMainImageTag = "4.9.2"
 )
 
 func LookupMainImageTag(log *logger.Logger) (string, error) {
