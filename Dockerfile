@@ -72,11 +72,9 @@ RUN ARCH=${TARGETARCH:-amd64} && \
 ARG HELM_VERSION=v3.14.0
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing helm for ${ARCH}" && \
-    curl -sL "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" \
-    | tar xz -C /tmp \
-    && mv /tmp/linux-${ARCH}/helm /usr/local/bin/helm \
-    && chmod +x /usr/local/bin/helm \
-    && rm -rf /tmp/linux-${ARCH}
+    curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" | \
+    tar -xzO "linux-${ARCH}/helm" > /usr/local/bin/helm && \
+    chmod +x /usr/local/bin/helm
 
 # Install roxctl - architecture-aware
 # The mirror has architecture-specific binaries: 'roxctl' (amd64) and 'roxctl-arm64'
