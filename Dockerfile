@@ -32,6 +32,21 @@ RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
     -o roxie \
     ./cmd
 
+# Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
+ARG GCLOUD_VERSION=latest
+RUN apk add --no-cache curl python3 && \
+    ARCH=${TARGETARCH:-amd64} && \
+    if [ "${ARCH}" = "amd64" ]; then \
+        GCLOUD_ARCH="x86_64"; \
+    elif [ "${ARCH}" = "arm64" ]; then \
+        GCLOUD_ARCH="arm"; \
+    else \
+        echo "ERROR: Unsupported architecture: ${ARCH}"; exit 1; \
+    fi && \
+    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" | \
+    tar -xz -C /tmp && \
+    /tmp/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet
+
 # Stage 2: Runtime image based on Red Hat UBI Minimal
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
@@ -106,23 +121,9 @@ RUN microdnf install -y podman fuse-overlayfs \
 # without requiring users to manage different auth plugins
 
 # 1. Google Cloud (GKE) - gke-gcloud-auth-plugin
-RUN ARCH=${TARGETARCH:-amd64} && \
-    echo "Installing gcloud SDK and gke-gcloud-auth-plugin for ${ARCH}" && \
-    # Map Docker arch names to gcloud package names
-    if [ "${ARCH}" = "amd64" ]; then \
-        GCLOUD_ARCH="x86_64"; \
-    elif [ "${ARCH}" = "arm64" ]; then \
-        GCLOUD_ARCH="arm"; \
-    else \
-        echo "ERROR: Unsupported architecture: ${ARCH}"; exit 1; \
-    fi && \
-    # Download and install gcloud SDK
-    curl -sL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
-    | tar xz -C /opt && \
-    # Install gke-gcloud-auth-plugin
-    /opt/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet && \
-    # Create symlinks in PATH
-    ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
+# Copy gcloud SDK from builder stage (extracted there to avoid UBI filesystem restrictions)
+COPY --from=builder /tmp/google-cloud-sdk /opt/google-cloud-sdk
+RUN ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
     ln -s /opt/google-cloud-sdk/bin/gke-gcloud-auth-plugin /usr/local/bin/gke-gcloud-auth-plugin
 
 # 2. AWS (EKS) - aws-iam-authenticator
