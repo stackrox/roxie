@@ -69,7 +69,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	if !env.RunningInteractively && envrc == "" {
-		return errors.New("running non-interactively requires --envrc to be set")
+		return errors.New("running without a controlling terminal requires --envrc to be set")
 	}
 
 	if envrc != "" && portForwarding {
