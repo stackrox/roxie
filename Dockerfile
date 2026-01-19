@@ -79,7 +79,7 @@ RUN microdnf install -y \
 ARG KUBECTL_VERSION=v1.29.0
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing kubectl for ${ARCH}" && \
-    curl -sLo /usr/local/bin/kubectl \
+    curl -fsSLo /usr/local/bin/kubectl \
     "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" \
     && chmod +x /usr/local/bin/kubectl
 
@@ -129,7 +129,7 @@ RUN ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
 # 2. AWS (EKS) - aws-iam-authenticator
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing aws-iam-authenticator for ${ARCH}" && \
-    curl -sLo /usr/local/bin/aws-iam-authenticator \
+    curl -fsSLo /usr/local/bin/aws-iam-authenticator \
     "https://amazon-eks.s3.us-west-2.amazonaws.com/1.30.0/2024-05-12/bin/linux/${ARCH}/aws-iam-authenticator" && \
     chmod +x /usr/local/bin/aws-iam-authenticator
 
@@ -137,7 +137,7 @@ RUN ARCH=${TARGETARCH:-amd64} && \
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing kubelogin (Azure) for ${ARCH}" && \
     KUBELOGIN_VERSION="v0.1.4" && \
-    curl -sL "https://github.com/Azure/kubelogin/releases/download/${KUBELOGIN_VERSION}/kubelogin-linux-${ARCH}.zip" \
+    curl -fsSL "https://github.com/Azure/kubelogin/releases/download/${KUBELOGIN_VERSION}/kubelogin-linux-${ARCH}.zip" \
     -o /tmp/kubelogin.zip && \
     unzip -q /tmp/kubelogin.zip -d /tmp && \
     mv /tmp/bin/linux_${ARCH}/kubelogin /usr/local/bin/kubelogin && \
