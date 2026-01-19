@@ -21,6 +21,7 @@ func newTeardownCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&helm, "helm", false, "Force teardown of Helm deployment")
+	_ = cmd.Flags().MarkHidden("helm")
 	cmd.Flags().BoolVar(&singleNamespace, "single-namespace", false, "Deploy all components in a single namespace ('stackrox' by default)")
 
 	return cmd
