@@ -180,7 +180,8 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	var missing []string
 	for _, crd := range requiredCRDs {
 		_, err := d.runKubectl(ctx, KubectlOptions{
-			Args: []string{"get", "crd", crd},
+			Args:                 []string{"get", "crd", crd},
+			SkipLoggingOnFailure: true,
 		})
 		if err != nil {
 			missing = append(missing, crd)
@@ -315,7 +316,10 @@ metadata:
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: strings.NewReader(nsYAML),
 	})
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to create operator namespace: %w", err)
+	}
+	return nil
 }
 
 // createServiceAccount creates a service account
@@ -494,7 +498,8 @@ func (d *Deployer) waitForOperatorReady(ctx context.Context, namespace, deployme
 	start := time.Now()
 	for time.Since(start) < time.Duration(timeout)*time.Second {
 		result, err := d.runKubectl(ctx, KubectlOptions{
-			Args: []string{"get", "deployment", deploymentName, "-n", namespace, "-o", "jsonpath={.status.readyReplicas}"},
+			Args:                 []string{"get", "deployment", deploymentName, "-n", namespace, "-o", "jsonpath={.status.readyReplicas}"},
+			SkipLoggingOnFailure: true,
 		})
 		if err == nil && result.Stdout != "" {
 			replicas := strings.TrimSpace(result.Stdout)
@@ -540,7 +545,7 @@ func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 		})
 	}
 
-	if err := d.waitForNamespaceDeletion(operatorNamespace); err != nil {
+	if err := d.waitForNamespaceDeletion(ctx, operatorNamespace); err != nil {
 		d.logger.Warningf("Namespace %s deletion incomplete: %v", operatorNamespace, err)
 	}
 

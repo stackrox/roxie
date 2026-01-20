@@ -1,32 +1,25 @@
 package deployer
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"io"
-	"os/exec"
 	"strings"
-	"time"
+
+	"github.com/stackrox/roxie/internal/helpers"
 )
 
 // KubectlOptions contains options for running kubectl commands
 type KubectlOptions struct {
-	Args         []string  // Command arguments (e.g., ["get", "pod", "my-pod"])
-	Stdin        io.Reader // Optional stdin for commands like "apply -f -"
-	MaxAttempts  int       // Maximum number of retry attempts (default: 3)
-	RetryDelay   int       // Base retry delay in seconds (default: 2)
-	IgnoreErrors bool      // If true, return nil on errors (useful for cleanup operations)
-}
-
-// KubectlResult contains the result of a kubectl command execution
-type KubectlResult struct {
-	Stdout string
-	Stderr string
+	Args                 []string  // Command arguments (e.g., ["get", "pod", "my-pod"])
+	Stdin                io.Reader // Optional stdin for commands like "apply -f -"
+	MaxAttempts          int       // Maximum number of retry attempts (default: 3)
+	RetryDelay           int       // Base retry delay in seconds (default: 2)
+	IgnoreErrors         bool      // If true, return nil on errors (useful for cleanup operations)
+	SkipLoggingOnFailure bool      // If true, don't log on failures.
 }
 
 // runKubectl executes a kubectl command with automatic retries on transient errors
-func (d *Deployer) runKubectl(ctx context.Context, opts KubectlOptions) (*KubectlResult, error) {
+func (d *Deployer) runKubectl(ctx context.Context, opts KubectlOptions) (*helpers.ExecResult, error) {
 	if opts.MaxAttempts <= 0 {
 		opts.MaxAttempts = 3
 	}
@@ -55,69 +48,23 @@ func (d *Deployer) runKubectl(ctx context.Context, opts KubectlOptions) (*Kubect
 		"transport is closing",
 	}
 
-	var lastStderr string
-	var lastErr error
-
-	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
-		if attempt > 1 {
-			waitTime := time.Duration(attempt*opts.RetryDelay) * time.Second
-			d.logger.Infof("Retrying kubectl command (attempt %d/%d) after %v...", attempt, opts.MaxAttempts, waitTime)
-			time.Sleep(waitTime)
-		}
-
-		cmd := exec.CommandContext(ctx, d.kubectl, opts.Args...)
-
-		if opts.Stdin != nil {
-			// For retry attempts, we need to reset the reader if it's a bytes.Reader
-			if reader, ok := opts.Stdin.(*bytes.Reader); ok {
-				reader.Seek(0, io.SeekStart)
-			}
-			cmd.Stdin = opts.Stdin
-		}
-
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-
-		err := cmd.Run()
-		lastStderr = stderr.String()
-		lastErr = err
-
-		if err == nil {
-			return &KubectlResult{
-				Stdout: stdout.String(),
-				Stderr: lastStderr,
-			}, nil
-		}
-
-		if opts.IgnoreErrors {
-			return &KubectlResult{
-				Stdout: stdout.String(),
-				Stderr: lastStderr,
-			}, nil
-		}
-
-		isRetryable := false
-		stderrLower := strings.ToLower(lastStderr)
+	retryablePredicate := func(stderr string) bool {
+		stderrLower := strings.ToLower(stderr)
 		for _, retryErr := range retryableErrors {
 			if strings.Contains(stderrLower, strings.ToLower(retryErr)) {
-				isRetryable = true
-				break
+				return true
 			}
 		}
-
-		if !isRetryable || attempt == opts.MaxAttempts {
-			return &KubectlResult{
-				Stdout: stdout.String(),
-				Stderr: lastStderr,
-			}, fmt.Errorf("kubectl command failed: %w", err)
-		}
-
-		d.logger.Warningf("Transient error in kubectl command: %s", lastStderr)
+		return false
 	}
 
-	return &KubectlResult{
-		Stdout: "",
-		Stderr: lastStderr,
-	}, fmt.Errorf("kubectl command failed after %d attempts: %w", opts.MaxAttempts, lastErr)
+	args := append([]string{d.kubectl}, opts.Args...)
+	return helpers.Exec(ctx, args,
+		helpers.WithStdin(opts.Stdin),
+		helpers.WithRetryablePredicate(retryablePredicate),
+		helpers.WithMaxAttempts(opts.MaxAttempts),
+		helpers.WithRetryDelay(opts.RetryDelay),
+		helpers.WithIgnoreErrors(opts.IgnoreErrors),
+		helpers.WithSkipLoggingOnFailure(opts.SkipLoggingOnFailure),
+	)
 }

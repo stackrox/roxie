@@ -149,6 +149,7 @@ func (d *Deployer) getDeployedOperatorImage(ctx context.Context) (string, error)
 	result, err := d.runKubectl(ctx, KubectlOptions{
 		Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace,
 			"-o", "jsonpath={.spec.template.spec.containers[0].image}"},
+		SkipLoggingOnFailure: true,
 	})
 	if err != nil {
 		return "", err
@@ -162,7 +163,7 @@ func (d *Deployer) getDeployedOperatorImage(ctx context.Context) (string, error)
 func (d *Deployer) prepareNamespace(ctx context.Context, namespace string) error {
 	d.logger.Infof("Preparing namespace %s", namespace)
 
-	if err := d.ensureNamespaceExists(namespace); err != nil {
+	if err := d.ensureNamespaceExists(ctx, namespace); err != nil {
 		return err
 	}
 
@@ -426,7 +427,8 @@ func (d *Deployer) waitForCentralReady(ctx context.Context, timeout int) error {
 
 		// Check if central deployment is ready
 		result, err := d.runKubectl(ctx, KubectlOptions{
-			Args: []string{"get", "deployment", "central", "-n", d.centralNamespace, "-o", "jsonpath={.status.readyReplicas}"},
+			Args:                 []string{"get", "deployment", "central", "-n", d.centralNamespace, "-o", "jsonpath={.status.readyReplicas}"},
+			SkipLoggingOnFailure: true,
 		})
 		if err == nil && result.Stdout != "" {
 			replicas := strings.TrimSpace(result.Stdout)
@@ -752,7 +754,8 @@ func (d *Deployer) waitForSecuredClusterReady(ctx context.Context, timeout int) 
 
 		// Check sensor deployment
 		result, err := d.runKubectl(ctx, KubectlOptions{
-			Args: []string{"get", "deployment", "sensor", "-n", d.sensorNamespace, "-o", "jsonpath={.status.readyReplicas}"},
+			Args:                 []string{"get", "deployment", "sensor", "-n", d.sensorNamespace, "-o", "jsonpath={.status.readyReplicas}"},
+			SkipLoggingOnFailure: true,
 		})
 		if err != nil || result.Stdout == "" {
 			allReady = false
@@ -767,7 +770,8 @@ func (d *Deployer) waitForSecuredClusterReady(ctx context.Context, timeout int) 
 		if !d.earlyReadiness {
 			// Check admission-control deployment
 			result, err = d.runKubectl(ctx, KubectlOptions{
-				Args: []string{"get", "deployment", "admission-control", "-n", d.sensorNamespace, "-o", "jsonpath={.status.readyReplicas}"},
+				Args:                 []string{"get", "deployment", "admission-control", "-n", d.sensorNamespace, "-o", "jsonpath={.status.readyReplicas}"},
+				SkipLoggingOnFailure: true,
 			})
 			if err != nil || result.Stdout == "" {
 				allReady = false

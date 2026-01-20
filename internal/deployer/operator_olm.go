@@ -248,7 +248,8 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 
 	for time.Since(start) < timeout {
 		result, err := d.runKubectl(ctx, KubectlOptions{
-			Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.conditions[?(@.type=='InstallPlanPending')].status}"},
+			Args:                 []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.conditions[?(@.type=='InstallPlanPending')].status}"},
+			SkipLoggingOnFailure: true,
 		})
 		if err == nil && strings.TrimSpace(result.Stdout) == "True" {
 			break
@@ -264,7 +265,8 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	// Sanity check:Verify currentCSV matches expected version.
 	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
 	result, err := d.runKubectl(ctx, KubectlOptions{
-		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.currentCSV}"},
+		Args:                 []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.currentCSV}"},
+		SkipLoggingOnFailure: true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get current CSV from subscription: %w", err)
@@ -277,7 +279,8 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 
 	// Get InstallPlan name.
 	result, err = d.runKubectl(ctx, KubectlOptions{
-		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.installPlanRef.name}"},
+		Args:                 []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.installPlanRef.name}"},
+		SkipLoggingOnFailure: true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get InstallPlan name: %w", err)
@@ -336,7 +339,8 @@ func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, OperatorDeploymentMode) {
 	// First, check if a Subscription exists (OLM-specific resource)
 	_, err := d.runKubectl(ctx, KubectlOptions{
-		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace},
+		Args:                 []string{"get", "subscription", subscriptionName, "-n", operatorNamespace},
+		SkipLoggingOnFailure: true,
 	})
 	if err == nil {
 		return true, OperatorModeOLM
@@ -344,12 +348,14 @@ func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, Oper
 
 	// If no subscription, check if operator deployment exists.
 	_, err = d.runKubectl(ctx, KubectlOptions{
-		Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace},
+		Args:                 []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace},
+		SkipLoggingOnFailure: true,
 	})
 	if err == nil {
 		// Deployment exists - check if it has OLM owner labels.
 		result, err := d.runKubectl(ctx, KubectlOptions{
-			Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace, "-o", "jsonpath={.metadata.labels}"},
+			Args:                 []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace, "-o", "jsonpath={.metadata.labels}"},
+			SkipLoggingOnFailure: true,
 		})
 		if err == nil && strings.Contains(result.Stdout, "olm.owner") {
 			return true, OperatorModeOLM
@@ -404,7 +410,7 @@ func (d *Deployer) teardownOperatorOLM(ctx context.Context) error {
 		IgnoreErrors: true,
 	})
 
-	if err := d.waitForNamespaceDeletion(operatorNamespace); err != nil {
+	if err := d.waitForNamespaceDeletion(ctx, operatorNamespace); err != nil {
 		d.logger.Warningf("Namespace %s deletion incomplete: %v", operatorNamespace, err)
 	}
 

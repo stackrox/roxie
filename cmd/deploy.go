@@ -164,6 +164,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
+	ctx = logger.InjectIntoContext(ctx, log)
 
 	if err := d.Deploy(ctx, component, resolvedResources, exposure); err != nil {
 		return fmt.Errorf("deployment failed: %w", err)

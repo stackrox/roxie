@@ -65,7 +65,7 @@ func (d *Deployer) deployCentralHelm(ctx context.Context, resources, exposure st
 	// Delete CRDs if they exist (Helm will recreate them)
 	d.deleteCRDs(ctx)
 
-	if err := d.ensureNamespaceExists(d.centralNamespace); err != nil {
+	if err := d.ensureNamespaceExists(ctx, d.centralNamespace); err != nil {
 		return err
 	}
 
@@ -147,7 +147,7 @@ func (d *Deployer) deploySecuredClusterHelm(ctx context.Context, resources strin
 		d.logger.Dim(helmValuesYaml)
 	}
 
-	if err := d.ensureNamespaceExists(d.sensorNamespace); err != nil {
+	if err := d.ensureNamespaceExists(ctx, d.sensorNamespace); err != nil {
 		return err
 	}
 

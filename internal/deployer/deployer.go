@@ -316,13 +316,13 @@ func New(log *logger.Logger, overrideFile string, overrideSetExpressions []strin
 		d.roxCACertFile = caCert
 	}
 
-	ctx, err := getCurrentContext(kubectl)
+	ctx, err := getCurrentContext(log, kubectl)
 	if err != nil {
 		return nil, err
 	}
 	d.kubeContext = ctx
 
-	clusterResourceKinds, err := d.getClusterResourceKinds()
+	clusterResourceKinds, err := d.getClusterResourceKinds(log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster resource kinds: %w", err)
 	}
@@ -334,8 +334,9 @@ func New(log *logger.Logger, overrideFile string, overrideSetExpressions []strin
 	return d, nil
 }
 
-func (d *Deployer) getClusterResourceKinds() (map[string]struct{}, error) {
-	result, err := d.runKubectl(context.Background(), KubectlOptions{
+func (d *Deployer) getClusterResourceKinds(log *logger.Logger) (map[string]struct{}, error) {
+	ctx := logger.InjectIntoContext(context.Background(), log)
+	result, err := d.runKubectl(ctx, KubectlOptions{
 		Args: []string{"api-resources", "-o", "name"},
 	})
 	if err != nil {
@@ -423,7 +424,7 @@ func (d *Deployer) prepareCredentials() error {
 
 func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string) error {
 	d.logger.Infof("Deploying Central to namespace %s", d.centralNamespace)
-	if d.namespaceExists(d.centralNamespace) {
+	if d.namespaceExists(ctx, d.centralNamespace) {
 		d.logger.Info("Existing Central deployment found, tearing down...")
 		if err := d.teardownCentral(ctx); err != nil {
 			d.logger.Warningf("Error during teardown: %v", err)
@@ -455,7 +456,7 @@ func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string
 
 func (d *Deployer) deploySecuredCluster(ctx context.Context, resources string) error {
 	d.logger.Infof("Deploying SecuredCluster to namespace %s", d.sensorNamespace)
-	if d.namespaceExists(d.sensorNamespace) {
+	if d.namespaceExists(ctx, d.sensorNamespace) {
 		d.logger.Info("Existing SecuredCluster deployment found, tearing down...")
 		if err := d.teardownSecuredCluster(ctx); err != nil {
 			d.logger.Warningf("Error during teardown: %v", err)
@@ -489,7 +490,7 @@ func (d *Deployer) Teardown(ctx context.Context, component string) error {
 func (d *Deployer) teardownCentral(ctx context.Context) error {
 	d.logger.Infof("🗑️  Tearing down %s", d.centralNamespace)
 
-	if !d.namespaceExists(d.centralNamespace) {
+	if !d.namespaceExists(ctx, d.centralNamespace) {
 		d.logger.Infof("Namespace %s doesn't exist, skipping", d.centralNamespace)
 		return nil
 	}
@@ -516,7 +517,7 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
 	d.logger.Infof("🗑️  Tearing down %s", d.sensorNamespace)
 
-	if !d.namespaceExists(d.sensorNamespace) {
+	if !d.namespaceExists(ctx, d.sensorNamespace) {
 		d.logger.Infof("Namespace %s doesn't exist, skipping", d.sensorNamespace)
 		return nil
 	}
@@ -538,14 +539,14 @@ func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
 	return nil
 }
 
-func (d *Deployer) ensureNamespaceExists(namespace string) error {
-	if d.namespaceExists(namespace) {
+func (d *Deployer) ensureNamespaceExists(ctx context.Context, namespace string) error {
+	if d.namespaceExists(ctx, namespace) {
 		return nil
 	}
 
 	d.logger.Infof("Creating namespace %s", namespace)
 
-	_, err := d.runKubectl(context.Background(), KubectlOptions{
+	_, err := d.runKubectl(ctx, KubectlOptions{
 		Args: []string{"create", "namespace", namespace},
 	})
 	if err != nil {
@@ -555,14 +556,15 @@ func (d *Deployer) ensureNamespaceExists(namespace string) error {
 	return nil
 }
 
-func (d *Deployer) namespaceExists(namespace string) bool {
-	_, err := d.runKubectl(context.Background(), KubectlOptions{
-		Args: []string{"get", "namespace", namespace},
+func (d *Deployer) namespaceExists(ctx context.Context, namespace string) bool {
+	_, err := d.runKubectl(ctx, KubectlOptions{
+		Args:                 []string{"get", "namespace", namespace},
+		SkipLoggingOnFailure: true,
 	})
 	return err == nil
 }
 
-func (d *Deployer) waitForNamespaceDeletion(namespace string) error {
+func (d *Deployer) waitForNamespaceDeletion(ctx context.Context, namespace string) error {
 	timeout := 5 * time.Minute
 	checkInterval := 2 * time.Second
 	progressInterval := 10 * time.Second // Report progress every 10 seconds
@@ -570,7 +572,7 @@ func (d *Deployer) waitForNamespaceDeletion(namespace string) error {
 	lastProgressReport := time.Now()
 
 	for time.Now().Before(deadline) {
-		if !d.namespaceExists(namespace) {
+		if !d.namespaceExists(ctx, namespace) {
 			d.logger.Infof("Namespace %s has been deleted", namespace)
 			return nil
 		}
@@ -646,14 +648,13 @@ func getRoxctlVersion() (string, error) {
 	return version, nil
 }
 
-func getCurrentContext(kubectl string) (string, error) {
-	cmd := exec.Command(kubectl, "config", "current-context")
-	output, err := cmd.Output()
+func getCurrentContext(log *logger.Logger, kubectl string) (string, error) {
+	ctx := logger.InjectIntoContext(context.Background(), log)
+	result, err := helpers.Exec(ctx, []string{kubectl, "config", "current-context"})
 	if err != nil {
 		return "", fmt.Errorf("failed to get current context: %w", err)
 	}
-
-	return strings.TrimSpace(string(output)), nil
+	return strings.TrimSpace(result.Stdout), nil
 }
 
 func generatePassword() string {
@@ -944,7 +945,8 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 // checkDeploymentProgressInNamespace checks for deployment state changes in a specific namespace and reports them
 func (d *Deployer) checkDeploymentProgressInNamespace(ctx context.Context, namespace string, seenDeployments map[string]string) {
 	result, err := d.runKubectl(ctx, KubectlOptions{
-		Args: []string{"get", "deployments", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{'|'}{.status.replicas}{'|'}{.status.readyReplicas}{'|'}{.status.availableReplicas}{'\\n'}{end}"},
+		Args:                 []string{"get", "deployments", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{'|'}{.status.replicas}{'|'}{.status.readyReplicas}{'|'}{.status.availableReplicas}{'\\n'}{end}"},
+		SkipLoggingOnFailure: true,
 	})
 	if err != nil {
 		return

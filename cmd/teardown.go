@@ -46,6 +46,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
+	ctx = logger.InjectIntoContext(ctx, log)
 
 	if err := d.Teardown(ctx, component); err != nil {
 		return fmt.Errorf("teardown failed: %w", err)
