@@ -54,13 +54,6 @@ func podmanImageExists(imageRef string) (bool, error) {
 	return true, nil
 }
 
-// ImageSet represents a collection of images to check.
-type ImageSet struct {
-	Main     string
-	Operator string
-	Images   []string
-}
-
 // CheckImages checks which images from the set exist locally.
 // Returns a map of image names to their full references.
 func CheckImages(mainTag, operatorTag string) (map[string]string, error) {
@@ -85,7 +78,7 @@ func CheckImages(mainTag, operatorTag string) (map[string]string, error) {
 	for _, imageName := range images {
 		ref, err := CheckLocalImage(imageName, mainTag)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("checking %s:%s: %w", imageName, mainTag, err)
 		}
 		if ref != "" {
 			localImages[imageName+":"+mainTag] = ref
@@ -96,7 +89,7 @@ func CheckImages(mainTag, operatorTag string) (map[string]string, error) {
 	for _, imageName := range operatorImages {
 		ref, err := CheckLocalImage(imageName, "v"+operatorTag)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("checking %s:v%s: %w", imageName, operatorTag, err)
 		}
 		if ref != "" {
 			localImages[imageName+":v"+operatorTag] = ref
