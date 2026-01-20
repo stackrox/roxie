@@ -5,14 +5,14 @@ import "os"
 const (
 	brandingEnvVar = "ROX_PRODUCT_BRANDING"
 
-	rhacsBranding     = "RHACS_BRANDING"
-	stackroxBranding  = "STACKROX_BRANDING"
+	rhacsBranding    = "RHACS_BRANDING"
+	stackroxBranding = "STACKROX_BRANDING"
 
-	rhacsOrg     = "rhacs-eng"
-	stackroxOrg  = "stackrox-io"
+	rhacsOrg    = "rhacs-eng"
+	stackroxOrg = "stackrox-io"
 
-	rhacsFlavor     = "development_build"
-	stackroxFlavor  = "opensource"
+	rhacsFlavor    = "development_build"
+	stackroxFlavor = "opensource"
 )
 
 // GetBrandingOrganization returns the registry organization based on ROX_PRODUCT_BRANDING.

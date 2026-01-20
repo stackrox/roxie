@@ -6,10 +6,10 @@ import (
 
 func TestGetBrandingRegistry(t *testing.T) {
 	tests := []struct {
-		name            string
-		brandingEnv     string
-		expectedOrg     string
-		expectedFlavor  string
+		name           string
+		brandingEnv    string
+		expectedOrg    string
+		expectedFlavor string
 	}{
 		{
 			name:           "RHACS branding",
