@@ -18,7 +18,11 @@ roxie has been authored with significant AI contributions.
 - Automated fast ACS teardowns.
 - Handles Quay image pull secrets automatically.
 - Verifies image existence before attempting deployment.
-- Helm charts supported: use `--helm` to deploy Central and Secured Cluster via Helm.
+
+Note: Helm charts are currently also supported: use `--helm` to deploy Central and Secured Cluster via Helm. Only
+use this in case you have very specific requirements which force you to use the Helm charts directly.
+One example would be working on the Helm charts and needing to test them independently of the ACS operator.
+Support for Helm charts might be dropped in the future.
 
 ## Quick start
 

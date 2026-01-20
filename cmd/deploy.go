@@ -23,14 +23,14 @@ func newDeployCmd() *cobra.Command {
 Examples:
   roxie deploy central
   roxie deploy secured-cluster
-  roxie deploy both
-  roxie deploy central --helm`,
+  roxie deploy both`,
 		ValidArgs: []string{"central", "secured-cluster", "both", "all"},
 		Args:      cobra.MaximumNArgs(1),
 		RunE:      runDeploy,
 	}
 
 	cmd.Flags().BoolVar(&helm, "helm", false, "Deploy using Helm charts instead of operator")
+	_ = cmd.Flags().MarkHidden("helm")
 	cmd.Flags().BoolVar(&olm, "olm", false, "Deploy operator via OLM (requires OLM installed)")
 	cmd.Flags().BoolVar(&deployOperator, "deploy-operator", true, "Deploy and check operator (set to false to skip operator deployment/checks)")
 	cmd.Flags().BoolVar(&portForwarding, "port-forwarding", false, "Enable localhost port-forward for Central")
