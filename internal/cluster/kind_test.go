@@ -30,6 +30,21 @@ func TestIsKindCluster(t *testing.T) {
 			contextName: "",
 			expected:    false,
 		},
+		{
+			name:        "contains but doesn't start with kind",
+			contextName: "my-kind-cluster",
+			expected:    false,
+		},
+		{
+			name:        "kubernetes context",
+			contextName: "kubernetes",
+			expected:    false,
+		},
+		{
+			name:        "mixed case KIND",
+			contextName: "KIND-acs",
+			expected:    true,
+		},
 	}
 
 	for _, tt := range tests {
