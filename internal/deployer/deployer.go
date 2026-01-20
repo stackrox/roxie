@@ -565,6 +565,12 @@ func (d *Deployer) shouldSkipCredentialVerification() bool {
 	return true
 }
 
+// shouldSkipImagePullSecrets returns true if image pull secrets should be skipped.
+// Same logic as credential verification - skip only if all images are local.
+func (d *Deployer) shouldSkipImagePullSecrets() bool {
+	return d.shouldSkipCredentialVerification()
+}
+
 func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string) error {
 	d.logger.Infof("Deploying Central to namespace %s", d.centralNamespace)
 	if d.namespaceExists(d.centralNamespace) {
