@@ -29,6 +29,7 @@ func buildKindLoadCommand(imageRef, clusterName string) []string {
 
 // LoadImagesToKind loads multiple images into a kind cluster in parallel.
 // Uses up to 4 concurrent workers to speed up loading.
+// Returns on first error encountered (fail-fast behavior).
 func LoadImagesToKind(ctx context.Context, images map[string]string, clusterName string, log *logger.Logger) error {
 	if len(images) == 0 {
 		return nil
@@ -66,9 +67,16 @@ func LoadImagesToKind(ctx context.Context, images map[string]string, clusterName
 	wg.Wait()
 	close(errChan)
 
-	// Check for errors
-	if err := <-errChan; err != nil {
-		return err
+	// Check for errors - collect all errors that occurred
+	var firstErr error
+	for err := range errChan {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	if firstErr != nil {
+		return firstErr
 	}
 
 	log.Infof("Successfully loaded %d images into kind cluster", len(images))
