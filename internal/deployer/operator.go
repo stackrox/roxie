@@ -328,6 +328,14 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 		return errors.New("ClusterServiceVersion file not found in bundle")
 	}
 
+	// Patch CSV with local image references if using local images
+	if d.usingLocalImages {
+		d.logger.Info("Patching CSV with local image references")
+		if err := patchCSVWithLocalImages(csvFile, d.mainImageTag, d.localImages); err != nil {
+			return fmt.Errorf("failed to patch CSV with local images: %w", err)
+		}
+	}
+
 	d.logger.Info("🔍 Parsing ClusterServiceVersion deployment specification")
 
 	deploymentSpec, err := d.parseCSVDeploymentSpec(csvFile)
@@ -369,6 +377,138 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	}
 
 	d.logger.Success("🎉 Operator deployment completed successfully!")
+	return nil
+}
+
+// patchCSVWithLocalImages patches the CSV file with local image references.
+// It updates:
+// 1. The operator image reference (spec.install.spec.deployments[0].spec.template.spec.containers[0].image)
+// 2. RELATED_IMAGE_* environment variables with local image tags
+//
+// The function only patches images that exist in the localImages map, leaving
+// other image references unchanged.
+func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[string]string) error {
+	// Return early if no local images to patch
+	if len(localImages) == 0 {
+		return nil
+	}
+
+	// Read the CSV file
+	content, err := os.ReadFile(csvFile)
+	if err != nil {
+		return fmt.Errorf("failed to read CSV file: %w", err)
+	}
+
+	// Unmarshal to map[string]interface{}
+	var csvData map[string]interface{}
+	if err := yaml.Unmarshal(content, &csvData); err != nil {
+		return fmt.Errorf("failed to parse CSV YAML: %w", err)
+	}
+
+	// Navigate to the container spec
+	spec, ok := csvData["spec"].(map[string]interface{})
+	if !ok {
+		return errors.New("CSV missing 'spec' field")
+	}
+
+	install, ok := spec["install"].(map[string]interface{})
+	if !ok {
+		return errors.New("CSV missing 'spec.install' field")
+	}
+
+	installSpec, ok := install["spec"].(map[string]interface{})
+	if !ok {
+		return errors.New("CSV missing 'spec.install.spec' field")
+	}
+
+	deployments, ok := installSpec["deployments"].([]interface{})
+	if !ok || len(deployments) == 0 {
+		return errors.New("CSV missing 'spec.install.spec.deployments' field or deployments array is empty")
+	}
+
+	deployment, ok := deployments[0].(map[string]interface{})
+	if !ok {
+		return errors.New("invalid deployment structure in CSV")
+	}
+
+	deploymentSpec, ok := deployment["spec"].(map[string]interface{})
+	if !ok {
+		return errors.New("CSV missing deployment spec")
+	}
+
+	template, ok := deploymentSpec["template"].(map[string]interface{})
+	if !ok {
+		return errors.New("CSV missing deployment template")
+	}
+
+	podSpec, ok := template["spec"].(map[string]interface{})
+	if !ok {
+		return errors.New("CSV missing pod spec")
+	}
+
+	containers, ok := podSpec["containers"].([]interface{})
+	if !ok || len(containers) == 0 {
+		return errors.New("CSV missing containers or containers array is empty")
+	}
+
+	container, ok := containers[0].(map[string]interface{})
+	if !ok {
+		return errors.New("invalid container structure in CSV")
+	}
+
+	// Patch operator image if it exists in localImages
+	operatorImageKey := "stackrox-operator:" + mainImageTag
+	if localRef, ok := localImages[operatorImageKey]; ok {
+		container["image"] = localRef
+	}
+
+	// Patch RELATED_IMAGE_* environment variables
+	envVars, ok := container["env"].([]interface{})
+	if !ok {
+		return errors.New("CSV missing container env variables")
+	}
+
+	// Mapping of RELATED_IMAGE_* env var names to image names
+	relatedImageMapping := map[string]string{
+		"RELATED_IMAGE_MAIN":          "main",
+		"RELATED_IMAGE_SCANNER":       "scanner",
+		"RELATED_IMAGE_SCANNER_DB":    "scanner-db",
+		"RELATED_IMAGE_CENTRAL_DB":    "central-db",
+		"RELATED_IMAGE_SCANNER_V4_DB": "scanner-v4-db",
+		"RELATED_IMAGE_SCANNER_V4":    "scanner-v4-matcher",
+	}
+
+	for _, envVar := range envVars {
+		envMap, ok := envVar.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		envName, ok := envMap["name"].(string)
+		if !ok {
+			continue
+		}
+
+		// Check if this is a RELATED_IMAGE_* env var that we should patch
+		if imageName, isRelatedImage := relatedImageMapping[envName]; isRelatedImage {
+			imageKey := imageName + ":" + mainImageTag
+			if localRef, found := localImages[imageKey]; found {
+				envMap["value"] = localRef
+			}
+		}
+	}
+
+	// Marshal back to YAML
+	patchedContent, err := yaml.Marshal(csvData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patched CSV: %w", err)
+	}
+
+	// Write back to file
+	if err := os.WriteFile(csvFile, patchedContent, 0644); err != nil {
+		return fmt.Errorf("failed to write patched CSV: %w", err)
+	}
+
 	return nil
 }
 
