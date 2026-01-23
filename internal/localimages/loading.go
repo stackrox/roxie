@@ -49,7 +49,7 @@ func LoadImagesToKind(ctx context.Context, images map[string]string, mainImageTa
 	// Note: scanner-v4 is a single image that runs in different modes (indexer/matcher)
 	// based on runtime configuration, not separate images.
 	mainImages := []string{"main", "scanner", "scanner-db", "scanner-v4",
-		"scanner-v4-db", "central-db"}
+		"scanner-v4-db", "central-db", "collector"}
 	for _, imageName := range mainImages {
 		imageKey := imageName + ":" + mainImageTag
 		if _, exists := images[imageKey]; exists {

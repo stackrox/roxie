@@ -64,6 +64,7 @@ func CheckImages(mainTag, operatorTag string) (map[string]string, error) {
 		"scanner-v4",
 		"scanner-v4-db",
 		"central-db",
+		"collector",
 	}
 
 	localImages := make(map[string]string)
