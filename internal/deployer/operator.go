@@ -381,6 +381,17 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	return nil
 }
 
+// envVarToImageName converts a RELATED_IMAGE_* environment variable name to an image name.
+// e.g., RELATED_IMAGE_SCANNER_V4_DB → scanner-v4-db
+func envVarToImageName(envVar string) string {
+	// Remove RELATED_IMAGE_ prefix
+	name := strings.TrimPrefix(envVar, "RELATED_IMAGE_")
+	// Convert to lowercase and replace underscores with hyphens
+	name = strings.ToLower(name)
+	name = strings.ReplaceAll(name, "_", "-")
+	return name
+}
+
 // patchCSVWithLocalImages patches the CSV file with local image references.
 // It updates:
 // 1. The operator image reference (spec.install.spec.deployments[0].spec.template.spec.containers[0].image)
@@ -471,18 +482,18 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 		return errors.New("CSV missing container env variables")
 	}
 
-	// Mapping of RELATED_IMAGE_* env var names to image names
-	relatedImageMapping := map[string]string{
-		"RELATED_IMAGE_MAIN":          "main",
-		"RELATED_IMAGE_SCANNER":       "scanner",
-		"RELATED_IMAGE_SCANNER_DB":    "scanner-db",
-		"RELATED_IMAGE_CENTRAL_DB":    "central-db",
-		"RELATED_IMAGE_SCANNER_V4_DB": "scanner-v4-db",
-		"RELATED_IMAGE_SCANNER_V4":    "scanner-v4-matcher",
-	}
-
 	// Get branding organization for constructing image paths
 	brandingOrg := localimages.GetBrandingOrganization()
+
+	// Build a reverse map from image name to local image refs for quick lookup
+	imageNameToKey := make(map[string]string)
+	for imageKey := range localImages {
+		// Extract image name from "imagename:tag"
+		parts := strings.SplitN(imageKey, ":", 2)
+		if len(parts) == 2 {
+			imageNameToKey[parts[0]] = imageKey
+		}
+	}
 
 	for _, envVar := range envVars {
 		envMap, ok := envVar.(map[string]interface{})
@@ -495,13 +506,26 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 			continue
 		}
 
-		// Check if this is a RELATED_IMAGE_* env var that we should patch
-		if imageName, isRelatedImage := relatedImageMapping[envName]; isRelatedImage {
-			imageKey := imageName + ":" + mainImageTag
-			if _, found := localImages[imageKey]; found {
-				// Construct quay.io path to avoid Kubernetes prepending docker.io/ to localhost/ references
-				envMap["value"] = fmt.Sprintf("quay.io/%s/%s:%s", brandingOrg, imageName, mainImageTag)
+		// Check if this is a RELATED_IMAGE_* env var
+		if !strings.HasPrefix(envName, "RELATED_IMAGE_") {
+			continue
+		}
+
+		// Convert RELATED_IMAGE_FOO_BAR to foo-bar
+		// e.g., RELATED_IMAGE_SCANNER_V4_DB → scanner-v4-db
+		imageName := envVarToImageName(envName)
+
+		// Check if we have this image locally
+		if imageKey, found := imageNameToKey[imageName]; found {
+			// Extract the tag from the imageKey
+			parts := strings.SplitN(imageKey, ":", 2)
+			if len(parts) != 2 {
+				continue
 			}
+			tag := parts[1]
+
+			// Construct quay.io path to avoid Kubernetes prepending docker.io/ to localhost/ references
+			envMap["value"] = fmt.Sprintf("quay.io/%s/%s:%s", brandingOrg, imageName, tag)
 		}
 	}
 

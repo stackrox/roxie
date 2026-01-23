@@ -8,6 +8,31 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// TestEnvVarToImageName tests the conversion of RELATED_IMAGE_* env vars to image names
+func TestEnvVarToImageName(t *testing.T) {
+	tests := []struct {
+		envVar   string
+		expected string
+	}{
+		{"RELATED_IMAGE_MAIN", "main"},
+		{"RELATED_IMAGE_SCANNER", "scanner"},
+		{"RELATED_IMAGE_SCANNER_DB", "scanner-db"},
+		{"RELATED_IMAGE_SCANNER_V4_DB", "scanner-v4-db"},
+		{"RELATED_IMAGE_SCANNER_V4", "scanner-v4"},
+		{"RELATED_IMAGE_CENTRAL_DB", "central-db"},
+		{"RELATED_IMAGE_COLLECTOR", "collector"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.envVar, func(t *testing.T) {
+			result := envVarToImageName(tt.envVar)
+			if result != tt.expected {
+				t.Errorf("envVarToImageName(%q) = %q, want %q", tt.envVar, result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestPatchCSVWithLocalImages_AllLocalImages tests patching when all images are available locally
 func TestPatchCSVWithLocalImages_AllLocalImages(t *testing.T) {
 	// Create a temporary CSV file
