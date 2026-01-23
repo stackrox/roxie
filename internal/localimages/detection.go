@@ -11,12 +11,28 @@ const (
 )
 
 // buildImageReferences returns candidate image references to check in podman.
-// Returns in priority order: localhost/stackrox first, then quay.io registry.
+// Returns in priority order:
+// 1. localhost/stackrox/<image>:<tag>
+// 2. quay.io/<current-branding-org>/<image>:<tag>
+// 3. quay.io/<other-branding-org>/<image>:<tag>
+//
+// Checking both branding organizations handles cases where images don't support
+// ROX_PRODUCT_BRANDING (e.g., collector currently only builds with stackrox-io).
 func buildImageReferences(imageName, tag string) []string {
-	org := GetBrandingOrganization()
+	currentOrg := GetBrandingOrganization()
+
+	// Determine the fallback organization (the one we're NOT using)
+	var fallbackOrg string
+	if currentOrg == "rhacs-eng" {
+		fallbackOrg = "stackrox-io"
+	} else {
+		fallbackOrg = "rhacs-eng"
+	}
+
 	return []string{
 		fmt.Sprintf("%s/%s:%s", localhostPrefix, imageName, tag),
-		fmt.Sprintf("%s/%s/%s:%s", quayRegistry, org, imageName, tag),
+		fmt.Sprintf("%s/%s/%s:%s", quayRegistry, currentOrg, imageName, tag),
+		fmt.Sprintf("%s/%s/%s:%s", quayRegistry, fallbackOrg, imageName, tag),
 	}
 }
 
