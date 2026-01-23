@@ -67,12 +67,6 @@ func CheckImages(mainTag, operatorTag string) (map[string]string, error) {
 		"central-db",
 	}
 
-	operatorImages := []string{
-		"stackrox-operator",        // The operator controller
-		"stackrox-operator-bundle",
-		"stackrox-operator-index",
-	}
-
 	localImages := make(map[string]string)
 
 	// Check main images
@@ -86,8 +80,22 @@ func CheckImages(mainTag, operatorTag string) (map[string]string, error) {
 		}
 	}
 
-	// Check operator images with v prefix
-	for _, imageName := range operatorImages {
+	// Check stackrox-operator with main tag (no v prefix)
+	ref, err := CheckLocalImage("stackrox-operator", mainTag)
+	if err != nil {
+		return nil, fmt.Errorf("checking stackrox-operator:%s: %w", mainTag, err)
+	}
+	if ref != "" {
+		localImages["stackrox-operator:"+mainTag] = ref
+	}
+
+	// Check operator bundle and index images with v prefix
+	operatorBundleImages := []string{
+		"stackrox-operator-bundle",
+		"stackrox-operator-index",
+	}
+
+	for _, imageName := range operatorBundleImages {
 		ref, err := CheckLocalImage(imageName, "v"+operatorTag)
 		if err != nil {
 			return nil, fmt.Errorf("checking %s:v%s: %w", imageName, operatorTag, err)
