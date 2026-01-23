@@ -21,7 +21,7 @@ func TestLoadImagesToKind_EmptyImages(t *testing.T) {
 	// Create a test logger (use nil if logger.New doesn't exist in tests)
 	log := &logger.Logger{}
 
-	err := LoadImagesToKind(ctx, map[string]string{}, "test-cluster", log)
+	err := LoadImagesToKind(ctx, map[string]string{}, "4.10.0", "4.10.0", "test-cluster", log)
 	if err != nil {
 		t.Errorf("LoadImagesToKind with empty map should not error, got: %v", err)
 	}

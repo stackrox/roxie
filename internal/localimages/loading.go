@@ -30,28 +30,61 @@ func buildKindLoadCommand(imageRef, clusterName string) []string {
 // LoadImagesToKind loads multiple images into a kind cluster in parallel.
 // Uses up to 4 concurrent workers to speed up loading.
 // Returns on first error encountered (fail-fast behavior).
-func LoadImagesToKind(ctx context.Context, images map[string]string, clusterName string, log *logger.Logger) error {
+//
+// Images are loaded using quay.io paths (e.g., quay.io/rhacs-eng/main:tag) instead of
+// localhost paths to ensure the tags in kind match what the operator CSV will reference.
+func LoadImagesToKind(ctx context.Context, images map[string]string, mainImageTag, operatorTag string, clusterName string, log *logger.Logger) error {
 	if len(images) == 0 {
 		return nil
 	}
 
 	log.Infof("Loading %d images into kind cluster %s", len(images), clusterName)
 
+	brandingOrg := GetBrandingOrganization()
+
+	// Build list of quay.io image references to load
+	imageRefs := make([]string, 0, len(images))
+
+	// Main images and central-db use mainImageTag
+	mainImages := []string{"main", "scanner", "scanner-db", "scanner-v4-db",
+		"scanner-v4-indexer", "scanner-v4-matcher", "central-db"}
+	for _, imageName := range mainImages {
+		imageKey := imageName + ":" + mainImageTag
+		if _, exists := images[imageKey]; exists {
+			imageRefs = append(imageRefs, fmt.Sprintf("quay.io/%s/%s:%s", brandingOrg, imageName, mainImageTag))
+		}
+	}
+
+	// stackrox-operator uses mainImageTag (no v prefix)
+	operatorKey := "stackrox-operator:" + mainImageTag
+	if _, exists := images[operatorKey]; exists {
+		imageRefs = append(imageRefs, fmt.Sprintf("quay.io/%s/stackrox-operator:%s", brandingOrg, mainImageTag))
+	}
+
+	// Operator bundle and index use v+operatorTag
+	operatorBundleImages := []string{"stackrox-operator-bundle", "stackrox-operator-index"}
+	for _, imageName := range operatorBundleImages {
+		imageKey := imageName + ":v" + operatorTag
+		if _, exists := images[imageKey]; exists {
+			imageRefs = append(imageRefs, fmt.Sprintf("quay.io/%s/%s:v%s", brandingOrg, imageName, operatorTag))
+		}
+	}
+
 	// Channel for images to process
-	imageChan := make(chan string, len(images))
-	for _, imageRef := range images {
+	imageChan := make(chan string, len(imageRefs))
+	for _, imageRef := range imageRefs {
 		imageChan <- imageRef
 	}
 	close(imageChan)
 
 	// Error channel
-	errChan := make(chan error, len(images))
+	errChan := make(chan error, len(imageRefs))
 
 	// Use 4 workers for parallel loading (matching existing image verification parallelism)
 	const numWorkers = 4
 	var wg sync.WaitGroup
 
-	for i := 0; i < numWorkers && i < len(images); i++ {
+	for i := 0; i < numWorkers && i < len(imageRefs); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -79,6 +112,6 @@ func LoadImagesToKind(ctx context.Context, images map[string]string, clusterName
 		return firstErr
 	}
 
-	log.Infof("Successfully loaded %d images into kind cluster", len(images))
+	log.Infof("Successfully loaded %d images into kind cluster", len(imageRefs))
 	return nil
 }

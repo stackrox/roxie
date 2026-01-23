@@ -531,8 +531,8 @@ func (d *Deployer) detectAndLoadLocalImages(ctx context.Context) error {
 	totalExpected := totalRequiredImages
 	d.logger.Infof("Found %d/%d images locally in podman", len(localImages), totalExpected)
 
-	// Load images into kind
-	if err := localimages.LoadImagesToKind(ctx, localImages, kindClusterName, d.logger); err != nil {
+	// Load images into kind using quay.io paths
+	if err := localimages.LoadImagesToKind(ctx, localImages, d.mainImageTag, d.operatorTag, kindClusterName, d.logger); err != nil {
 		return fmt.Errorf("failed to load %d images into kind cluster %s: %w", len(localImages), kindClusterName, err)
 	}
 
