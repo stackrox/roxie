@@ -61,6 +61,7 @@ func CheckImages(mainTag, operatorTag string) (map[string]string, error) {
 		"main",
 		"scanner",
 		"scanner-db",
+		"scanner-v4",
 		"scanner-v4-db",
 		"scanner-v4-indexer",
 		"scanner-v4-matcher",

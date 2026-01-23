@@ -46,8 +46,8 @@ func LoadImagesToKind(ctx context.Context, images map[string]string, mainImageTa
 	imageRefs := make([]string, 0, len(images))
 
 	// Main images and central-db use mainImageTag
-	mainImages := []string{"main", "scanner", "scanner-db", "scanner-v4-db",
-		"scanner-v4-indexer", "scanner-v4-matcher", "central-db"}
+	mainImages := []string{"main", "scanner", "scanner-db", "scanner-v4",
+		"scanner-v4-db", "scanner-v4-indexer", "scanner-v4-matcher", "central-db"}
 	for _, imageName := range mainImages {
 		imageKey := imageName + ":" + mainImageTag
 		if _, exists := images[imageKey]; exists {
