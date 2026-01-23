@@ -19,9 +19,9 @@ func TestBuildImageReferences(t *testing.T) {
 			tag:       "4.10.0",
 			branding:  "RHACS_BRANDING",
 			expected: []string{
-				"localhost/stackrox/main:4.10.0",
 				"quay.io/rhacs-eng/main:4.10.0",
 				"quay.io/stackrox-io/main:4.10.0", // fallback
+				"localhost/stackrox/main:4.10.0",
 			},
 		},
 		{
@@ -30,9 +30,9 @@ func TestBuildImageReferences(t *testing.T) {
 			tag:       "4.9.2",
 			branding:  "STACKROX_BRANDING",
 			expected: []string{
-				"localhost/stackrox/scanner:4.9.2",
 				"quay.io/stackrox-io/scanner:4.9.2",
 				"quay.io/rhacs-eng/scanner:4.9.2", // fallback
+				"localhost/stackrox/scanner:4.9.2",
 			},
 		},
 	}
