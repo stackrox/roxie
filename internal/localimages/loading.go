@@ -40,9 +40,8 @@ func LoadImagesToKind(ctx context.Context, images map[string]string, mainImageTa
 
 	log.Infof("Loading %d images into kind cluster %s", len(images), clusterName)
 
-	brandingOrg := GetBrandingOrganization()
-
-	// Build list of quay.io image references to load
+	// Build list of image references to load
+	// Use the actual references found during detection (which may be from fallback branding)
 	imageRefs := make([]string, 0, len(images))
 
 	// Main images and central-db use mainImageTag
@@ -52,22 +51,22 @@ func LoadImagesToKind(ctx context.Context, images map[string]string, mainImageTa
 		"scanner-v4-db", "central-db", "collector"}
 	for _, imageName := range mainImages {
 		imageKey := imageName + ":" + mainImageTag
-		if _, exists := images[imageKey]; exists {
-			imageRefs = append(imageRefs, fmt.Sprintf("quay.io/%s/%s:%s", brandingOrg, imageName, mainImageTag))
+		if imageRef, exists := images[imageKey]; exists {
+			imageRefs = append(imageRefs, imageRef)
 		}
 	}
 
 	// stackrox-operator uses mainImageTag (no v prefix)
 	operatorKey := "stackrox-operator:" + mainImageTag
-	if _, exists := images[operatorKey]; exists {
-		imageRefs = append(imageRefs, fmt.Sprintf("quay.io/%s/stackrox-operator:%s", brandingOrg, mainImageTag))
+	if imageRef, exists := images[operatorKey]; exists {
+		imageRefs = append(imageRefs, imageRef)
 	}
 
 	// Operator bundle uses v+operatorTag
 	// Note: We don't load operator-index as roxie doesn't use it in default (non-OLM) mode
 	bundleKey := "stackrox-operator-bundle:v" + operatorTag
-	if _, exists := images[bundleKey]; exists {
-		imageRefs = append(imageRefs, fmt.Sprintf("quay.io/%s/stackrox-operator-bundle:v%s", brandingOrg, operatorTag))
+	if imageRef, exists := images[bundleKey]; exists {
+		imageRefs = append(imageRefs, imageRef)
 	}
 
 	// Channel for images to process
