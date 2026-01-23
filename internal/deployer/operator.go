@@ -17,6 +17,7 @@ import (
 
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/localimages"
 )
 
 const (
@@ -457,9 +458,11 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 	}
 
 	// Patch operator image if it exists in localImages
+	// We construct the quay.io path to avoid Kubernetes prepending docker.io/ to localhost/ references
 	operatorImageKey := "stackrox-operator:" + mainImageTag
-	if localRef, ok := localImages[operatorImageKey]; ok {
-		container["image"] = localRef
+	if _, ok := localImages[operatorImageKey]; ok {
+		brandingOrg := localimages.GetBrandingOrganization()
+		container["image"] = fmt.Sprintf("quay.io/%s/stackrox-operator:%s", brandingOrg, mainImageTag)
 	}
 
 	// Patch RELATED_IMAGE_* environment variables
@@ -478,6 +481,9 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 		"RELATED_IMAGE_SCANNER_V4":    "scanner-v4-matcher",
 	}
 
+	// Get branding organization for constructing image paths
+	brandingOrg := localimages.GetBrandingOrganization()
+
 	for _, envVar := range envVars {
 		envMap, ok := envVar.(map[string]interface{})
 		if !ok {
@@ -492,8 +498,9 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 		// Check if this is a RELATED_IMAGE_* env var that we should patch
 		if imageName, isRelatedImage := relatedImageMapping[envName]; isRelatedImage {
 			imageKey := imageName + ":" + mainImageTag
-			if localRef, found := localImages[imageKey]; found {
-				envMap["value"] = localRef
+			if _, found := localImages[imageKey]; found {
+				// Construct quay.io path to avoid Kubernetes prepending docker.io/ to localhost/ references
+				envMap["value"] = fmt.Sprintf("quay.io/%s/%s:%s", brandingOrg, imageName, mainImageTag)
 			}
 		}
 	}

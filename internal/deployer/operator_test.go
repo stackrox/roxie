@@ -91,23 +91,23 @@ spec:
 	containers := podSpec["containers"].([]interface{})
 	container := containers[0].(map[string]interface{})
 
-	// Verify operator image was patched
+	// Verify operator image was patched with quay.io path
 	operatorImage := container["image"].(string)
-	expectedOperatorImage := "localhost/stackrox/stackrox-operator:4.0.0"
+	expectedOperatorImage := "quay.io/rhacs-eng/stackrox-operator:4.0.0"
 	if operatorImage != expectedOperatorImage {
 		t.Errorf("Operator image not patched correctly. Got: %s, Expected: %s", operatorImage, expectedOperatorImage)
 	}
 
-	// Verify RELATED_IMAGE_* env vars were patched
+	// Verify RELATED_IMAGE_* env vars were patched with quay.io paths
 	envVars := container["env"].([]interface{})
 	expectedEnvVars := map[string]string{
-		"RELATED_IMAGE_MAIN":           "localhost/stackrox/main:4.0.0",
-		"RELATED_IMAGE_SCANNER":        "localhost/stackrox/scanner:4.0.0",
-		"RELATED_IMAGE_SCANNER_DB":     "localhost/stackrox/scanner-db:4.0.0",
-		"RELATED_IMAGE_CENTRAL_DB":     "localhost/stackrox/central-db:4.0.0",
-		"RELATED_IMAGE_SCANNER_V4_DB":  "localhost/stackrox/scanner-v4-db:4.0.0",
-		"RELATED_IMAGE_SCANNER_V4":     "localhost/stackrox/scanner-v4-matcher:4.0.0",
-		"RELATED_IMAGE_COLLECTOR":      "quay.io/rhacs-eng/collector:4.0.0", // Not in local images
+		"RELATED_IMAGE_MAIN":           "quay.io/rhacs-eng/main:4.0.0",
+		"RELATED_IMAGE_SCANNER":        "quay.io/rhacs-eng/scanner:4.0.0",
+		"RELATED_IMAGE_SCANNER_DB":     "quay.io/rhacs-eng/scanner-db:4.0.0",
+		"RELATED_IMAGE_CENTRAL_DB":     "quay.io/rhacs-eng/central-db:4.0.0",
+		"RELATED_IMAGE_SCANNER_V4_DB":  "quay.io/rhacs-eng/scanner-v4-db:4.0.0",
+		"RELATED_IMAGE_SCANNER_V4":     "quay.io/rhacs-eng/scanner-v4-matcher:4.0.0",
+		"RELATED_IMAGE_COLLECTOR":      "quay.io/rhacs-eng/collector:4.0.0", // Not in local images, stays unchanged
 		"OTHER_ENV":                    "some-value",
 	}
 
@@ -197,12 +197,12 @@ spec:
 		t.Errorf("Operator image should not be patched. Got: %s, Expected: %s", operatorImage, expectedOperatorImage)
 	}
 
-	// Verify only local images were patched
+	// Verify only local images were patched with quay.io paths
 	envVars := container["env"].([]interface{})
 	expectedEnvVars := map[string]string{
-		"RELATED_IMAGE_MAIN":       "localhost/stackrox/main:4.0.0",
-		"RELATED_IMAGE_SCANNER":    "localhost/stackrox/scanner:4.0.0",
-		"RELATED_IMAGE_SCANNER_DB": "quay.io/rhacs-eng/scanner-db:4.0.0", // Not patched
+		"RELATED_IMAGE_MAIN":       "quay.io/rhacs-eng/main:4.0.0",       // Patched with quay.io path
+		"RELATED_IMAGE_SCANNER":    "quay.io/rhacs-eng/scanner:4.0.0",    // Patched with quay.io path
+		"RELATED_IMAGE_SCANNER_DB": "quay.io/rhacs-eng/scanner-db:4.0.0", // Not patched, stays original
 	}
 
 	for _, envVar := range envVars {
