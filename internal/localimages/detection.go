@@ -68,6 +68,7 @@ func CheckImages(mainTag, operatorTag string) (map[string]string, error) {
 	}
 
 	operatorImages := []string{
+		"stackrox-operator",        // The operator controller
 		"stackrox-operator-bundle",
 		"stackrox-operator-index",
 	}

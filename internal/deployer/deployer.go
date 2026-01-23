@@ -25,8 +25,8 @@ import (
 
 const (
 	// totalRequiredImages is the number of images needed for a complete deployment
-	// (7 main images + 2 operator images).
-	totalRequiredImages = 9
+	// (7 main images + 3 operator images).
+	totalRequiredImages = 10
 
 	// skipLocalImagesEnvVar is the environment variable name to disable local image detection.
 	skipLocalImagesEnvVar = "ROXIE_SKIP_LOCAL_IMAGES"
@@ -527,7 +527,7 @@ func (d *Deployer) detectAndLoadLocalImages(ctx context.Context) error {
 		return nil
 	}
 
-	// Calculate total images needed (7 main + 2 operator = 9)
+	// Calculate total images needed (7 main + 3 operator = 10)
 	totalExpected := totalRequiredImages
 	d.logger.Infof("Found %d/%d images locally in podman", len(localImages), totalExpected)
 
@@ -553,7 +553,7 @@ func (d *Deployer) shouldSkipCredentialVerification() bool {
 	}
 
 	// If using some local images but not all, don't skip (need creds for remote pulls)
-	// Total expected: 7 main + 2 operator = 9
+	// Total expected: 7 main + 3 operator = 10
 	totalExpected := totalRequiredImages
 	if len(d.localImages) < totalExpected {
 		d.logger.Dimf("Using %d/%d local images, remaining images will be pulled from quay.io",
