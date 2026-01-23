@@ -89,20 +89,14 @@ func CheckImages(mainTag, operatorTag string) (map[string]string, error) {
 		localImages["stackrox-operator:"+mainTag] = ref
 	}
 
-	// Check operator bundle and index images with v prefix
-	operatorBundleImages := []string{
-		"stackrox-operator-bundle",
-		"stackrox-operator-index",
+	// Check operator bundle image with v prefix
+	// Note: We don't check operator-index as roxie doesn't use it in default (non-OLM) mode
+	ref, err = CheckLocalImage("stackrox-operator-bundle", "v"+operatorTag)
+	if err != nil {
+		return nil, fmt.Errorf("checking stackrox-operator-bundle:v%s: %w", operatorTag, err)
 	}
-
-	for _, imageName := range operatorBundleImages {
-		ref, err := CheckLocalImage(imageName, "v"+operatorTag)
-		if err != nil {
-			return nil, fmt.Errorf("checking %s:v%s: %w", imageName, operatorTag, err)
-		}
-		if ref != "" {
-			localImages[imageName+":v"+operatorTag] = ref
-		}
+	if ref != "" {
+		localImages["stackrox-operator-bundle:v"+operatorTag] = ref
 	}
 
 	return localImages, nil

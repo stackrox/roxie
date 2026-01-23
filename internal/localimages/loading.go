@@ -61,13 +61,11 @@ func LoadImagesToKind(ctx context.Context, images map[string]string, mainImageTa
 		imageRefs = append(imageRefs, fmt.Sprintf("quay.io/%s/stackrox-operator:%s", brandingOrg, mainImageTag))
 	}
 
-	// Operator bundle and index use v+operatorTag
-	operatorBundleImages := []string{"stackrox-operator-bundle", "stackrox-operator-index"}
-	for _, imageName := range operatorBundleImages {
-		imageKey := imageName + ":v" + operatorTag
-		if _, exists := images[imageKey]; exists {
-			imageRefs = append(imageRefs, fmt.Sprintf("quay.io/%s/%s:v%s", brandingOrg, imageName, operatorTag))
-		}
+	// Operator bundle uses v+operatorTag
+	// Note: We don't load operator-index as roxie doesn't use it in default (non-OLM) mode
+	bundleKey := "stackrox-operator-bundle:v" + operatorTag
+	if _, exists := images[bundleKey]; exists {
+		imageRefs = append(imageRefs, fmt.Sprintf("quay.io/%s/stackrox-operator-bundle:v%s", brandingOrg, operatorTag))
 	}
 
 	// Channel for images to process

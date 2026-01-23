@@ -25,8 +25,9 @@ import (
 
 const (
 	// totalRequiredImages is the number of images needed for a complete deployment
-	// (7 main images + 3 operator images).
-	totalRequiredImages = 10
+	// (7 main images + 2 operator images: stackrox-operator + stackrox-operator-bundle).
+	// Note: operator-index is not included as roxie doesn't use it in default (non-OLM) mode.
+	totalRequiredImages = 9
 
 	// skipLocalImagesEnvVar is the environment variable name to disable local image detection.
 	skipLocalImagesEnvVar = "ROXIE_SKIP_LOCAL_IMAGES"
