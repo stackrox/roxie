@@ -69,7 +69,7 @@ spec:
 
 	// Only have scanner-v4 locally (not separate indexer/matcher)
 	localImages := map[string]string{
-		"scanner-v4:4.0.0-local": "localhost/stackrox/scanner-v4:4.0.0-local",
+		"scanner-v4:4.0.0-local": "quay.io/rhacs-eng/scanner-v4:4.0.0-local",
 	}
 
 	err := patchCSVWithLocalImages(csvFile, "4.0.0-local", localImages)
@@ -169,13 +169,13 @@ spec:
 
 	// Create local images map with all images
 	localImages := map[string]string{
-		"stackrox-operator:4.0.0":       "localhost/stackrox/stackrox-operator:4.0.0",
-		"main:4.0.0":                    "localhost/stackrox/main:4.0.0",
-		"scanner:4.0.0":                 "localhost/stackrox/scanner:4.0.0",
-		"scanner-db:4.0.0":              "localhost/stackrox/scanner-db:4.0.0",
-		"central-db:4.0.0":              "localhost/stackrox/central-db:4.0.0",
-		"scanner-v4-db:4.0.0":           "localhost/stackrox/scanner-v4-db:4.0.0",
-		"scanner-v4-matcher:4.0.0":      "localhost/stackrox/scanner-v4-matcher:4.0.0",
+		"stackrox-operator:4.0.0":       "quay.io/rhacs-eng/stackrox-operator:4.0.0",
+		"main:4.0.0":                    "quay.io/rhacs-eng/main:4.0.0",
+		"scanner:4.0.0":                 "quay.io/rhacs-eng/scanner:4.0.0",
+		"scanner-db:4.0.0":              "quay.io/rhacs-eng/scanner-db:4.0.0",
+		"central-db:4.0.0":              "quay.io/rhacs-eng/central-db:4.0.0",
+		"scanner-v4-db:4.0.0":           "quay.io/rhacs-eng/scanner-v4-db:4.0.0",
+		"scanner-v4-matcher:4.0.0":      "quay.io/rhacs-eng/scanner-v4-matcher:4.0.0",
 	}
 
 	// Patch the CSV
@@ -274,8 +274,8 @@ spec:
 
 	// Only main and scanner are local
 	localImages := map[string]string{
-		"main:4.0.0":    "localhost/stackrox/main:4.0.0",
-		"scanner:4.0.0": "localhost/stackrox/scanner:4.0.0",
+		"main:4.0.0":    "quay.io/rhacs-eng/main:4.0.0",
+		"scanner:4.0.0": "quay.io/rhacs-eng/scanner:4.0.0",
 	}
 
 	err := patchCSVWithLocalImages(csvFile, "4.0.0", localImages)
@@ -419,7 +419,7 @@ func TestPatchCSVWithLocalImages_MalformedCSV(t *testing.T) {
 	}
 
 	localImages := map[string]string{
-		"main:4.0.0": "localhost/stackrox/main:4.0.0",
+		"main:4.0.0": "quay.io/rhacs-eng/main:4.0.0",
 	}
 
 	err := patchCSVWithLocalImages(csvFile, "4.0.0", localImages)
@@ -431,7 +431,7 @@ func TestPatchCSVWithLocalImages_MalformedCSV(t *testing.T) {
 // TestPatchCSVWithLocalImages_MissingFile tests error handling for missing CSV file
 func TestPatchCSVWithLocalImages_MissingFile(t *testing.T) {
 	localImages := map[string]string{
-		"main:4.0.0": "localhost/stackrox/main:4.0.0",
+		"main:4.0.0": "quay.io/rhacs-eng/main:4.0.0",
 	}
 
 	err := patchCSVWithLocalImages("/nonexistent/file.yaml", "4.0.0", localImages)
@@ -484,7 +484,7 @@ spec:
 	}
 
 	localImages := map[string]string{
-		"main:4.0.0": "localhost/stackrox/main:4.0.0",
+		"main:4.0.0": "quay.io/rhacs-eng/main:4.0.0",
 	}
 
 	err := patchCSVWithLocalImages(csvFile, "4.0.0", localImages)

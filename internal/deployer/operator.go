@@ -17,7 +17,6 @@ import (
 
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
-	"github.com/stackrox/roxie/internal/localimages"
 )
 
 const (
@@ -469,11 +468,10 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 	}
 
 	// Patch operator image if it exists in localImages
-	// We construct the quay.io path to avoid Kubernetes prepending docker.io/ to localhost/ references
+	// Use the actual detected image reference to handle fallback branding cases
 	operatorImageKey := "stackrox-operator:" + mainImageTag
-	if _, ok := localImages[operatorImageKey]; ok {
-		brandingOrg := localimages.GetBrandingOrganization()
-		container["image"] = fmt.Sprintf("quay.io/%s/stackrox-operator:%s", brandingOrg, mainImageTag)
+	if imageRef, ok := localImages[operatorImageKey]; ok {
+		container["image"] = imageRef
 	}
 
 	// Patch RELATED_IMAGE_* environment variables
@@ -482,16 +480,14 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 		return errors.New("CSV missing container env variables")
 	}
 
-	// Get branding organization for constructing image paths
-	brandingOrg := localimages.GetBrandingOrganization()
-
-	// Build a reverse map from image name to local image refs for quick lookup
-	imageNameToKey := make(map[string]string)
-	for imageKey := range localImages {
+	// Build a reverse map from image name to full image reference for quick lookup
+	// Map[imagename] -> "quay.io/org/imagename:tag"
+	imageNameToRef := make(map[string]string)
+	for imageKey, imageRef := range localImages {
 		// Extract image name from "imagename:tag"
 		parts := strings.SplitN(imageKey, ":", 2)
 		if len(parts) == 2 {
-			imageNameToKey[parts[0]] = imageKey
+			imageNameToRef[parts[0]] = imageRef
 		}
 	}
 
@@ -521,17 +517,10 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 			imageName = "scanner-v4"
 		}
 
-		// Check if we have this image locally
-		if imageKey, found := imageNameToKey[imageName]; found {
-			// Extract the tag from the imageKey
-			parts := strings.SplitN(imageKey, ":", 2)
-			if len(parts) != 2 {
-				continue
-			}
-			tag := parts[1]
-
-			// Construct quay.io path to avoid Kubernetes prepending docker.io/ to localhost/ references
-			envMap["value"] = fmt.Sprintf("quay.io/%s/%s:%s", brandingOrg, imageName, tag)
+		// Check if we have this image locally and use the actual detected reference
+		// This handles cases where an image was found at a fallback branding org
+		if imageRef, found := imageNameToRef[imageName]; found {
+			envMap["value"] = imageRef
 		}
 	}
 
