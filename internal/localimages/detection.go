@@ -6,21 +6,21 @@ import (
 )
 
 const (
-	localhostPrefix = "localhost/stackrox"
-	quayRegistry    = "quay.io"
+	quayRegistry = "quay.io"
 )
 
 // buildImageReferences returns candidate image references to check in podman.
+// Checks both branding organizations to handle cases where images don't support
+// ROX_PRODUCT_BRANDING (e.g., collector currently only builds with stackrox-io).
+//
 // Returns in priority order:
 // 1. quay.io/<current-branding-org>/<image>:<tag>
 // 2. quay.io/<other-branding-org>/<image>:<tag>
-// 3. localhost/stackrox/<image>:<tag>
 //
-// Checking both branding organizations handles cases where images don't support
-// ROX_PRODUCT_BRANDING (e.g., collector currently only builds with stackrox-io).
-//
-// Note: quay.io paths are checked BEFORE localhost paths because the CSV will
-// reference quay.io paths, and kind needs to store images with matching tags.
+// Only checks quay.io paths (not localhost/stackrox) because:
+// - The CSV will reference quay.io paths
+// - Kind needs to store images with tags matching the CSV
+// - Podman dual-tags images, so quay.io path will exist if image is built locally
 func buildImageReferences(imageName, tag string) []string {
 	currentOrg := GetBrandingOrganization()
 
@@ -35,7 +35,6 @@ func buildImageReferences(imageName, tag string) []string {
 	return []string{
 		fmt.Sprintf("%s/%s/%s:%s", quayRegistry, currentOrg, imageName, tag),
 		fmt.Sprintf("%s/%s/%s:%s", quayRegistry, fallbackOrg, imageName, tag),
-		fmt.Sprintf("%s/%s:%s", localhostPrefix, imageName, tag),
 	}
 }
 
