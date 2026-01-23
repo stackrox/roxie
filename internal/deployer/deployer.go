@@ -25,11 +25,12 @@ import (
 
 const (
 	// totalRequiredImages is the number of images needed for a complete deployment
-	// (8 main images + 2 operator images: stackrox-operator + stackrox-operator-bundle).
-	// Main images: main, scanner, scanner-db, scanner-v4, scanner-v4-db,
-	//              scanner-v4-indexer, scanner-v4-matcher, central-db
+	// (6 main images + 2 operator images: stackrox-operator + stackrox-operator-bundle).
+	// Main images: main, scanner, scanner-db, scanner-v4, scanner-v4-db, central-db
+	// Note: scanner-v4 is a single image that runs in different modes (indexer/matcher)
+	//       based on runtime configuration.
 	// Note: operator-index is not included as roxie doesn't use it in default (non-OLM) mode.
-	totalRequiredImages = 10
+	totalRequiredImages = 8
 
 	// skipLocalImagesEnvVar is the environment variable name to disable local image detection.
 	skipLocalImagesEnvVar = "ROXIE_SKIP_LOCAL_IMAGES"
