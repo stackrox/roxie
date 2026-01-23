@@ -19,6 +19,8 @@ func TestEnvVarToImageName(t *testing.T) {
 		{"RELATED_IMAGE_SCANNER_DB", "scanner-db"},
 		{"RELATED_IMAGE_SCANNER_V4_DB", "scanner-v4-db"},
 		{"RELATED_IMAGE_SCANNER_V4", "scanner-v4"},
+		{"RELATED_IMAGE_SCANNER_V4_INDEXER", "scanner-v4-indexer"},
+		{"RELATED_IMAGE_SCANNER_V4_MATCHER", "scanner-v4-matcher"},
 		{"RELATED_IMAGE_CENTRAL_DB", "central-db"},
 		{"RELATED_IMAGE_COLLECTOR", "collector"},
 	}
@@ -30,6 +32,95 @@ func TestEnvVarToImageName(t *testing.T) {
 				t.Errorf("envVarToImageName(%q) = %q, want %q", tt.envVar, result, tt.expected)
 			}
 		})
+	}
+}
+
+// TestPatchCSVWithLocalImages_ScannerV4Mapping tests that scanner-v4-indexer and scanner-v4-matcher
+// both get mapped to the scanner-v4 image
+func TestPatchCSVWithLocalImages_ScannerV4Mapping(t *testing.T) {
+	csvContent := `apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  name: rhacs-operator.v4.0.0
+spec:
+  install:
+    spec:
+      deployments:
+      - name: rhacs-operator-controller-manager
+        spec:
+          template:
+            spec:
+              containers:
+              - name: manager
+                image: quay.io/rhacs-eng/stackrox-operator:4.0.0
+                env:
+                - name: RELATED_IMAGE_SCANNER_V4
+                  value: quay.io/rhacs-eng/scanner-v4:4.0.x-nightly
+                - name: RELATED_IMAGE_SCANNER_V4_INDEXER
+                  value: quay.io/rhacs-eng/scanner-v4:4.0.x-nightly
+                - name: RELATED_IMAGE_SCANNER_V4_MATCHER
+                  value: quay.io/rhacs-eng/scanner-v4:4.0.x-nightly
+`
+
+	csvFile := filepath.Join(t.TempDir(), "test-csv.yaml")
+	if err := os.WriteFile(csvFile, []byte(csvContent), 0644); err != nil {
+		t.Fatalf("Failed to write test CSV: %v", err)
+	}
+
+	// Only have scanner-v4 locally (not separate indexer/matcher)
+	localImages := map[string]string{
+		"scanner-v4:4.0.0-local": "localhost/stackrox/scanner-v4:4.0.0-local",
+	}
+
+	err := patchCSVWithLocalImages(csvFile, "4.0.0-local", localImages)
+	if err != nil {
+		t.Fatalf("patchCSVWithLocalImages failed: %v", err)
+	}
+
+	// Read and parse the patched CSV
+	patchedContent, err := os.ReadFile(csvFile)
+	if err != nil {
+		t.Fatalf("Failed to read patched CSV: %v", err)
+	}
+
+	var csvData map[string]interface{}
+	if err := yaml.Unmarshal(patchedContent, &csvData); err != nil {
+		t.Fatalf("Failed to unmarshal patched CSV: %v", err)
+	}
+
+	// Navigate to env vars
+	spec := csvData["spec"].(map[string]interface{})
+	install := spec["install"].(map[string]interface{})
+	installSpec := install["spec"].(map[string]interface{})
+	deployments := installSpec["deployments"].([]interface{})
+	deployment := deployments[0].(map[string]interface{})
+	deploymentSpec := deployment["spec"].(map[string]interface{})
+	template := deploymentSpec["template"].(map[string]interface{})
+	podSpec := template["spec"].(map[string]interface{})
+	containers := podSpec["containers"].([]interface{})
+	container := containers[0].(map[string]interface{})
+	envVars := container["env"].([]interface{})
+
+	// All three env vars should be patched to use scanner-v4:4.0.0-local
+	expectedValue := "quay.io/rhacs-eng/scanner-v4:4.0.0-local"
+	scannerV4EnvVars := []string{
+		"RELATED_IMAGE_SCANNER_V4",
+		"RELATED_IMAGE_SCANNER_V4_INDEXER",
+		"RELATED_IMAGE_SCANNER_V4_MATCHER",
+	}
+
+	for _, envVar := range envVars {
+		envMap := envVar.(map[string]interface{})
+		name := envMap["name"].(string)
+
+		for _, expectedName := range scannerV4EnvVars {
+			if name == expectedName {
+				value := envMap["value"].(string)
+				if value != expectedValue {
+					t.Errorf("%s not patched correctly. Got: %s, Expected: %s", name, value, expectedValue)
+				}
+			}
+		}
 	}
 }
 

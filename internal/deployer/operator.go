@@ -515,6 +515,12 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 		// e.g., RELATED_IMAGE_SCANNER_V4_DB → scanner-v4-db
 		imageName := envVarToImageName(envName)
 
+		// Special case: scanner-v4-indexer and scanner-v4-matcher both use the scanner-v4 image
+		// The same image runs in different modes based on runtime configuration
+		if imageName == "scanner-v4-indexer" || imageName == "scanner-v4-matcher" {
+			imageName = "scanner-v4"
+		}
+
 		// Check if we have this image locally
 		if imageKey, found := imageNameToKey[imageName]; found {
 			// Extract the tag from the imageKey
