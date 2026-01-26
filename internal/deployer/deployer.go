@@ -135,8 +135,8 @@ type Deployer struct {
 	dockerCreds            *dockerauth.Credentials
 	clusterResourceKinds   map[string]struct{}
 	// New fields for local image support
-	localImages            map[string]string  // map of image names to local references
-	usingLocalImages       bool               // true if any local images were found and loaded
+	localImages      map[string]string // map of image names to local references
+	usingLocalImages bool              // true if any local images were found and loaded
 }
 
 type ResourceKindWithName struct {

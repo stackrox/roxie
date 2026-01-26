@@ -169,13 +169,13 @@ spec:
 
 	// Create local images map with all images
 	localImages := map[string]string{
-		"stackrox-operator:4.0.0":       "quay.io/rhacs-eng/stackrox-operator:4.0.0",
-		"main:4.0.0":                    "quay.io/rhacs-eng/main:4.0.0",
-		"scanner:4.0.0":                 "quay.io/rhacs-eng/scanner:4.0.0",
-		"scanner-db:4.0.0":              "quay.io/rhacs-eng/scanner-db:4.0.0",
-		"central-db:4.0.0":              "quay.io/rhacs-eng/central-db:4.0.0",
-		"scanner-v4-db:4.0.0":           "quay.io/rhacs-eng/scanner-v4-db:4.0.0",
-		"scanner-v4:4.0.0":              "quay.io/rhacs-eng/scanner-v4:4.0.0",
+		"stackrox-operator:4.0.0": "quay.io/rhacs-eng/stackrox-operator:4.0.0",
+		"main:4.0.0":              "quay.io/rhacs-eng/main:4.0.0",
+		"scanner:4.0.0":           "quay.io/rhacs-eng/scanner:4.0.0",
+		"scanner-db:4.0.0":        "quay.io/rhacs-eng/scanner-db:4.0.0",
+		"central-db:4.0.0":        "quay.io/rhacs-eng/central-db:4.0.0",
+		"scanner-v4-db:4.0.0":     "quay.io/rhacs-eng/scanner-v4-db:4.0.0",
+		"scanner-v4:4.0.0":        "quay.io/rhacs-eng/scanner-v4:4.0.0",
 	}
 
 	// Patch the CSV
@@ -217,14 +217,14 @@ spec:
 	// Verify RELATED_IMAGE_* env vars were patched with quay.io paths
 	envVars := container["env"].([]interface{})
 	expectedEnvVars := map[string]string{
-		"RELATED_IMAGE_MAIN":           "quay.io/rhacs-eng/main:4.0.0",
-		"RELATED_IMAGE_SCANNER":        "quay.io/rhacs-eng/scanner:4.0.0",
-		"RELATED_IMAGE_SCANNER_DB":     "quay.io/rhacs-eng/scanner-db:4.0.0",
-		"RELATED_IMAGE_CENTRAL_DB":     "quay.io/rhacs-eng/central-db:4.0.0",
-		"RELATED_IMAGE_SCANNER_V4_DB":  "quay.io/rhacs-eng/scanner-v4-db:4.0.0",
-		"RELATED_IMAGE_SCANNER_V4":     "quay.io/rhacs-eng/scanner-v4:4.0.0",
-		"RELATED_IMAGE_COLLECTOR":      "quay.io/rhacs-eng/collector:4.0.0", // Not in local images, stays unchanged
-		"OTHER_ENV":                    "some-value",
+		"RELATED_IMAGE_MAIN":          "quay.io/rhacs-eng/main:4.0.0",
+		"RELATED_IMAGE_SCANNER":       "quay.io/rhacs-eng/scanner:4.0.0",
+		"RELATED_IMAGE_SCANNER_DB":    "quay.io/rhacs-eng/scanner-db:4.0.0",
+		"RELATED_IMAGE_CENTRAL_DB":    "quay.io/rhacs-eng/central-db:4.0.0",
+		"RELATED_IMAGE_SCANNER_V4_DB": "quay.io/rhacs-eng/scanner-v4-db:4.0.0",
+		"RELATED_IMAGE_SCANNER_V4":    "quay.io/rhacs-eng/scanner-v4:4.0.0",
+		"RELATED_IMAGE_COLLECTOR":     "quay.io/rhacs-eng/collector:4.0.0", // Not in local images, stays unchanged
+		"OTHER_ENV":                   "some-value",
 	}
 
 	for _, envVar := range envVars {
