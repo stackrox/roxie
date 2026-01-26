@@ -175,7 +175,7 @@ spec:
 		"scanner-db:4.0.0":              "quay.io/rhacs-eng/scanner-db:4.0.0",
 		"central-db:4.0.0":              "quay.io/rhacs-eng/central-db:4.0.0",
 		"scanner-v4-db:4.0.0":           "quay.io/rhacs-eng/scanner-v4-db:4.0.0",
-		"scanner-v4-matcher:4.0.0":      "quay.io/rhacs-eng/scanner-v4-matcher:4.0.0",
+		"scanner-v4:4.0.0":              "quay.io/rhacs-eng/scanner-v4:4.0.0",
 	}
 
 	// Patch the CSV
@@ -222,7 +222,7 @@ spec:
 		"RELATED_IMAGE_SCANNER_DB":     "quay.io/rhacs-eng/scanner-db:4.0.0",
 		"RELATED_IMAGE_CENTRAL_DB":     "quay.io/rhacs-eng/central-db:4.0.0",
 		"RELATED_IMAGE_SCANNER_V4_DB":  "quay.io/rhacs-eng/scanner-v4-db:4.0.0",
-		"RELATED_IMAGE_SCANNER_V4":     "quay.io/rhacs-eng/scanner-v4-matcher:4.0.0",
+		"RELATED_IMAGE_SCANNER_V4":     "quay.io/rhacs-eng/scanner-v4:4.0.0",
 		"RELATED_IMAGE_COLLECTOR":      "quay.io/rhacs-eng/collector:4.0.0", // Not in local images, stays unchanged
 		"OTHER_ENV":                    "some-value",
 	}

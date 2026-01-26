@@ -13,7 +13,6 @@ func IsKindCluster() bool {
 }
 
 // isKindContext checks if the given context name indicates a kind cluster.
-// Exported for testing.
 func isKindContext(contextName string) bool {
 	if contextName == "" {
 		return false
@@ -27,8 +26,8 @@ func isKindContext(contextName string) bool {
 // For context "kind", returns "kind".
 func ExtractKindClusterName(contextName string) string {
 	// Remove "kind-" prefix if present
-	if len(contextName) > 5 && strings.HasPrefix(strings.ToLower(contextName), "kind-") {
-		return contextName[5:]
+	if strings.HasPrefix(strings.ToLower(contextName), "kind-") {
+		return contextName[len("kind-"):]
 	}
 	// If just "kind", return as-is
 	return contextName

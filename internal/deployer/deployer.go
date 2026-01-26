@@ -531,7 +531,7 @@ func (d *Deployer) detectAndLoadLocalImages(ctx context.Context) error {
 		return nil
 	}
 
-	// Calculate total images needed (7 main + 3 operator = 10)
+	// Calculate total images needed (7 main + 2 operator = 9)
 	totalExpected := totalRequiredImages
 	d.logger.Infof("Found %d/%d images locally in podman", len(localImages), totalExpected)
 
@@ -557,7 +557,7 @@ func (d *Deployer) shouldSkipCredentialVerification() bool {
 	}
 
 	// If using some local images but not all, don't skip (need creds for remote pulls)
-	// Total expected: 7 main + 3 operator = 10
+	// Total expected: 7 main + 2 operator = 9
 	totalExpected := totalRequiredImages
 	if len(d.localImages) < totalExpected {
 		d.logger.Dimf("Using %d/%d local images, remaining images will be pulled from quay.io",

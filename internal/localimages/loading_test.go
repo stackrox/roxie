@@ -36,9 +36,9 @@ func TestBuildKindLoadCommand(t *testing.T) {
 	}{
 		{
 			name:        "basic load",
-			imageRef:    "localhost/stackrox/main:4.10.0",
+			imageRef:    "quay.io/rhacs-eng/main:4.10.0",
 			clusterName: "acs",
-			expected:    []string{"kind", "load", "docker-image", "localhost/stackrox/main:4.10.0", "-n", "acs"},
+			expected:    []string{"kind", "load", "docker-image", "quay.io/rhacs-eng/main:4.10.0", "-n", "acs"},
 		},
 	}
 
