@@ -106,16 +106,13 @@ When deploying to a kind cluster, roxie:
 
 - kind cluster (context name must start with "kind")
 - podman with images built locally
-- Images tagged with either:
-  - `localhost/stackrox/<image>:<tag>`
-  - `quay.io/<branding-org>/<image>:<tag>`
+- Images tagged with `quay.io/<branding-org>/<image>:<tag>`
 
 ### Supported Images
 
-- main
+- main, central-db
 - scanner, scanner-db
 - scanner-v4-db, scanner-v4-indexer, scanner-v4-matcher
-- central-db
 - stackrox-operator-bundle
 - stackrox-operator-index
 
@@ -136,7 +133,7 @@ make image
 
 # Deploy to kind - roxie automatically uses local images
 cd /path/to/roxie
-./roxie deploy both
+./roxie deploy
 ```
 
 ### Behavior

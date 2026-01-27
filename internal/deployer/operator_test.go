@@ -72,7 +72,7 @@ spec:
 		"scanner-v4:4.0.0-local": "quay.io/rhacs-eng/scanner-v4:4.0.0-local",
 	}
 
-	err := patchCSVWithLocalImages(csvFile, "4.0.0-local", localImages)
+	err := patchCSVWithLocalImages(csvFile, "4.0.0-local", "4.0.0", localImages)
 	if err != nil {
 		t.Fatalf("patchCSVWithLocalImages failed: %v", err)
 	}
@@ -179,7 +179,7 @@ spec:
 	}
 
 	// Patch the CSV
-	err := patchCSVWithLocalImages(csvFile, "4.0.0", localImages)
+	err := patchCSVWithLocalImages(csvFile, "4.0.0", "4.0.0", localImages)
 	if err != nil {
 		t.Fatalf("patchCSVWithLocalImages failed: %v", err)
 	}
@@ -278,7 +278,7 @@ spec:
 		"scanner:4.0.0": "quay.io/rhacs-eng/scanner:4.0.0",
 	}
 
-	err := patchCSVWithLocalImages(csvFile, "4.0.0", localImages)
+	err := patchCSVWithLocalImages(csvFile, "4.0.0", "4.0.0", localImages)
 	if err != nil {
 		t.Fatalf("patchCSVWithLocalImages failed: %v", err)
 	}
@@ -366,7 +366,7 @@ spec:
 	// Empty local images map
 	localImages := map[string]string{}
 
-	err := patchCSVWithLocalImages(csvFile, "4.0.0", localImages)
+	err := patchCSVWithLocalImages(csvFile, "4.0.0", "4.0.0", localImages)
 	if err != nil {
 		t.Fatalf("patchCSVWithLocalImages failed: %v", err)
 	}
@@ -422,7 +422,7 @@ func TestPatchCSVWithLocalImages_MalformedCSV(t *testing.T) {
 		"main:4.0.0": "quay.io/rhacs-eng/main:4.0.0",
 	}
 
-	err := patchCSVWithLocalImages(csvFile, "4.0.0", localImages)
+	err := patchCSVWithLocalImages(csvFile, "4.0.0", "4.0.0", localImages)
 	if err == nil {
 		t.Error("Expected error for malformed CSV, got nil")
 	}
@@ -434,7 +434,7 @@ func TestPatchCSVWithLocalImages_MissingFile(t *testing.T) {
 		"main:4.0.0": "quay.io/rhacs-eng/main:4.0.0",
 	}
 
-	err := patchCSVWithLocalImages("/nonexistent/file.yaml", "4.0.0", localImages)
+	err := patchCSVWithLocalImages("/nonexistent/file.yaml", "4.0.0", "4.0.0", localImages)
 	if err == nil {
 		t.Error("Expected error for missing file, got nil")
 	}
@@ -487,7 +487,7 @@ spec:
 		"main:4.0.0": "quay.io/rhacs-eng/main:4.0.0",
 	}
 
-	err := patchCSVWithLocalImages(csvFile, "4.0.0", localImages)
+	err := patchCSVWithLocalImages(csvFile, "4.0.0", "4.0.0", localImages)
 	if err != nil {
 		t.Fatalf("patchCSVWithLocalImages failed: %v", err)
 	}

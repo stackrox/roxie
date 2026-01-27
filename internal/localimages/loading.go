@@ -9,8 +9,8 @@ import (
 	"github.com/stackrox/roxie/internal/logger"
 )
 
-// LoadImageToKind loads a single image into a kind cluster.
-func LoadImageToKind(ctx context.Context, imageRef, clusterName string, log *logger.Logger) error {
+// loadImageToKind loads a single image into a kind cluster.
+func loadImageToKind(ctx context.Context, imageRef, clusterName string, log *logger.Logger) error {
 	log.Dimf("Loading %s into kind cluster %s", imageRef, clusterName)
 
 	cmd := exec.CommandContext(ctx, "kind", "load", "docker-image", imageRef, "-n", clusterName)
@@ -20,11 +20,6 @@ func LoadImageToKind(ctx context.Context, imageRef, clusterName string, log *log
 	}
 
 	return nil
-}
-
-// buildKindLoadCommand builds the kind load command arguments.
-func buildKindLoadCommand(imageRef, clusterName string) []string {
-	return []string{"kind", "load", "docker-image", imageRef, "-n", clusterName}
 }
 
 // LoadImagesToKind loads multiple images into a kind cluster in parallel.
@@ -44,29 +39,11 @@ func LoadImagesToKind(ctx context.Context, images map[string]string, mainImageTa
 	// Use the actual references found during detection (which may be from fallback branding)
 	imageRefs := make([]string, 0, len(images))
 
-	// Main images and central-db use mainImageTag
-	// Note: scanner-v4 is a single image that runs in different modes (indexer/matcher)
-	// based on runtime configuration, not separate images.
-	mainImages := []string{"main", "scanner", "scanner-db", "scanner-v4",
-		"scanner-v4-db", "central-db", "collector"}
-	for _, imageName := range mainImages {
-		imageKey := imageName + ":" + mainImageTag
+	for _, img := range getExpectedImages(mainImageTag, operatorTag) {
+		imageKey := img.name + ":" + img.tag
 		if imageRef, exists := images[imageKey]; exists {
 			imageRefs = append(imageRefs, imageRef)
 		}
-	}
-
-	// stackrox-operator uses mainImageTag (no v prefix)
-	operatorKey := "stackrox-operator:" + mainImageTag
-	if imageRef, exists := images[operatorKey]; exists {
-		imageRefs = append(imageRefs, imageRef)
-	}
-
-	// Operator bundle uses v+operatorTag
-	// Note: We don't load operator-index as roxie doesn't use it in default (non-OLM) mode
-	bundleKey := "stackrox-operator-bundle:v" + operatorTag
-	if imageRef, exists := images[bundleKey]; exists {
-		imageRefs = append(imageRefs, imageRef)
 	}
 
 	// Channel for images to process
@@ -88,7 +65,7 @@ func LoadImagesToKind(ctx context.Context, images map[string]string, mainImageTa
 		go func() {
 			defer wg.Done()
 			for imageRef := range imageChan {
-				if err := LoadImageToKind(ctx, imageRef, clusterName, log); err != nil {
+				if err := loadImageToKind(ctx, imageRef, clusterName, log); err != nil {
 					errChan <- err
 					return
 				}

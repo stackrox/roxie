@@ -1,7 +1,6 @@
 package localimages
 
 import (
-	"os/exec"
 	"testing"
 )
 
@@ -52,19 +51,3 @@ func TestBuildImageReferences(t *testing.T) {
 	}
 }
 
-// Add to detection_test.go
-func TestCheckLocalImage_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	// This test requires podman to be available
-	cmd := exec.Command("podman", "version")
-	if err := cmd.Run(); err != nil {
-		t.Skip("podman not available, skipping integration test")
-	}
-
-	// Try to find a known image (alpine is commonly available)
-	// This is just to test the mechanism works
-	t.Log("Integration test - checking if podman command works")
-}

@@ -25,6 +25,43 @@ const (
 	operatorDeploymentName  = "rhacs-operator-controller-manager"
 )
 
+// clusterServiceVersion represents the relevant structure of a ClusterServiceVersion YAML
+// that we need to patch for local image references. Uses inline maps to preserve
+// all fields not explicitly defined.
+type clusterServiceVersion struct {
+	Spec struct {
+		Install struct {
+			Spec struct {
+				Deployments []struct {
+					Spec struct {
+						Template struct {
+							Spec struct {
+								Containers []struct {
+									Image string `yaml:"image"`
+									Env   []struct {
+										Name        string                 `yaml:"name"`
+										Value       string                 `yaml:"value"`
+										ExtraFields map[string]interface{} `yaml:",inline"`
+									} `yaml:"env"`
+									ExtraFields map[string]interface{} `yaml:",inline"`
+								} `yaml:"containers"`
+								ExtraFields map[string]interface{} `yaml:",inline"`
+							} `yaml:"spec"`
+							ExtraFields map[string]interface{} `yaml:",inline"`
+						} `yaml:"template"`
+						ExtraFields map[string]interface{} `yaml:",inline"`
+					} `yaml:"spec"`
+					ExtraFields map[string]interface{} `yaml:",inline"`
+				} `yaml:"deployments"`
+				ExtraFields map[string]interface{} `yaml:",inline"`
+			} `yaml:"spec"`
+			ExtraFields map[string]interface{} `yaml:",inline"`
+		} `yaml:"install"`
+		ExtraFields map[string]interface{} `yaml:",inline"`
+	} `yaml:"spec"`
+	ExtraFields map[string]interface{} `yaml:",inline"`
+}
+
 // deployOperator deploys the RHACS operator
 func (d *Deployer) deployOperator(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.operatorTag)
@@ -331,7 +368,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	// Patch CSV with local image references if using local images
 	if d.usingLocalImages {
 		d.logger.Info("Patching CSV with local image references")
-		if err := patchCSVWithLocalImages(csvFile, d.mainImageTag, d.localImages); err != nil {
+		if err := patchCSVWithLocalImages(csvFile, d.mainImageTag, d.operatorTag, d.localImages); err != nil {
 			return fmt.Errorf("failed to patch CSV with local images: %w", err)
 		}
 	}
@@ -383,9 +420,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 // envVarToImageName converts a RELATED_IMAGE_* environment variable name to an image name.
 // e.g., RELATED_IMAGE_SCANNER_V4_DB → scanner-v4-db
 func envVarToImageName(envVar string) string {
-	// Remove RELATED_IMAGE_ prefix
 	name := strings.TrimPrefix(envVar, "RELATED_IMAGE_")
-	// Convert to lowercase and replace underscores with hyphens
 	name = strings.ToLower(name)
 	name = strings.ReplaceAll(name, "_", "-")
 	return name
@@ -398,86 +433,34 @@ func envVarToImageName(envVar string) string {
 //
 // The function only patches images that exist in the localImages map, leaving
 // other image references unchanged.
-func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[string]string) error {
-	// Return early if no local images to patch
-	if len(localImages) == 0 {
-		return nil
-	}
-
+func patchCSVWithLocalImages(csvFile, mainImageTag, operatorTag string, localImages map[string]string) error {
 	// Read the CSV file
 	content, err := os.ReadFile(csvFile)
 	if err != nil {
 		return fmt.Errorf("failed to read CSV file: %w", err)
 	}
 
-	// Unmarshal to map[string]interface{}
-	var csvData map[string]interface{}
+	var csvData clusterServiceVersion
 	if err := yaml.Unmarshal(content, &csvData); err != nil {
 		return fmt.Errorf("failed to parse CSV YAML: %w", err)
 	}
 
-	// Navigate to the container spec
-	spec, ok := csvData["spec"].(map[string]interface{})
-	if !ok {
-		return errors.New("CSV missing 'spec' field")
+	// Validate structure
+	if len(csvData.Spec.Install.Spec.Deployments) == 0 {
+		return errors.New("CSV missing deployments")
+	}
+	if len(csvData.Spec.Install.Spec.Deployments[0].Spec.Template.Spec.Containers) == 0 {
+		return errors.New("CSV missing containers")
 	}
 
-	install, ok := spec["install"].(map[string]interface{})
-	if !ok {
-		return errors.New("CSV missing 'spec.install' field")
-	}
-
-	installSpec, ok := install["spec"].(map[string]interface{})
-	if !ok {
-		return errors.New("CSV missing 'spec.install.spec' field")
-	}
-
-	deployments, ok := installSpec["deployments"].([]interface{})
-	if !ok || len(deployments) == 0 {
-		return errors.New("CSV missing 'spec.install.spec.deployments' field or deployments array is empty")
-	}
-
-	deployment, ok := deployments[0].(map[string]interface{})
-	if !ok {
-		return errors.New("invalid deployment structure in CSV")
-	}
-
-	deploymentSpec, ok := deployment["spec"].(map[string]interface{})
-	if !ok {
-		return errors.New("CSV missing deployment spec")
-	}
-
-	template, ok := deploymentSpec["template"].(map[string]interface{})
-	if !ok {
-		return errors.New("CSV missing deployment template")
-	}
-
-	podSpec, ok := template["spec"].(map[string]interface{})
-	if !ok {
-		return errors.New("CSV missing pod spec")
-	}
-
-	containers, ok := podSpec["containers"].([]interface{})
-	if !ok || len(containers) == 0 {
-		return errors.New("CSV missing containers or containers array is empty")
-	}
-
-	container, ok := containers[0].(map[string]interface{})
-	if !ok {
-		return errors.New("invalid container structure in CSV")
-	}
+	// Get reference to the first container
+	container := &csvData.Spec.Install.Spec.Deployments[0].Spec.Template.Spec.Containers[0]
 
 	// Patch operator image if it exists in localImages
 	// Use the actual detected image reference to handle fallback branding cases
-	operatorImageKey := "stackrox-operator:" + mainImageTag
+	operatorImageKey := "stackrox-operator:" + operatorTag
 	if imageRef, ok := localImages[operatorImageKey]; ok {
-		container["image"] = imageRef
-	}
-
-	// Patch RELATED_IMAGE_* environment variables
-	envVars, ok := container["env"].([]interface{})
-	if !ok {
-		return errors.New("CSV missing container env variables")
+		container.Image = imageRef
 	}
 
 	// Build a reverse map from image name to full image reference for quick lookup
@@ -491,25 +474,18 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 		}
 	}
 
-	for _, envVar := range envVars {
-		envMap, ok := envVar.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		envName, ok := envMap["name"].(string)
-		if !ok {
-			continue
-		}
+	// Patch RELATED_IMAGE_* environment variables
+	for i := range container.Env {
+		envVar := &container.Env[i]
 
 		// Check if this is a RELATED_IMAGE_* env var
-		if !strings.HasPrefix(envName, "RELATED_IMAGE_") {
+		if !strings.HasPrefix(envVar.Name, "RELATED_IMAGE_") {
 			continue
 		}
 
 		// Convert RELATED_IMAGE_FOO_BAR to foo-bar
 		// e.g., RELATED_IMAGE_SCANNER_V4_DB → scanner-v4-db
-		imageName := envVarToImageName(envName)
+		imageName := envVarToImageName(envVar.Name)
 
 		// Special case: scanner-v4-indexer and scanner-v4-matcher both use the scanner-v4 image
 		// The same image runs in different modes based on runtime configuration
@@ -520,7 +496,7 @@ func patchCSVWithLocalImages(csvFile, mainImageTag string, localImages map[strin
 		// Check if we have this image locally and use the actual detected reference
 		// This handles cases where an image was found at a fallback branding org
 		if imageRef, found := imageNameToRef[imageName]; found {
-			envMap["value"] = imageRef
+			envVar.Value = imageRef
 		}
 	}
 

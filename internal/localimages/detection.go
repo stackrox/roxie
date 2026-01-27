@@ -9,22 +9,47 @@ const (
 	quayRegistry = "quay.io"
 )
 
+// mainImageNames lists the core product images that use mainTag
+var mainImageNames = []string{
+	"main",
+	"scanner",
+	"scanner-db",
+	"scanner-v4",
+	"scanner-v4-db",
+	"central-db",
+	"collector",
+}
+
+// imageSpec represents an image name and its tag
+type imageSpec struct {
+	name string
+	tag  string
+}
+
+// getExpectedImages returns all expected images with their respective tags.
+// Main images use mainTag, while operator images use operatorTag.
+func getExpectedImages(mainTag, operatorTag string) []imageSpec {
+	specs := make([]imageSpec, 0, len(mainImageNames)+2)
+
+	// Main images use mainTag
+	for _, name := range mainImageNames {
+		specs = append(specs, imageSpec{name: name, tag: mainTag})
+	}
+
+	// Operator images use operatorTag (with and without v prefix)
+	specs = append(specs, imageSpec{name: "stackrox-operator", tag: operatorTag})
+	specs = append(specs, imageSpec{name: "stackrox-operator-bundle", tag: "v" + operatorTag})
+
+	return specs
+}
+
 // buildImageReferences returns candidate image references to check in podman.
 // Checks both branding organizations to handle cases where images don't support
 // ROX_PRODUCT_BRANDING (e.g., collector currently only builds with stackrox-io).
-//
-// Returns in priority order:
-// 1. quay.io/<current-branding-org>/<image>:<tag>
-// 2. quay.io/<other-branding-org>/<image>:<tag>
-//
-// Only checks quay.io paths (not localhost/stackrox) because:
-// - The CSV will reference quay.io paths
-// - Kind needs to store images with tags matching the CSV
-// - Podman dual-tags images, so quay.io path will exist if image is built locally
 func buildImageReferences(imageName, tag string) []string {
 	currentOrg := GetBrandingOrganization()
 
-	// Determine the fallback organization (the one we're NOT using)
+	// Determine the fallback organization
 	var fallbackOrg string
 	if currentOrg == "rhacs-eng" {
 		fallbackOrg = "stackrox-io"
@@ -38,26 +63,25 @@ func buildImageReferences(imageName, tag string) []string {
 	}
 }
 
-// CheckLocalImage checks if an image exists in podman.
-// Returns the full image reference if found, empty string if not found.
-func CheckLocalImage(imageName, tag string) (string, error) {
+// checkLocalImage checks if an image exists in podman.
+// Returns the full image reference and true if found, empty string and false if not found.
+func checkLocalImage(imageName, tag string) (string, bool, error) {
 	refs := buildImageReferences(imageName, tag)
 
 	for _, ref := range refs {
 		exists, err := podmanImageExists(ref)
 		if err != nil {
-			return "", fmt.Errorf("checking podman for %s: %w", ref, err)
+			return "", false, fmt.Errorf("checking podman for %s: %w", ref, err)
 		}
 		if exists {
-			return ref, nil
+			return ref, true, nil
 		}
 	}
 
-	return "", nil
+	return "", false, nil
 }
 
-// podmanImageExists checks if an image exists in podman using 'podman image exists'.
-// Returns true if the image exists (exit code 0), false otherwise.
+// checks if an image exists in podman
 func podmanImageExists(imageRef string) (bool, error) {
 	cmd := exec.Command("podman", "image", "exists", imageRef)
 	err := cmd.Run()
@@ -72,49 +96,19 @@ func podmanImageExists(imageRef string) (bool, error) {
 	return true, nil
 }
 
-// CheckImages checks which images from the set exist locally.
+// CheckImages checks which images from the overall set exist locally.
 // Returns a map of image names to their full references.
 func CheckImages(mainTag, operatorTag string) (map[string]string, error) {
-	images := []string{
-		"main",
-		"scanner",
-		"scanner-db",
-		"scanner-v4",
-		"scanner-v4-db",
-		"central-db",
-		"collector",
-	}
-
 	localImages := make(map[string]string)
 
-	// Check main images
-	for _, imageName := range images {
-		ref, err := CheckLocalImage(imageName, mainTag)
+	for _, img := range getExpectedImages(mainTag, operatorTag) {
+		ref, found, err := checkLocalImage(img.name, img.tag)
 		if err != nil {
-			return nil, fmt.Errorf("checking %s:%s: %w", imageName, mainTag, err)
+			return nil, fmt.Errorf("checking %s:%s: %w", img.name, img.tag, err)
 		}
-		if ref != "" {
-			localImages[imageName+":"+mainTag] = ref
+		if found {
+			localImages[img.name+":"+img.tag] = ref
 		}
-	}
-
-	// Check stackrox-operator with main tag (no v prefix)
-	ref, err := CheckLocalImage("stackrox-operator", mainTag)
-	if err != nil {
-		return nil, fmt.Errorf("checking stackrox-operator:%s: %w", mainTag, err)
-	}
-	if ref != "" {
-		localImages["stackrox-operator:"+mainTag] = ref
-	}
-
-	// Check operator bundle image with v prefix
-	// Note: We don't check operator-index as roxie doesn't use it in default (non-OLM) mode
-	ref, err = CheckLocalImage("stackrox-operator-bundle", "v"+operatorTag)
-	if err != nil {
-		return nil, fmt.Errorf("checking stackrox-operator-bundle:v%s: %w", operatorTag, err)
-	}
-	if ref != "" {
-		localImages["stackrox-operator-bundle:v"+operatorTag] = ref
 	}
 
 	return localImages, nil

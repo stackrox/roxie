@@ -180,7 +180,7 @@ func (d *Deployer) prepareNamespace(ctx context.Context, namespace string) error
 	}
 
 	if env.GetCurrentClusterType() != env.InfraOpenShift4 {
-		if !d.shouldSkipImagePullSecrets() {
+		if !d.hasAllImagesLocally() {
 			if err := d.ensurePullSecretExists(ctx, namespace); err != nil {
 				return fmt.Errorf("ensuring image pull secret exists: %w", err)
 			}

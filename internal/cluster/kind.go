@@ -21,10 +21,10 @@ func isKindContext(contextName string) bool {
 	return strings.HasPrefix(strings.ToLower(contextName), "kind")
 }
 
-// ExtractKindClusterName extracts the cluster name from a kind context.
+// extractKindClusterName extracts the cluster name from a kind context.
 // For context "kind-acs", returns "acs".
 // For context "kind", returns "kind".
-func ExtractKindClusterName(contextName string) string {
+func extractKindClusterName(contextName string) string {
 	// Remove "kind-" prefix if present
 	if strings.HasPrefix(strings.ToLower(contextName), "kind-") {
 		return contextName[len("kind-"):]
@@ -39,5 +39,5 @@ func GetKindClusterName() string {
 	if !IsKindCluster() {
 		return ""
 	}
-	return ExtractKindClusterName(env.GetCurrentContext())
+	return extractKindClusterName(env.GetCurrentContext())
 }

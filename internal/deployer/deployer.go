@@ -27,9 +27,6 @@ const (
 	// totalRequiredImages is the number of images needed for a complete deployment
 	// (7 main images + 2 operator images: stackrox-operator + stackrox-operator-bundle).
 	// Main images: main, scanner, scanner-db, scanner-v4, scanner-v4-db, central-db, collector
-	// Note: scanner-v4 is a single image that runs in different modes (indexer/matcher)
-	//       based on runtime configuration.
-	// Note: operator-index is not included as roxie doesn't use it in default (non-OLM) mode.
 	totalRequiredImages = 9
 
 	// skipLocalImagesEnvVar is the environment variable name to disable local image detection.
@@ -134,9 +131,8 @@ type Deployer struct {
 	earlyReadiness         bool
 	dockerCreds            *dockerauth.Credentials
 	clusterResourceKinds   map[string]struct{}
-	// New fields for local image support
-	localImages      map[string]string // map of image names to local references
-	usingLocalImages bool              // true if any local images were found and loaded
+	localImages            map[string]string // map of image names to local references
+	usingLocalImages       bool
 }
 
 type ResourceKindWithName struct {
@@ -445,7 +441,7 @@ func (d *Deployer) Deploy(ctx context.Context, component, resources, exposure st
 
 	// Prepare and verify credentials early to fail fast
 	// Skip if all images are local
-	if !d.shouldSkipCredentialVerification() {
+	if !d.hasAllImagesLocally() {
 		if err := d.prepareCredentials(); err != nil {
 			return fmt.Errorf("failed to prepare credentials: %w", err)
 		}
@@ -491,19 +487,14 @@ func (d *Deployer) prepareCredentials() error {
 }
 
 // detectAndLoadLocalImages attempts to detect and load locally-available container
-// images into the kind cluster. It performs the following steps:
-//  1. Checks if ROXIE_SKIP_LOCAL_IMAGES environment variable is set
-//  2. Verifies the target cluster is a kind cluster
-//  3. Queries podman for locally available images
-//  4. Loads discovered images into the kind cluster
+// images into the kind cluster.
 //
 // This method gracefully degrades - if podman is unavailable or no images are found,
 // it returns nil and allows deployment to proceed with remote image pulls.
 // Returns an error only if image loading into kind fails after images are detected.
 func (d *Deployer) detectAndLoadLocalImages(ctx context.Context) error {
-	// Check if ROXIE_SKIP_LOCAL_IMAGES is set
 	if os.Getenv(skipLocalImagesEnvVar) == "true" {
-		d.logger.Dim("ROXIE_SKIP_LOCAL_IMAGES is set, skipping local image detection")
+		d.logger.Dim(skipLocalImagesEnvVar + " is set, skipping local image detection")
 		return nil
 	}
 
@@ -520,7 +511,6 @@ func (d *Deployer) detectAndLoadLocalImages(ctx context.Context) error {
 	d.logger.Dim("Checking for local images in podman...")
 	localImages, err := localimages.CheckImages(d.mainImageTag, d.operatorTag)
 	if err != nil {
-		// If podman is not available, gracefully fall back
 		d.logger.Dimf("Could not check for local images: %v", err)
 		d.logger.Dim("Falling back to quay.io")
 		return nil
@@ -531,13 +521,11 @@ func (d *Deployer) detectAndLoadLocalImages(ctx context.Context) error {
 		return nil
 	}
 
-	// Calculate total images needed (7 main + 2 operator = 9)
-	totalExpected := totalRequiredImages
-	d.logger.Infof("Found %d/%d images locally in podman", len(localImages), totalExpected)
+	d.logger.Infof("Found %d/%d images locally in podman", len(localImages), totalRequiredImages)
 
 	// Load images into kind using quay.io paths
 	if err := localimages.LoadImagesToKind(ctx, localImages, d.mainImageTag, d.operatorTag, kindClusterName, d.logger); err != nil {
-		return fmt.Errorf("failed to load %d images into kind cluster %s: %w", len(localImages), kindClusterName, err)
+		return fmt.Errorf("failed to load images into kind cluster %s: %w", kindClusterName, err)
 	}
 
 	// Store the local images for later use
@@ -547,32 +535,24 @@ func (d *Deployer) detectAndLoadLocalImages(ctx context.Context) error {
 	return nil
 }
 
-// shouldSkipCredentialVerification returns true if credential verification should be skipped.
-// Verification is skipped only when all required images (9 total) are available locally.
-// For partial local image scenarios, verification is still required for remote pulls.
-func (d *Deployer) shouldSkipCredentialVerification() bool {
-	// If not using any local images, don't skip
+// hasAllImagesLocally returns true if all required images are available locally.
+// When all images are local, credential verification and image pull secrets can be skipped.
+// For partial local image scenarios, credentials are still required for remote pulls.
+func (d *Deployer) hasAllImagesLocally() bool {
+	// If not using any local images, return false
 	if !d.usingLocalImages {
 		return false
 	}
 
-	// If using some local images but not all, don't skip (need creds for remote pulls)
-	// Total expected: 7 main + 2 operator = 9
-	totalExpected := totalRequiredImages
-	if len(d.localImages) < totalExpected {
+	// If using some local images but not all, return false (need creds for remote pulls)
+	if len(d.localImages) < totalRequiredImages {
 		d.logger.Dimf("Using %d/%d local images, remaining images will be pulled from quay.io",
-			len(d.localImages), totalExpected)
+			len(d.localImages), totalRequiredImages)
 		return false
 	}
 
 	// All images are local
 	return true
-}
-
-// shouldSkipImagePullSecrets returns true if image pull secrets should be skipped.
-// Same logic as credential verification - skip only if all images are local.
-func (d *Deployer) shouldSkipImagePullSecrets() bool {
-	return d.shouldSkipCredentialVerification()
 }
 
 func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string) error {

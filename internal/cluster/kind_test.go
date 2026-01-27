@@ -82,9 +82,9 @@ func TestExtractKindClusterName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ExtractKindClusterName(tt.contextName)
+			result := extractKindClusterName(tt.contextName)
 			if result != tt.expected {
-				t.Errorf("ExtractKindClusterName(%q) = %v, want %v", tt.contextName, result, tt.expected)
+				t.Errorf("extractKindClusterName(%q) = %v, want %v", tt.contextName, result, tt.expected)
 			}
 		})
 	}
