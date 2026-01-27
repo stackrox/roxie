@@ -1,8 +1,15 @@
 # Local Image Support for Kind Clusters
 
 **Date**: 2026-01-20
-**Status**: Approved
+**Status**: Implemented (with variations from original design)
 **Author**: Design session with user
+
+> **Note**: This document reflects the initial design. The final implementation differs in several areas:
+> - Image detection checks both branding organizations (not just ROX_PRODUCT_BRANDING)
+> - Localhost paths were removed (only quay.io paths used)
+> - Added CSV patching for operator deployments
+> - Image list includes collector, scanner-v4, and stackrox-operator
+> - See git history (commits bc376ad through 9d8a54b) for implementation evolution
 
 ## Overview
 
@@ -63,34 +70,42 @@ This upload/download cycle is slow and unnecessary for local kind cluster testin
 
 ### Image Inventory and Detection
 
-**Images Required for Deployment**:
+**Images Required for Deployment** (as implemented):
 
-Operator deployment path:
-- `stackrox-operator-bundle:v<operatorTag>`
-- `stackrox-operator-index:v<operatorTag>`
+Main images (7):
 - `main:<tag>`
 - `scanner:<tag>`
 - `scanner-db:<tag>`
+- `scanner-v4:<tag>`
 - `scanner-v4-db:<tag>`
-- `scanner-v4-indexer:<tag>`
-- `scanner-v4-matcher:<tag>`
 - `central-db:<tag>`
+- `collector:<tag>`
 
-Helm deployment path:
-- Same main application images (extracted from rendered Helm templates)
+Operator images (2):
+- `stackrox-operator:<operatorTag>`
+- `stackrox-operator-bundle:v<operatorTag>`
 
-**Detection Algorithm**:
+Total: 9 images
+
+Note: Original design included scanner-v4-indexer, scanner-v4-matcher, and stackrox-operator-index, but these were removed/consolidated during implementation.
+
+**Detection Algorithm** (as implemented):
 
 For each required image:
 ```
-Function: checkLocalImage(imageName, tag, branding)
-  1. Determine branding org: "rhacs-eng" or "stackrox-io" based on ROX_PRODUCT_BRANDING
-  2. Check: podman image exists localhost/stackrox/<imageName>:<tag>
-  3. If not found, check: podman image exists quay.io/<branding-org>/<imageName>:<tag>
-  4. Return: imageRef if found, empty if not found
+Function: checkLocalImage(imageName, tag)
+  1. Determine primary org based on ROX_PRODUCT_BRANDING (defaults to "rhacs-eng")
+  2. Determine fallback org (the other branding org)
+  3. Check: podman image exists quay.io/<primary-org>/<imageName>:<tag>
+  4. If not found, check: podman image exists quay.io/<fallback-org>/<imageName>:<tag>
+  5. Return: (imageRef, true, nil) if found, ("", false, nil) if not found
 ```
 
-**Implementation**: Use `podman image exists <ref>` command (exit code 0 = exists, 1 = doesn't exist)
+**Key Implementation Differences**:
+- ✅ Checks BOTH branding orgs to handle images that only exist in one org (e.g., collector)
+- ✅ Only uses quay.io paths (localhost paths removed in commit bc376ad)
+- ✅ Returns idiomatic (value, bool, error) tuple
+- **Implementation**: Use `podman image exists <ref>` command (exit code 0 = exists, 1 = doesn't exist)
 
 ### Kind Cluster Detection
 

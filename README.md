@@ -110,11 +110,15 @@ When deploying to a kind cluster, roxie:
 
 ### Supported Images
 
+Main images (7):
 - main, central-db
 - scanner, scanner-db
-- scanner-v4-db, scanner-v4-indexer, scanner-v4-matcher
+- scanner-v4, scanner-v4-db
+- collector
+
+Operator images (2):
+- stackrox-operator
 - stackrox-operator-bundle
-- stackrox-operator-index
 
 ### Environment Variables
 
