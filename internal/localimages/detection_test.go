@@ -50,4 +50,3 @@ func TestBuildImageReferences(t *testing.T) {
 		})
 	}
 }
-
