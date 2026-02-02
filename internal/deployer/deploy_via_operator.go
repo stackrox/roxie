@@ -14,6 +14,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// deployOperatorOnly deploys only the operator without any Central or SecuredCluster resources
+func (d *Deployer) deployOperatorOnly(ctx context.Context) error {
+	d.logger.Info("🚀 Deploying Operator only...")
+
+	if err := d.ensureOperatorDeployed(ctx); err != nil {
+		return err
+	}
+
+	d.logger.Success("✓ Operator deployed successfully")
+	d.logger.Info("You can now deploy Central or SecuredCluster components separately")
+	return nil
+}
+
 // ensureOperatorDeployed ensures the operator is deployed with the correct version and mode
 func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	// Skip operator deployment/checks if flag is set to false
