@@ -18,13 +18,14 @@ func newDeployCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy [component]",
 		Short: "Deploy ACS components",
-		Long: `Deploy ACS components (central, secured-cluster).
+		Long: `Deploy ACS components (central, secured-cluster, operator).
 
 Examples:
   roxie deploy central
   roxie deploy secured-cluster
-  roxie deploy both`,
-		ValidArgs: []string{"central", "secured-cluster", "both", "all"},
+  roxie deploy both
+  roxie deploy operator`,
+		ValidArgs: []string{"central", "secured-cluster", "both", "all", "operator"},
 		Args:      cobra.MaximumNArgs(1),
 		RunE:      runDeploy,
 	}
@@ -62,6 +63,10 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	component := "both"
 	if len(args) > 0 {
 		component = args[0]
+	}
+
+	if component == "operator" && helm {
+		return errors.New("cannot use --helm flag with 'operator' component")
 	}
 
 	if (component == "central" || component == "both") && os.Getenv("ROXIE_SHELL") != "" {
@@ -123,6 +128,8 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		d.PrintCentralDeploymentSummary()
 	case "secured-cluster", "sensor":
 		d.PrintSecuredClusterDeploymentSummary()
+	case "operator":
+		// No deployment summary needed for operator-only deployment
 	}
 
 	if envrc != "" {

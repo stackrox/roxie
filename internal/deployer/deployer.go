@@ -363,6 +363,8 @@ func formatComponentName(component string) string {
 		return "Secured Cluster"
 	case "central":
 		return "Central"
+	case "operator":
+		return "Operator"
 	default:
 		return component
 	}
@@ -389,6 +391,8 @@ func (d *Deployer) Deploy(ctx context.Context, component, resources, exposure st
 	d.logger.Infof("Initiating deployment of %s", formatComponentName(component))
 
 	switch component {
+	case "operator":
+		return d.deployOperatorOnly(ctx)
 	case "central":
 		return d.deployCentral(ctx, resources, exposure)
 	case "secured-cluster", "sensor":
