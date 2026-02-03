@@ -257,28 +257,6 @@ func (d *Deployer) createCentralCR(resources, exposure string) (map[string]inter
 					"enabled": false,
 				},
 			},
-			"scanner": map[string]interface{}{
-				"analyzer": map[string]interface{}{
-					"scaling": map[string]interface{}{
-						"autoScaling": "Disabled",
-						"replicas":    1,
-					},
-				},
-			},
-			"scannerV4": map[string]interface{}{
-				"indexer": map[string]interface{}{
-					"scaling": map[string]interface{}{
-						"autoScaling": "Disabled",
-						"replicas":    1,
-					},
-				},
-				"matcher": map[string]interface{}{
-					"scaling": map[string]interface{}{
-						"autoScaling": "Disabled",
-						"replicas":    1,
-					},
-				},
-			},
 		},
 	}
 
@@ -305,6 +283,12 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 			},
 			"scanner": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"analyzer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
+				},
 			},
 			"scannerV4": map[string]interface{}{
 				"db": map[string]interface{}{
@@ -312,9 +296,17 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 				},
 				"indexer": map[string]interface{}{
 					"resources": centralScannerV4IndexerResourcesSmall,
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
 				},
 				"matcher": map[string]interface{}{
 					"resources": centralScannerV4MatcherResourcesSmall,
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
 				},
 			},
 		},
@@ -330,6 +322,12 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 			},
 			"scanner": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"analyzer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
+				},
 			},
 			"scannerV4": map[string]interface{}{
 				"db": map[string]interface{}{
@@ -337,9 +335,17 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 				},
 				"indexer": map[string]interface{}{
 					"resources": centralScannerV4IndexerResourcesMedium,
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
 				},
 				"matcher": map[string]interface{}{
 					"resources": centralScannerV4MatcherResourcesMedium,
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
 				},
 			},
 		},
@@ -641,25 +647,6 @@ func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[st
 			"imagePullSecrets": []map[string]string{
 				{"name": "stackrox"},
 			},
-			"admissionControl": map[string]interface{}{
-				"replicas": 1,
-			},
-			"scanner": map[string]interface{}{
-				"analyzer": map[string]interface{}{
-					"scaling": map[string]interface{}{
-						"autoScaling": "Enabled",
-						"replicas":    1,
-					},
-				},
-			},
-			"scannerV4": map[string]interface{}{
-				"indexer": map[string]interface{}{
-					"scaling": map[string]interface{}{
-						"autoScaling": "Disabled",
-						"replicas":    1,
-					},
-				},
-			},
 		},
 	}
 
@@ -683,23 +670,50 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 			},
 			"scanner": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"analyzer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Enabled",
+						"replicas":    1,
+					},
+				},
 			},
 			"scannerV4": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"indexer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
+				},
 			},
 		},
 	}
 
 	resourcesMedium := map[string]interface{}{
 		"spec": map[string]interface{}{
-			"sensor": map[string]interface{}{
-				"resources": securedClusterSensorResourcesMedium,
+			"admissionControl": map[string]interface{}{
+				"replicas": 1,
 			},
 			"scanner": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"analyzer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Enabled",
+						"replicas":    1,
+					},
+				},
+			},
+			"sensor": map[string]interface{}{
+				"resources": securedClusterSensorResourcesMedium,
 			},
 			"scannerV4": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"indexer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
+				},
 			},
 		},
 	}
