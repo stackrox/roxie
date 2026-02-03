@@ -260,6 +260,7 @@ func (d *Deployer) createCentralCR(resources, exposure string) (map[string]inter
 		},
 	}
 
+	d.logger.Infof("Using Central resource profile: %s", resources)
 	resourcesOverlay := d.getCentralResourcesOperator(resources)
 
 	overrides, err := GetOverrides(d.overrideFile, d.overrideSetExpressions)
