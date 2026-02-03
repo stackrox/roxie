@@ -348,6 +348,8 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 	var resources map[string]interface{}
 
 	switch resourcesName {
+	case "acs-defaults":
+		// Nothing to do here, don't set any custom resources.
 	case "small":
 		resources = resourcesSmall
 	case "medium":
@@ -705,6 +707,8 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 	var resources map[string]interface{}
 
 	switch resourcesName {
+	case "acs-defaults":
+		// Nothing to do here, don't set any custom resources.
 	case "small":
 		resources = resourcesSmall
 	case "medium":
