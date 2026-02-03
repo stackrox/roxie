@@ -199,14 +199,14 @@ func resolveAutoResources(clusterType env.ClusterType, log *logger.Logger) strin
 	switch clusterType {
 	case env.LocalKind:
 		resolvedResources = "small"
-		log.Info("Auto-detected cluster type Kind: using small resources")
 	case env.InfraOpenShift4:
+	case env.InfraGKE:
 		resolvedResources = "medium"
-		log.Info("Auto-detected cluster type OpenShift 4: using medium resources")
 	default:
-		resolvedResources = "default"
-		log.Info("Auto-detected cluster type " + clusterType.String() + ": using default resources")
+		resolvedResources = "acs-defaults"
 	}
+
+	log.Infof("Auto-detected cluster type %s: using resource profile %q", clusterType.String(), resolvedResources)
 
 	return resolvedResources
 }
