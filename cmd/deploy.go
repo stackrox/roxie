@@ -39,7 +39,7 @@ Examples:
 	cmd.Flags().StringVar(&overrideFile, "override", "", "Path to YAML file with overrides")
 	cmd.Flags().StringArrayVar(&overrideSetExpressions, "set", []string{}, "Set override values (can specify multiple times, e.g., --set foo.bar=val)")
 	cmd.Flags().StringVar(&exposure, "exposure", "loadbalancer", "Central exposure backend (loadbalancer, none)")
-	cmd.Flags().StringVar(&resources, "resources", "auto", "Resource sizing preset (auto=cluster-based, medium, small)")
+	cmd.Flags().StringVar(&resources, "resources", "acs-defaults", "Resource sizing preset (acs-defaults, auto, medium, small)")
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to spawn after Central deployment")
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
 	cmd.Flags().BoolVar(&singleNamespace, "single-namespace", false, "Deploy all components in a single namespace ('stackrox' by default)")
@@ -199,14 +199,14 @@ func resolveAutoResources(clusterType env.ClusterType, log *logger.Logger) strin
 	switch clusterType {
 	case env.LocalKind:
 		resolvedResources = "small"
-		log.Info("Auto-detected cluster type Kind: using small resources")
 	case env.InfraOpenShift4:
+	case env.InfraGKE:
 		resolvedResources = "medium"
-		log.Info("Auto-detected cluster type OpenShift 4: using medium resources")
 	default:
-		resolvedResources = "default"
-		log.Info("Auto-detected cluster type " + clusterType.String() + ": using default resources")
+		resolvedResources = "acs-defaults"
 	}
+
+	log.Infof("Auto-detected cluster type %s: using resource profile %q", clusterType.String(), resolvedResources)
 
 	return resolvedResources
 }
