@@ -15,6 +15,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 )
 
@@ -27,6 +28,15 @@ const (
 // deployOperator deploys the RHACS operator
 func (d *Deployer) deployOperator(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.operatorTag)
+	if d.useKonflux {
+		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
+			return fmt.Errorf("failed to configure Konflux image rewriting: %w", err)
+		}
+	} else {
+		if err := d.removeKonfluxImageRewriting(ctx); err != nil {
+			return fmt.Errorf("failed to remove Konflux ImageContentSourcePolicy: %v", err)
+		}
+	}
 	bundleImage := d.getOperatorBundleImage()
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
@@ -210,7 +220,99 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 }
 
 func (d *Deployer) getOperatorBundleImage() string {
+	if d.useKonflux {
+		d.logger.Infof("Using Konflux-built operator bundle image")
+		return fmt.Sprintf("quay.io/rhacs-eng/release-operator-bundle:v%s", d.operatorTag)
+	}
 	return fmt.Sprintf("quay.io/rhacs-eng/stackrox-operator-bundle:v%s", d.operatorTag)
+}
+
+// ensureKonfluxImageRewriting configures image rewriting for Konflux images
+func (d *Deployer) ensureKonfluxImageRewriting(ctx context.Context) error {
+	if env.GetCurrentClusterType() != env.InfraOpenShift4 {
+		return errors.New("image rewriting for Konflux is only supported on OpenShift4 clusters")
+	}
+
+	d.logger.Info("Configuring ImageContentSourcePolicy for Konflux images on OpenShift4...")
+	return d.applyImageContentSourcePolicy(ctx)
+}
+
+// applyImageContentSourcePolicy creates the ImageContentSourcePolicy for Konflux image mirrors
+func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
+	// Define repository digest mirrors as Go data structures
+	rewrite := func(from, to string) map[string]interface{} {
+		source := fmt.Sprintf("registry.redhat.io/advanced-cluster-security/%s", from)
+		mirror := fmt.Sprintf("quay.io/rhacs-eng/%s", to)
+		if d.verbose {
+			d.logger.Dimf("Image rewriting rule: %s -> %s", source, mirror)
+		}
+		return map[string]interface{}{
+			"source":  source,
+			"mirrors": []string{mirror},
+		}
+	}
+	repositoryDigestMirrors := []map[string]interface{}{
+		rewrite("rhacs-operator-bundle", "release-operator-bundle"),
+		rewrite("rhacs-rhel8-operator", "release-operator"),
+		rewrite("rhacs-main-rhel8", "release-main"),
+		rewrite("rhacs-scanner-rhel8", "release-scanner"),
+		rewrite("rhacs-scanner-slim-rhel8", "release-scanner-slim"),
+		rewrite("rhacs-scanner-db-rhel8", "release-scanner-db"),
+		rewrite("rhacs-scanner-db-slim-rhel8", "release-scanner-db-slim"),
+		rewrite("rhacs-collector-slim-rhel8", "release-collector-slim"),
+		rewrite("rhacs-collector-rhel8", "release-collector"),
+		rewrite("rhacs-roxctl-rhel8", "release-roxctl"),
+		rewrite("rhacs-central-db-rhel8", "release-central-db"),
+		rewrite("rhacs-scanner-v4-db-rhel8", "release-scanner-v4-db"),
+		rewrite("rhacs-scanner-v4-rhel8", "release-scanner-v4"),
+	}
+
+	icsp := map[string]interface{}{
+		"apiVersion": "operator.openshift.io/v1alpha1",
+		"kind":       "ImageContentSourcePolicy",
+		"metadata": map[string]interface{}{
+			"name": "acs-konflux-builds",
+		},
+		"spec": map[string]interface{}{
+			"repositoryDigestMirrors": repositoryDigestMirrors,
+		},
+	}
+
+	yamlData, err := yaml.Marshal(icsp)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ImageContentSourcePolicy: %w", err)
+	}
+
+	d.logger.Dim("Applying ImageContentSourcePolicy...")
+	_, err = d.runKubectl(ctx, KubectlOptions{
+		Args:  []string{"apply", "-f", "-"},
+		Stdin: bytes.NewReader(yamlData),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to apply ImageContentSourcePolicy: %w", err)
+	}
+
+	d.logger.Successf("✓ ImageContentSourcePolicy 'acs-konflux-builds' applied")
+	d.logger.Info("Note: OpenShift nodes may need to restart to apply the image mirroring configuration")
+
+	return nil
+}
+
+// removeKonfluxImageRewriting removes the ImageContentSourcePolicy for Konflux images if it exists
+func (d *Deployer) removeKonfluxImageRewriting(ctx context.Context) error {
+	if env.GetCurrentClusterType() != env.InfraOpenShift4 {
+		return nil
+	}
+
+	d.logger.Dim("Removing Konflux ImageContentSourcePolicy if present...")
+	_, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{"delete", "imagecontentsourcepolicy", "acs-konflux-builds", "--ignore-not-found=true"},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete ImageContentSourcePolicy: %w", err)
+	}
+
+	return nil
 }
 
 // deployOperatorFromCSV deploys the operator from CSV

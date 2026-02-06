@@ -112,6 +112,7 @@ type Deployer struct {
 	envrcFile              string
 	useHelm                bool
 	useOLM                 bool
+	useKonflux             bool
 	shouldDeployOperator   bool
 	verbose                bool
 	earlyReadiness         bool
@@ -698,6 +699,11 @@ func (d *Deployer) SetUseHelm(useHelm bool) error {
 
 func (d *Deployer) SetUseOLM(useOLM bool) error {
 	d.useOLM = useOLM
+	return nil
+}
+
+func (d *Deployer) SetUseKonflux(useKonflux bool) error {
+	d.useKonflux = useKonflux
 	return nil
 }
 
