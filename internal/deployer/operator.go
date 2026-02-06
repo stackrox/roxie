@@ -222,7 +222,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 func (d *Deployer) getOperatorBundleImage() string {
 	if d.useKonflux {
 		d.logger.Infof("Using Konflux-built operator bundle image")
-		return fmt.Sprintf("quay.io/rhacs-eng/release-operator-bundle:v%s", d.operatorTag)
+		return fmt.Sprintf("quay.io/rhacs-eng/release-operator-bundle:v%s-fast", d.operatorTag)
 	}
 	return fmt.Sprintf("quay.io/rhacs-eng/stackrox-operator-bundle:v%s", d.operatorTag)
 }
