@@ -200,6 +200,7 @@ func resolveAutoResources(clusterType env.ClusterType, log *logger.Logger) strin
 	case env.LocalKind:
 		resolvedResources = "small"
 	case env.InfraOpenShift4:
+		resolvedResources = "medium"
 	case env.InfraGKE:
 		resolvedResources = "medium"
 	default:
