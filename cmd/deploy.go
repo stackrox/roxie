@@ -33,6 +33,7 @@ Examples:
 	cmd.Flags().BoolVar(&helm, "helm", false, "Deploy using Helm charts instead of operator")
 	_ = cmd.Flags().MarkHidden("helm")
 	cmd.Flags().BoolVar(&olm, "olm", false, "Deploy operator via OLM (requires OLM installed)")
+	cmd.Flags().BoolVar(&konflux, "konflux", false, "Use Konflux images")
 	cmd.Flags().BoolVar(&deployOperator, "deploy-operator", true, "Deploy and check operator (set to false to skip operator deployment/checks)")
 	cmd.Flags().BoolVar(&portForwarding, "port-forwarding", false, "Enable localhost port-forward for Central")
 	cmd.Flags().BoolVar(&pauseReconciliation, "pause-reconciliation", false, "Pause reconciliation after deployment")
@@ -114,6 +115,16 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return errors.New("cannot use both --helm and --olm flags together")
 	}
 
+	if konflux {
+		if helm {
+			return errors.New("cannot use both --helm and --konflux flags together (Konflux requires operator-based deployment)")
+		}
+		clusterType := env.GetCurrentClusterType()
+		if clusterType != env.InfraOpenShift4 {
+			return fmt.Errorf("--konflux flag is only supported on OpenShift 4 clusters (current cluster type: %s)", clusterType.String())
+		}
+	}
+
 	if !deployOperator && olm {
 		return errors.New("cannot use --deploy-operator=false with --olm (OLM requires operator deployment)")
 	}
@@ -147,6 +158,13 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		if err := d.SetUseOLM(true); err != nil {
 			return err
 		}
+	}
+
+	if konflux {
+		if err := d.SetUseKonflux(true); err != nil {
+			return err
+		}
+
 	}
 
 	d.SetDeployOperator(deployOperator)
