@@ -176,6 +176,7 @@ func (d *Deployer) deleteFinalizers(ctx context.Context, namespace, resourceType
 	return err
 }
 
+// Expects that reconciliation for the RHACS operator is paused.
 func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error {
 	d.logger.Info("Deleting Central resources")
 	var crExists bool
@@ -193,12 +194,19 @@ func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error 
 		if err != nil {
 			return fmt.Errorf("failed to delete finalizers on Central CR: %w", err)
 		}
-
 	}
 
-	// In the meantime, delete other resources by brute force.
+	// Pause reconciliation for other controllers, not just our RHACS operator.
+	// This is needed to ensure that there is no race causing the Cluster Network Operator
+	// to re-create the injected-ca-bundle ConfigMap during resource deletion.
+	err := d.preventOtherControllersFromReconciling(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to prevent other controllers from reconciling: %w", err)
+	}
+
+	// Delete other resources by brute force.
 	resourceKinds := d.filterResourceKinds(allInstallableCentralResourceKinds)
-	err := d.deleteResources(ctx, d.centralNamespace, resourceKinds, "-l=app.kubernetes.io/part-of=stackrox-central-services")
+	err = d.deleteResources(ctx, d.centralNamespace, resourceKinds, "-l=app.kubernetes.io/part-of=stackrox-central-services")
 	if err != nil {
 		return err
 	}
@@ -220,6 +228,33 @@ func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error 
 		if err != nil {
 			return fmt.Errorf("failed to delete Central CR: %w", err)
 		}
+	}
+
+	return nil
+}
+
+func (d *Deployer) preventOtherControllersFromReconciling(ctx context.Context) error {
+	return d.preventCABundleInjection(ctx)
+}
+
+func (d *Deployer) preventCABundleInjection(ctx context.Context) error {
+	configMapName := "injected-cabundle-stackrox-central-services"
+
+	if !d.doesResourceExist(ctx, "configmap", configMapName, d.centralNamespace) {
+		return nil
+	}
+
+	d.logger.Info("Removing CNO label from injected-cabundle ConfigMap to prevent CNO from injecting the CA bundle during cleanup")
+	_, err := d.runKubectl(ctx, KubectlOptions{
+		Args: []string{
+			"label", "configmap", configMapName, "-n", d.centralNamespace,
+			"config.openshift.io/inject-trusted-cabundle-",
+		},
+		IgnoreErrors: true,
+	})
+
+	if err != nil {
+		d.logger.Warningf("Failed to remove CNO label from %s: %v", configMapName, err)
 	}
 
 	return nil
