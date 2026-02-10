@@ -18,27 +18,29 @@ func newDeployCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy [component]",
 		Short: "Deploy ACS components",
-		Long: `Deploy ACS components (central, secured-cluster).
+		Long: `Deploy ACS components (central, secured-cluster, operator).
 
 Examples:
   roxie deploy central
   roxie deploy secured-cluster
   roxie deploy both
-  roxie deploy central --helm`,
-		ValidArgs: []string{"central", "secured-cluster", "both", "all"},
+  roxie deploy operator`,
+		ValidArgs: []string{"central", "secured-cluster", "both", "all", "operator"},
 		Args:      cobra.MaximumNArgs(1),
 		RunE:      runDeploy,
 	}
 
 	cmd.Flags().BoolVar(&helm, "helm", false, "Deploy using Helm charts instead of operator")
+	_ = cmd.Flags().MarkHidden("helm")
 	cmd.Flags().BoolVar(&olm, "olm", false, "Deploy operator via OLM (requires OLM installed)")
+	cmd.Flags().BoolVar(&konflux, "konflux", false, "Use Konflux images")
 	cmd.Flags().BoolVar(&deployOperator, "deploy-operator", true, "Deploy and check operator (set to false to skip operator deployment/checks)")
 	cmd.Flags().BoolVar(&portForwarding, "port-forwarding", false, "Enable localhost port-forward for Central")
 	cmd.Flags().BoolVar(&pauseReconciliation, "pause-reconciliation", false, "Pause reconciliation after deployment")
 	cmd.Flags().StringVar(&overrideFile, "override", "", "Path to YAML file with overrides")
 	cmd.Flags().StringArrayVar(&overrideSetExpressions, "set", []string{}, "Set override values (can specify multiple times, e.g., --set foo.bar=val)")
 	cmd.Flags().StringVar(&exposure, "exposure", "loadbalancer", "Central exposure backend (loadbalancer, none)")
-	cmd.Flags().StringVar(&resources, "resources", "auto", "Resource sizing preset (auto=cluster-based, medium, small)")
+	cmd.Flags().StringVar(&resources, "resources", "acs-defaults", "Resource sizing preset (acs-defaults, auto, medium, small)")
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to spawn after Central deployment")
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
 	cmd.Flags().BoolVar(&singleNamespace, "single-namespace", false, "Deploy all components in a single namespace ('stackrox' by default)")
@@ -62,6 +64,10 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	component := "both"
 	if len(args) > 0 {
 		component = args[0]
+	}
+
+	if component == "operator" && helm {
+		return errors.New("cannot use --helm flag with 'operator' component")
 	}
 
 	if (component == "central" || component == "both") && os.Getenv("ROXIE_SHELL") != "" {
@@ -109,6 +115,19 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return errors.New("cannot use both --helm and --olm flags together")
 	}
 
+	if konflux {
+		if helm {
+			return errors.New("cannot use both --helm and --konflux flags together (Konflux requires operator-based deployment)")
+		}
+		if olm {
+			return errors.New("cannot use both --olm and --konflux flags together (not currently implemented)")
+		}
+		clusterType := env.GetCurrentClusterType()
+		if clusterType != env.InfraOpenShift4 {
+			return fmt.Errorf("--konflux flag is only supported on OpenShift 4 clusters (current cluster type: %s)", clusterType.String())
+		}
+	}
+
 	if !deployOperator && olm {
 		return errors.New("cannot use --deploy-operator=false with --olm (OLM requires operator deployment)")
 	}
@@ -123,6 +142,8 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		d.PrintCentralDeploymentSummary()
 	case "secured-cluster", "sensor":
 		d.PrintSecuredClusterDeploymentSummary()
+	case "operator":
+		// No deployment summary needed for operator-only deployment
 	}
 
 	if envrc != "" {
@@ -140,6 +161,13 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		if err := d.SetUseOLM(true); err != nil {
 			return err
 		}
+	}
+
+	if konflux {
+		if err := d.SetUseKonflux(true); err != nil {
+			return err
+		}
+
 	}
 
 	d.SetDeployOperator(deployOperator)
@@ -192,14 +220,15 @@ func resolveAutoResources(clusterType env.ClusterType, log *logger.Logger) strin
 	switch clusterType {
 	case env.LocalKind:
 		resolvedResources = "small"
-		log.Info("Auto-detected cluster type Kind: using small resources")
 	case env.InfraOpenShift4:
 		resolvedResources = "medium"
-		log.Info("Auto-detected cluster type OpenShift 4: using medium resources")
+	case env.InfraGKE:
+		resolvedResources = "medium"
 	default:
-		resolvedResources = "default"
-		log.Info("Auto-detected cluster type " + clusterType.String() + ": using default resources")
+		resolvedResources = "acs-defaults"
 	}
+
+	log.Infof("Auto-detected cluster type %s: using resource profile %q", clusterType.String(), resolvedResources)
 
 	return resolvedResources
 }

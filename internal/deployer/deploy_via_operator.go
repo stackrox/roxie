@@ -14,6 +14,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// deployOperatorOnly deploys only the operator without any Central or SecuredCluster resources
+func (d *Deployer) deployOperatorOnly(ctx context.Context) error {
+	d.logger.Info("🚀 Deploying Operator only...")
+
+	if err := d.ensureOperatorDeployed(ctx); err != nil {
+		return err
+	}
+
+	d.logger.Success("✓ Operator deployed successfully")
+	d.logger.Info("You can now deploy Central or SecuredCluster components separately")
+	return nil
+}
+
 // ensureOperatorDeployed ensures the operator is deployed with the correct version and mode
 func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	// Skip operator deployment/checks if flag is set to false
@@ -244,31 +257,10 @@ func (d *Deployer) createCentralCR(resources, exposure string) (map[string]inter
 					"enabled": false,
 				},
 			},
-			"scanner": map[string]interface{}{
-				"analyzer": map[string]interface{}{
-					"scaling": map[string]interface{}{
-						"autoScaling": "Disabled",
-						"replicas":    1,
-					},
-				},
-			},
-			"scannerV4": map[string]interface{}{
-				"indexer": map[string]interface{}{
-					"scaling": map[string]interface{}{
-						"autoScaling": "Disabled",
-						"replicas":    1,
-					},
-				},
-				"matcher": map[string]interface{}{
-					"scaling": map[string]interface{}{
-						"autoScaling": "Disabled",
-						"replicas":    1,
-					},
-				},
-			},
 		},
 	}
 
+	d.logger.Infof("Using Central resource profile: %s", resources)
 	resourcesOverlay := d.getCentralResourcesOperator(resources)
 
 	overrides, err := GetOverrides(d.overrideFile, d.overrideSetExpressions)
@@ -292,6 +284,12 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 			},
 			"scanner": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"analyzer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
+				},
 			},
 			"scannerV4": map[string]interface{}{
 				"db": map[string]interface{}{
@@ -299,9 +297,17 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 				},
 				"indexer": map[string]interface{}{
 					"resources": centralScannerV4IndexerResourcesSmall,
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
 				},
 				"matcher": map[string]interface{}{
 					"resources": centralScannerV4MatcherResourcesSmall,
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
 				},
 			},
 		},
@@ -317,6 +323,12 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 			},
 			"scanner": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"analyzer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
+				},
 			},
 			"scannerV4": map[string]interface{}{
 				"db": map[string]interface{}{
@@ -324,9 +336,17 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 				},
 				"indexer": map[string]interface{}{
 					"resources": centralScannerV4IndexerResourcesMedium,
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
 				},
 				"matcher": map[string]interface{}{
 					"resources": centralScannerV4MatcherResourcesMedium,
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
 				},
 			},
 		},
@@ -335,6 +355,8 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 	var resources map[string]interface{}
 
 	switch resourcesName {
+	case "acs-defaults":
+		// Nothing to do here, don't set any custom resources.
 	case "small":
 		resources = resourcesSmall
 	case "medium":
@@ -626,25 +648,6 @@ func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[st
 			"imagePullSecrets": []map[string]string{
 				{"name": "stackrox"},
 			},
-			"admissionControl": map[string]interface{}{
-				"replicas": 1,
-			},
-			"scanner": map[string]interface{}{
-				"analyzer": map[string]interface{}{
-					"scaling": map[string]interface{}{
-						"autoScaling": "Enabled",
-						"replicas":    1,
-					},
-				},
-			},
-			"scannerV4": map[string]interface{}{
-				"indexer": map[string]interface{}{
-					"scaling": map[string]interface{}{
-						"autoScaling": "Disabled",
-						"replicas":    1,
-					},
-				},
-			},
 		},
 	}
 
@@ -668,23 +671,50 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 			},
 			"scanner": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"analyzer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Enabled",
+						"replicas":    1,
+					},
+				},
 			},
 			"scannerV4": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"indexer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
+				},
 			},
 		},
 	}
 
 	resourcesMedium := map[string]interface{}{
 		"spec": map[string]interface{}{
-			"sensor": map[string]interface{}{
-				"resources": securedClusterSensorResourcesMedium,
+			"admissionControl": map[string]interface{}{
+				"replicas": 1,
 			},
 			"scanner": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"analyzer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Enabled",
+						"replicas":    1,
+					},
+				},
+			},
+			"sensor": map[string]interface{}{
+				"resources": securedClusterSensorResourcesMedium,
 			},
 			"scannerV4": map[string]interface{}{
 				"scannerComponent": "Disabled",
+				"indexer": map[string]interface{}{
+					"scaling": map[string]interface{}{
+						"autoScaling": "Disabled",
+						"replicas":    1,
+					},
+				},
 			},
 		},
 	}
@@ -692,6 +722,8 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 	var resources map[string]interface{}
 
 	switch resourcesName {
+	case "acs-defaults":
+		// Nothing to do here, don't set any custom resources.
 	case "small":
 		resources = resourcesSmall
 	case "medium":

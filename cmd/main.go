@@ -13,6 +13,7 @@ var (
 	earlyReadiness         bool
 	helm                   bool
 	olm                    bool
+	konflux                bool
 	deployOperator         bool
 	portForwarding         bool
 	pauseReconciliation    bool
