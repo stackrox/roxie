@@ -32,6 +32,21 @@ RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
     -o roxie \
     ./cmd
 
+# Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
+ARG GCLOUD_VERSION=latest
+RUN apk add --no-cache curl python3 && \
+    ARCH=${TARGETARCH:-amd64} && \
+    if [ "${ARCH}" = "amd64" ]; then \
+        GCLOUD_ARCH="x86_64"; \
+    elif [ "${ARCH}" = "arm64" ]; then \
+        GCLOUD_ARCH="arm"; \
+    else \
+        echo "ERROR: Unsupported architecture: ${ARCH}"; exit 1; \
+    fi && \
+    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" | \
+    tar -xz -C /tmp && \
+    /tmp/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet
+
 # Stage 2: Runtime image based on Red Hat UBI Minimal
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
@@ -64,7 +79,7 @@ RUN microdnf install -y \
 ARG KUBECTL_VERSION=v1.29.0
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing kubectl for ${ARCH}" && \
-    curl -sLo /usr/local/bin/kubectl \
+    curl -fsSLo /usr/local/bin/kubectl \
     "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" \
     && chmod +x /usr/local/bin/kubectl
 
@@ -72,11 +87,9 @@ RUN ARCH=${TARGETARCH:-amd64} && \
 ARG HELM_VERSION=v3.14.0
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing helm for ${ARCH}" && \
-    curl -sL "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" \
-    | tar xz -C /tmp \
-    && mv /tmp/linux-${ARCH}/helm /usr/local/bin/helm \
-    && chmod +x /usr/local/bin/helm \
-    && rm -rf /tmp/linux-${ARCH}
+    curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" | \
+    tar -xzO "linux-${ARCH}/helm" > /usr/local/bin/helm && \
+    chmod +x /usr/local/bin/helm
 
 # Install roxctl - architecture-aware
 # The mirror has architecture-specific binaries: 'roxctl' (amd64) and 'roxctl-arm64'
@@ -108,29 +121,15 @@ RUN microdnf install -y podman fuse-overlayfs \
 # without requiring users to manage different auth plugins
 
 # 1. Google Cloud (GKE) - gke-gcloud-auth-plugin
-RUN ARCH=${TARGETARCH:-amd64} && \
-    echo "Installing gcloud SDK and gke-gcloud-auth-plugin for ${ARCH}" && \
-    # Map Docker arch names to gcloud package names
-    if [ "${ARCH}" = "amd64" ]; then \
-        GCLOUD_ARCH="x86_64"; \
-    elif [ "${ARCH}" = "arm64" ]; then \
-        GCLOUD_ARCH="arm"; \
-    else \
-        echo "ERROR: Unsupported architecture: ${ARCH}"; exit 1; \
-    fi && \
-    # Download and install gcloud SDK
-    curl -sL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
-    | tar xz -C /opt && \
-    # Install gke-gcloud-auth-plugin
-    /opt/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet && \
-    # Create symlinks in PATH
-    ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
+# Copy gcloud SDK from builder stage (extracted there to avoid UBI filesystem restrictions)
+COPY --from=builder /tmp/google-cloud-sdk /opt/google-cloud-sdk
+RUN ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
     ln -s /opt/google-cloud-sdk/bin/gke-gcloud-auth-plugin /usr/local/bin/gke-gcloud-auth-plugin
 
 # 2. AWS (EKS) - aws-iam-authenticator
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing aws-iam-authenticator for ${ARCH}" && \
-    curl -sLo /usr/local/bin/aws-iam-authenticator \
+    curl -fsSLo /usr/local/bin/aws-iam-authenticator \
     "https://amazon-eks.s3.us-west-2.amazonaws.com/1.30.0/2024-05-12/bin/linux/${ARCH}/aws-iam-authenticator" && \
     chmod +x /usr/local/bin/aws-iam-authenticator
 
@@ -138,7 +137,7 @@ RUN ARCH=${TARGETARCH:-amd64} && \
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing kubelogin (Azure) for ${ARCH}" && \
     KUBELOGIN_VERSION="v0.1.4" && \
-    curl -sL "https://github.com/Azure/kubelogin/releases/download/${KUBELOGIN_VERSION}/kubelogin-linux-${ARCH}.zip" \
+    curl -fsSL "https://github.com/Azure/kubelogin/releases/download/${KUBELOGIN_VERSION}/kubelogin-linux-${ARCH}.zip" \
     -o /tmp/kubelogin.zip && \
     unzip -q /tmp/kubelogin.zip -d /tmp && \
     mv /tmp/bin/linux_${ARCH}/kubelogin /usr/local/bin/kubelogin && \
