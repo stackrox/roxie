@@ -189,9 +189,11 @@ func TestDetectClusterType_GKE_DifferentProject(t *testing.T) {
 }
 
 func TestDetectClusterType_Integration(t *testing.T) {
+	Initialize(nil)
+
 	// This test uses the current kubectl context
 	// The result will depend on the active cluster
-	clusterType := DetectClusterType()
+	clusterType := GetCurrentClusterType()
 
 	t.Logf("Detected cluster type: %s", clusterType)
 
