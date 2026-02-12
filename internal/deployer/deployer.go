@@ -420,8 +420,11 @@ func (d *Deployer) Deploy(ctx context.Context, component, resources, exposure st
 	d.exposure = exposure
 
 	// Prepare and verify credentials early to fail fast
-	if err := d.prepareCredentials(); err != nil {
-		return fmt.Errorf("failed to prepare credentials: %w", err)
+
+	if env.GetCurrentClusterType() != env.InfraOpenShift4 {
+		if err := d.prepareCredentials(); err != nil {
+			return fmt.Errorf("failed to prepare credentials: %w", err)
+		}
 	}
 
 	d.logger.Infof("Initiating deployment of %s", formatComponentName(component))

@@ -27,7 +27,6 @@ var (
 )
 
 func main() {
-
 	if err := rootCmd.Execute(); err != nil {
 		red := color.New(color.FgRed, color.Bold)
 		red.Fprintf(os.Stderr, "Error: %v\n", err)
