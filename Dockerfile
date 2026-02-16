@@ -44,8 +44,7 @@ RUN apk add --no-cache curl python3 && \
         echo "ERROR: Unsupported architecture: ${ARCH}"; exit 1; \
     fi && \
     curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" | \
-    tar -xz -C /tmp && \
-    /tmp/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet
+    tar -xz -C /tmp
 
 # Stage 2: Runtime image based on Red Hat UBI Minimal
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
@@ -123,7 +122,9 @@ RUN microdnf install -y podman fuse-overlayfs \
 # 1. Google Cloud (GKE) - gke-gcloud-auth-plugin
 # Copy gcloud SDK from builder stage (extracted there to avoid UBI filesystem restrictions)
 COPY --from=builder /tmp/google-cloud-sdk /opt/google-cloud-sdk
-RUN ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
+# Install gke-gcloud-auth-plugin on target platform (auto-detects correct architecture)
+RUN /opt/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet && \
+    ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
     ln -s /opt/google-cloud-sdk/bin/gke-gcloud-auth-plugin /usr/local/bin/gke-gcloud-auth-plugin
 
 # 2. AWS (EKS) - aws-iam-authenticator
