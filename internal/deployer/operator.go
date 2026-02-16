@@ -80,7 +80,11 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 	if err := inspectCmd.Run(); err != nil {
 		// Image doesn't exist locally, pull it
 		d.logger.Info("Pulling operator bundle image...")
-		pullCmd := exec.CommandContext(ctx, containerTool, "pull", bundleImage)
+		// Force amd64 platform for pulling the operator bundle image.
+		// This is
+		//   1. fine because bundle images only contain platform-agnostic YAML files and
+		//   2. required to pull the image after the recent changes to the operator bundle image build process.
+		pullCmd := exec.CommandContext(ctx, containerTool, "pull", "--platform", "linux/amd64", bundleImage)
 		if output, err := pullCmd.CombinedOutput(); err != nil {
 			os.RemoveAll(bundleDir)
 			d.logger.Dim("Command output:")
