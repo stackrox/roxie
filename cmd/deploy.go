@@ -44,6 +44,7 @@ Examples:
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to spawn after Central deployment")
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
 	cmd.Flags().BoolVar(&singleNamespace, "single-namespace", false, "Deploy all components in a single namespace ('stackrox' by default)")
+	cmd.Flags().StringVarP(&tag, "tag", "t", "", "Main image tag to use for deployment (takes precedence over MAIN_IMAGE_TAG environment variable)")
 
 	return cmd
 }
@@ -178,9 +179,16 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	d.SetPauseReconciliation(pauseReconciliation)
 	d.SetSingleNamespace(singleNamespace)
 
-	mainImageTag, err := helpers.LookupMainImageTag(log)
-	if err != nil {
-		return fmt.Errorf("looking up main image tag: %w", err)
+	var mainImageTag string
+	if tag != "" {
+		log.Dimf("Using main image tag from --tag flag: %s", tag)
+		mainImageTag = tag
+	}
+	if mainImageTag == "" {
+		mainImageTag, err = helpers.LookupMainImageTag(log)
+		if err != nil {
+			return fmt.Errorf("looking up main image tag: %w", err)
+		}
 	}
 	d.SetMainImageTag(mainImageTag)
 

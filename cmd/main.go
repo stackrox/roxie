@@ -24,6 +24,7 @@ var (
 	shell                  string
 	envrc                  string
 	singleNamespace        bool
+	tag                    string
 )
 
 func main() {
