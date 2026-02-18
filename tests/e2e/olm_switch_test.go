@@ -70,13 +70,12 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 	}
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	// Step 1: Deploy central with OLM operator
 	t.Log("=== Step 1: Deploy central with OLM operator ===")
@@ -119,13 +118,12 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 	}
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	// Step 1: Deploy central without OLM (non-OLM operator)
 	t.Log("=== Step 1: Deploy central with non-OLM operator ===")
@@ -172,13 +170,12 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	// but the logic should handle version changes by tearing down and redeploying
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	// Step 1: Deploy central with OLM operator
 	t.Log("=== Step 1: Deploy central with OLM operator ===")
@@ -231,13 +228,12 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 	}
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	// Step 1: Deploy central with OLM
 	t.Log("=== Step 1: Deploy central with OLM ===")

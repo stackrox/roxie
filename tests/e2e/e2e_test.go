@@ -264,13 +264,12 @@ func TestDeployCentralAndSecuredCluster(t *testing.T) {
 	}
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	// Deploy central
 	t.Log("=== Deploying central ===")
@@ -350,13 +349,12 @@ func TestDeployBothComponentsTogether(t *testing.T) {
 	}
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	t.Log("=== Deploying both components ===")
 	// We also test --pause-reconciliation flag here.
@@ -387,13 +385,12 @@ func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
 	}
 
 	// Create temporary envrc file.
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	t.Log("=== Deploying both components in single namespace ===")
 	args := append([]string{roxieBinary, "deploy", "both", "--single-namespace", "--early-readiness", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
@@ -412,13 +409,12 @@ func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
 
 func TestDeployCentralAndSecuredClusterViaHelm(t *testing.T) {
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	t.Log("=== Deploying central via Helm ===")
 	args := append([]string{roxieBinary, "deploy", "--early-readiness", "central", "--helm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
