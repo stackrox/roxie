@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
@@ -61,16 +62,16 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		log.Dim("Running without a controlling terminal.")
 	}
 
-	component := "both"
-	if len(args) > 0 {
-		component = args[0]
+	components, err := component.FromArgs(args)
+	if err != nil {
+		return err
 	}
 
-	if component == "operator" && helm {
+	if components.IncludesOperatorExplicitly() && helm {
 		return errors.New("cannot use --helm flag with 'operator' component")
 	}
 
-	if (component == "central" || component == "both") && os.Getenv("ROXIE_SHELL") != "" {
+	if components.IncludesCentral() && os.Getenv("ROXIE_SHELL") != "" {
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
 	}
 
@@ -139,12 +140,11 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if overrideFile != "" {
 		var err error
-		switch component {
-		case "both", "all":
+		if components.IncludesBothCentralAndSensor() {
 			err = d.SetCombinedOverrideFile(overrideFile)
-		case "central":
+		} else if components.IncludesCentral() {
 			err = d.SetCentralOverrideFile(overrideFile)
-		case "secured-cluster":
+		} else if components.IncludesSensor() {
 			err = d.SetSecuredClusterOverrideFile(overrideFile)
 		}
 		if err != nil {
@@ -154,12 +154,11 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if len(overrideSetExpressions) > 0 {
 		var err error
-		switch component {
-		case "both", "all":
+		if components.IncludesBothCentralAndSensor() {
 			err = d.SetCombinedOverrideSetExpressions(overrideSetExpressions)
-		case "central":
+		} else if components.IncludesCentral() {
 			err = d.SetCentralOverrideSetExpressions(overrideSetExpressions)
-		case "secured-cluster":
+		} else if components.IncludesSensor() {
 			err = d.SetSecuredClusterOverrideSetExpressions(overrideSetExpressions)
 		}
 		if err != nil {
@@ -167,13 +166,11 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	switch component {
-	case "central", "both", "all":
+	if components.IncludesCentral() {
 		d.PrintCentralDeploymentSummary()
-	case "secured-cluster", "sensor":
+	}
+	if components.IncludesSensor() {
 		d.PrintSecuredClusterDeploymentSummary()
-	case "operator":
-		// No deployment summary needed for operator-only deployment
 	}
 
 	if envrc != "" {
@@ -230,18 +227,18 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	if err := d.Deploy(ctx, component, resolvedResources, exposure); err != nil {
+	if err := d.Deploy(ctx, components, resolvedResources, exposure); err != nil {
 		return fmt.Errorf("deployment failed: %w", err)
 	}
 
 	log.Success("🎉 Deployment complete!")
 
 	// If Central was deployed, wait for it to be ready before entering subshell
-	if component == "central" || component == "both" || component == "all" {
+	if components.IncludesCentral() {
 		d.WaitForCentral(5 * time.Minute)
 	}
 
-	if (component == "central" || component == "both") && envrc == "" {
+	if components.IncludesCentral() && envrc == "" {
 		if err := spawnSubshell(d, log); err != nil {
 			return fmt.Errorf("failed to spawn subshell: %w", err)
 		}
