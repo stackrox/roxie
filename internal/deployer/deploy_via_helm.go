@@ -318,102 +318,90 @@ func (d *Deployer) getCentralExposureConfigHelm(exposure string) map[string]inte
 
 // getCentralResourcesHelm returns resource overlays for Central Helm deployment
 func (d *Deployer) getCentralResourcesHelm(resourcesName string) map[string]interface{} {
-	resourcesSmall := map[string]interface{}{
-		"central": map[string]interface{}{
-			"resources": centralResourcesSmall,
-			"db": map[string]interface{}{
-				"resources": centralDbResourcesSmall,
-			},
-		},
-		"scanner": map[string]interface{}{
-			"resources":   centralScannerResourcesSmall,
-			"dbResources": centralScannerDbResourcesSmall,
-		},
-		"scannerV4": map[string]interface{}{
-			"indexer": map[string]interface{}{
-				"resources": centralScannerV4IndexerResourcesSmall,
-			},
-			"matcher": map[string]interface{}{
-				"resources": centralScannerV4MatcherResourcesSmall,
-			},
-			"db": map[string]interface{}{
-				"resources": centralScannerV4DbResourcesSmall,
-			},
-		},
-	}
-
-	resourcesMedium := map[string]interface{}{
-		"central": map[string]interface{}{
-			"resources": centralResourcesMedium,
-			"db": map[string]interface{}{
-				"resources": centralDbResourcesMedium,
-			},
-		},
-		"scanner": map[string]interface{}{
-			"resources":   centralScannerResourcesMedium,
-			"dbResources": centralScannerDbResourcesMedium,
-		},
-		"scannerV4": map[string]interface{}{
-			"indexer": map[string]interface{}{
-				"resources": centralScannerV4IndexerResourcesMedium,
-			},
-			"matcher": map[string]interface{}{
-				"resources": centralScannerV4MatcherResourcesMedium,
-			},
-			"db": map[string]interface{}{
-				"resources": centralScannerV4DbResourcesMedium,
-			},
-		},
-	}
-
-	var resources map[string]interface{}
-
 	switch resourcesName {
 	case "small":
-		resources = resourcesSmall
+		return map[string]interface{}{
+			"central": map[string]interface{}{
+				"resources": centralResourcesSmall,
+				"db": map[string]interface{}{
+					"resources": centralDbResourcesSmall,
+				},
+			},
+			"scanner": map[string]interface{}{
+				"resources":   centralScannerResourcesSmall,
+				"dbResources": centralScannerDbResourcesSmall,
+			},
+			"scannerV4": map[string]interface{}{
+				"indexer": map[string]interface{}{
+					"resources": centralScannerV4IndexerResourcesSmall,
+				},
+				"matcher": map[string]interface{}{
+					"resources": centralScannerV4MatcherResourcesSmall,
+				},
+				"db": map[string]interface{}{
+					"resources": centralScannerV4DbResourcesSmall,
+				},
+			},
+		}
 	case "medium":
-		resources = resourcesMedium
+		return map[string]interface{}{
+			"central": map[string]interface{}{
+				"resources": centralResourcesMedium,
+				"db": map[string]interface{}{
+					"resources": centralDbResourcesMedium,
+				},
+			},
+			"scanner": map[string]interface{}{
+				"resources":   centralScannerResourcesMedium,
+				"dbResources": centralScannerDbResourcesMedium,
+			},
+			"scannerV4": map[string]interface{}{
+				"indexer": map[string]interface{}{
+					"resources": centralScannerV4IndexerResourcesMedium,
+				},
+				"matcher": map[string]interface{}{
+					"resources": centralScannerV4MatcherResourcesMedium,
+				},
+				"db": map[string]interface{}{
+					"resources": centralScannerV4DbResourcesMedium,
+				},
+			},
+		}
+	default:
+		return nil
 	}
-
-	return resources
 }
 
 // getSecuredClusterResourcesHelm returns resource overlays for SecuredCluster Helm deployment
 func (d *Deployer) getSecuredClusterResourcesHelm(resourcesName string) map[string]interface{} {
-	resourcesSmall := map[string]interface{}{
-		"sensor": map[string]interface{}{
-			"resources": securedClusterSensorResourcesSmall,
-		},
-		"scanner": map[string]interface{}{
-			"disable": true,
-		},
-		"scannerV4": map[string]interface{}{
-			"disable": true,
-		},
-	}
-
-	resourcesMedium := map[string]interface{}{
-		"sensor": map[string]interface{}{
-			"resources": securedClusterSensorResourcesMedium,
-		},
-		"scanner": map[string]interface{}{
-			"disable": true,
-		},
-		"scannerV4": map[string]interface{}{
-			"disable": true,
-		},
-	}
-
-	var resources map[string]interface{}
-
 	switch resourcesName {
 	case "small":
-		resources = resourcesSmall
+		return map[string]interface{}{
+			"sensor": map[string]interface{}{
+				"resources": securedClusterSensorResourcesSmall,
+			},
+			"scanner": map[string]interface{}{
+				"disable": true,
+			},
+			"scannerV4": map[string]interface{}{
+				"disable": true,
+			},
+		}
 	case "medium":
-		resources = resourcesMedium
+		return map[string]interface{}{
+			"sensor": map[string]interface{}{
+				"resources": securedClusterSensorResourcesMedium,
+			},
+			"scanner": map[string]interface{}{
+				"disable": true,
+			},
+			"scannerV4": map[string]interface{}{
+				"disable": true,
+			},
+		}
+	default:
+		return nil
 	}
-
-	return resources
 }
 
 // verifyHelmChartImages renders the Helm template and verifies that images are pullable
