@@ -296,9 +296,6 @@ func TestDeployCentralAndSecuredCluster(t *testing.T) {
 	t.Log("Verifying namespace: acs-sensor")
 	verifyNamespaceExists(t, "acs-sensor")
 	verifyNamespaceHasLabel(t, "acs-sensor", "app.kubernetes.io/managed-by", "roxie")
-
-	// Brief pause before next test
-	time.Sleep(5 * time.Second)
 }
 
 func TestTeardownCentralAndSecuredCluster(t *testing.T) {

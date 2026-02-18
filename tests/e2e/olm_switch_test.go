@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-	"time"
 )
 
 // Note: All e2e tests run sequentially via the -parallel=1 flag in the Makefile.
@@ -92,9 +91,6 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 	// Verify central namespace exists
 	verifyNamespaceExists(t, "acs-central")
 
-	// Brief pause
-	time.Sleep(10 * time.Second)
-
 	// Step 2: Deploy central again without OLM (should switch modes)
 	t.Log("=== Step 2: Redeploy central without OLM (triggering mode switch) ===")
 	args = append([]string{roxieBinary, "deploy", "central", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
@@ -143,9 +139,6 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 
 	// Verify central namespace exists
 	verifyNamespaceExists(t, "acs-central")
-
-	// Brief pause
-	time.Sleep(10 * time.Second)
 
 	// Step 2: Deploy central again with OLM (should switch modes)
 	t.Log("=== Step 2: Redeploy central with OLM (triggering mode switch) ===")
@@ -208,9 +201,6 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	}
 	initialImage := strings.TrimSpace(string(output))
 	t.Logf("Initial operator image: %s", initialImage)
-
-	// Brief pause
-	time.Sleep(10 * time.Second)
 
 	// Step 2: Redeploy with same version (should skip if version matches)
 	t.Log("=== Step 2: Redeploy with same version (should detect correct version) ===")
