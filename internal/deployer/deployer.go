@@ -163,7 +163,7 @@ func (d *Deployer) deleteFinalizers(ctx context.Context, namespace, resourceType
 	_, err := d.runKubectl(ctx, KubectlOptions{
 		Args: []string{
 			"-n", namespace, "patch", resourceType, resourceName,
-			"-p", "{\"metadata\":{\"finalizers\":null}}",
+			"-p", `{"metadata":{"finalizers":null}}`,
 			"--type=merge",
 		},
 	})
