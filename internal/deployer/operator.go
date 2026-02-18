@@ -54,7 +54,7 @@ func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 
 	d.logger.Infof("Bundle image: %s", bundleImage)
 
-	crdFiles, err := d.identifyCRDFiles(bundleDir)
+	crdFiles, err := d.identifyCRDFileNames(bundleDir)
 	if err != nil {
 		return err
 	}
@@ -90,8 +90,8 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 	return bundleDir, nil
 }
 
-// identifyCRDFiles identifies CRD files in the bundle directory
-func (d *Deployer) identifyCRDFiles(bundleDir string) ([]string, error) {
+// identifyCRDFileNames identifies CRD files in the bundle directory
+func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 	var crdFiles []string
 
 	err := filepath.Walk(bundleDir, func(path string, info os.FileInfo, err error) error {
@@ -178,7 +178,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 		}
 		defer d.cleanupTempDir(bundleDir, "CRD bundle directory")
 
-		crdFiles, err := d.identifyCRDFiles(bundleDir)
+		crdFiles, err := d.identifyCRDFileNames(bundleDir)
 		if err != nil {
 			return err
 		}

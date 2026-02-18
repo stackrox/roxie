@@ -419,7 +419,7 @@ func (d *Deployer) verifyHelmChartImages(ctx context.Context, chartDir, valuesFi
 		return fmt.Errorf("failed to render helm template: %w", err)
 	}
 
-	imageRefs := extractImageReferences(string(output))
+	imageRefs := extractMainImageReferences(string(output))
 
 	if len(imageRefs) == 0 {
 		d.logger.Warning("No images found in rendered template")
@@ -439,8 +439,8 @@ func (d *Deployer) verifyHelmChartImages(ctx context.Context, chartDir, valuesFi
 	return nil
 }
 
-// extractImageReferences extracts unique image references from rendered YAML
-func extractImageReferences(renderedYAML string) []string {
+// extractMainImageReferences extracts unique image references from rendered YAML
+func extractMainImageReferences(renderedYAML string) []string {
 	seen := make(map[string]bool)
 	var images []string
 
