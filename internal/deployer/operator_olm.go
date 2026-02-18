@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	catalogSourceName = "stackrox-operator-index"
-	subscriptionName  = "stackrox-operator-subscription"
-	operatorGroupName = "all-namespaces-operator-group"
-	operatorChannel   = "latest"
+	catalogSourceName  = "stackrox-operator-index"
+	subscriptionName   = "stackrox-operator-subscription"
+	operatorGroupName  = "all-namespaces-operator-group"
+	operatorChannel    = "latest"
+	operatorIndexImage = "quay.io/rhacs-eng/stackrox-operator-index"
 )
 
 // OperatorDeploymentMode represents how the operator is deployed
@@ -95,14 +96,14 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 
 // getOperatorIndexImage returns the operator index image reference.
 func (d *Deployer) getOperatorIndexImage() string {
-	return fmt.Sprintf("quay.io/rhacs-eng/stackrox-operator-index:v%s", d.operatorTag)
+	return fmt.Sprintf(operatorIndexImage+":v%s", d.operatorTag)
 }
 
 // createCatalogSource creates the CatalogSource for the operator.
 func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) error {
 	d.logger.Info("Creating CatalogSource...")
 
-	// Check if CatalogSource CRD supports securityContextConfig.
+	// Check if CatalogSource CRD supports securityContextConfig (OCP 4.14+).
 	hasSecurityContextConfig, err := d.catalogSourceSupportsSecurityContextConfig(ctx)
 	if err != nil {
 		d.logger.Warning("Could not check CatalogSource CRD capabilities, proceeding without securityContextConfig")

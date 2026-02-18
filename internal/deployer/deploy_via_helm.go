@@ -268,7 +268,7 @@ func (d *Deployer) createCentralValues(resourcesName, exposure string) (map[stri
 func (d *Deployer) createSecuredClusterValues(clusterName, resources string) (map[string]interface{}, error) {
 	base := map[string]interface{}{
 		"clusterName":               clusterName,
-		"centralEndpoint":           "https://central.acs-central.svc:443",
+		"centralEndpoint":           "https://central." + centralNamespace + ".svc:443",
 		"allowNonstandardNamespace": true,
 	}
 

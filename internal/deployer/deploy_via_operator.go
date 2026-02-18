@@ -573,7 +573,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context, exposure string
 		d.centralEndpoint = strings.TrimSuffix(d.centralEndpoint, ":443")
 		d.centralEndpoint = d.centralEndpoint + ":443"
 	} else {
-		d.centralEndpoint = "central.acs-central.svc:443"
+		d.centralEndpoint = "central." + centralNamespace + ".svc:443"
 	}
 
 	if err := d.fetchCentralCACert(ctx); err != nil {
