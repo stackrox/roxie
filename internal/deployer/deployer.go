@@ -141,18 +141,7 @@ func (d *Deployer) filterResourceKinds(resourceKinds []string) []string {
 }
 
 func (d *Deployer) deleteResource(ctx context.Context, namespace, resourceType, resourceName string, args ...string) error {
-	finalArgs := []string{
-		"-n", namespace,
-		"delete",
-		resourceType,
-		resourceName,
-		"--ignore-not-found",
-		"--force",
-		"--grace-period=0",
-	}
-	finalArgs = append(finalArgs, args...)
-	_, err := d.runKubectl(ctx, KubectlOptions{Args: finalArgs})
-	return err
+	return d.deleteResources(ctx, namespace, []string{resourceType}, append([]string{resourceName}, args...)...)
 }
 
 func (d *Deployer) deleteResources(ctx context.Context, namespace string, resourceTypes []string, args ...string) error {
