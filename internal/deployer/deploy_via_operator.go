@@ -782,10 +782,8 @@ func (d *Deployer) waitForSecuredClusterReady(ctx context.Context, timeout int) 
 	checkInterval := 3 * time.Second
 
 	for time.Since(start) < time.Duration(timeout)*time.Second {
-		// Check for new deployments
 		d.checkDeploymentProgressInNamespace(ctx, d.sensorNamespace, seenDeployments)
 
-		// Check for pod events if in early readiness mode or verbose
 		if d.earlyReadiness || d.verbose {
 			d.checkPodProgressInNamespace(ctx, d.sensorNamespace, seenPods)
 		}

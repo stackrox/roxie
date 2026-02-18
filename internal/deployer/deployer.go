@@ -468,7 +468,6 @@ func (d *Deployer) SetFeatureFlags(featureFlags []string) error {
 }
 
 func New(log *logger.Logger) (*Deployer, error) {
-	// Check required tools first
 	if err := checkRequiredTools(); err != nil {
 		return nil, err
 	}
@@ -609,7 +608,6 @@ func (d *Deployer) prepareCredentials() error {
 		return err
 	}
 
-	// Store the verified credentials
 	d.dockerCreds = creds
 
 	d.logger.Dimf("Docker credentials verified successfully")

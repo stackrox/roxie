@@ -31,7 +31,6 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying operator via OLM...")
 	d.logger.Infof("Operator tag: %s", d.operatorTag)
 
-	// Sanity check:Check if OLM is installed.
 	if err := d.checkOLMInstalled(ctx); err != nil {
 		return err
 	}
@@ -39,37 +38,30 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	indexImage := d.getOperatorIndexImage()
 	d.logger.Infof("Index image: %s", indexImage)
 
-	// Create operator namespace.
 	if err := d.createOperatorNamespace(ctx); err != nil {
 		return err
 	}
 
-	// Create CatalogSource.
 	if err := d.createCatalogSource(ctx, indexImage); err != nil {
 		return fmt.Errorf("failed to create CatalogSource: %w", err)
 	}
 
-	// Create OperatorGroup.
 	if err := d.createOperatorGroup(ctx); err != nil {
 		return fmt.Errorf("failed to create OperatorGroup: %w", err)
 	}
 
-	// Create Subscription.
 	if err := d.createSubscription(ctx); err != nil {
 		return fmt.Errorf("failed to create Subscription: %w", err)
 	}
 
-	// Wait for and approve InstallPlan.
 	if err := d.waitForAndApproveInstallPlan(ctx); err != nil {
 		return fmt.Errorf("failed to approve InstallPlan: %w", err)
 	}
 
-	// Wait for CSV to succeed.
 	if err := d.waitForCSVSuccess(ctx); err != nil {
 		return fmt.Errorf("failed waiting for CSV: %w", err)
 	}
 
-	// Wait for operator deployment.
 	if err := d.waitForOperatorReady(ctx, operatorNamespace, operatorDeploymentName, 300); err != nil {
 		return fmt.Errorf("failed waiting for operator: %w", err)
 	}

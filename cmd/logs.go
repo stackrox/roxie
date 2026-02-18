@@ -60,7 +60,6 @@ func runLogsOperator(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Create kubectl command with context
 	kubectlCmd := exec.CommandContext(ctx, "kubectl", kubectlArgs...)
 
 	// Get stdout pipe for streaming
@@ -69,20 +68,15 @@ func runLogsOperator(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
-	// Pass through stderr directly
 	kubectlCmd.Stderr = os.Stderr
 
-	// Start the command
 	if err := kubectlCmd.Start(); err != nil {
 		return fmt.Errorf("failed to start kubectl: %w", err)
 	}
 
-	// Process stdout with color coding
 	processLogStream(stdout)
 
-	// Wait for command to complete
 	if err := kubectlCmd.Wait(); err != nil {
-		// Check if it was a timeout
 		if ctx.Err() == context.DeadlineExceeded {
 			return fmt.Errorf("timeout connecting to cluster - ensure your kubeconfig is correct and the cluster is reachable")
 		}
@@ -99,7 +93,6 @@ func runLogsOperator(cmd *cobra.Command, args []string) error {
 func processLogStream(reader io.Reader) {
 	scanner := bufio.NewScanner(reader)
 
-	// Define colors for different log levels
 	infoColor := color.New(color.FgWhite)
 	debugColor := color.New(color.Faint)
 	errorColor := color.New(color.FgRed, color.Bold)
@@ -108,7 +101,6 @@ func processLogStream(reader io.Reader) {
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Determine log level and apply appropriate color
 		switch {
 		case strings.Contains(line, "ERROR"):
 			errorColor.Println(line)
