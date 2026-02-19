@@ -196,6 +196,22 @@ func verifyNamespaceExists(t *testing.T, namespace string) {
 	}
 }
 
+func verifyNamespaceHasLabel(t *testing.T, namespace, key, value string) {
+	t.Helper()
+
+	cmd := exec.Command("kubectl", "get", "namespace", namespace,
+		"-o", "jsonpath={.metadata.labels['"+key+"']}")
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to get label %s from namespace %s: %v", key, namespace, err)
+	}
+
+	actualValue := strings.TrimSpace(string(output))
+	if actualValue != value {
+		t.Fatalf("Namespace %s has label %s=%s, expected %s", namespace, key, actualValue, value)
+	}
+}
+
 func doesDeploymentExist(t *testing.T, namespace string, name string) bool {
 	t.Helper()
 
@@ -272,12 +288,14 @@ func TestDeployCentralAndSecuredCluster(t *testing.T) {
 	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster"}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout, envrcEnv, args...)
 
-	// Verify namespaces
+	// Verify namespaces and labels
 	t.Log("Verifying namespace: acs-central")
 	verifyNamespaceExists(t, "acs-central")
+	verifyNamespaceHasLabel(t, "acs-central", "app.kubernetes.io/managed-by", "roxie")
 
 	t.Log("Verifying namespace: acs-sensor")
 	verifyNamespaceExists(t, "acs-sensor")
+	verifyNamespaceHasLabel(t, "acs-sensor", "app.kubernetes.io/managed-by", "roxie")
 
 	// Brief pause before next test
 	time.Sleep(5 * time.Second)
@@ -350,9 +368,11 @@ func TestDeployBothComponentsTogether(t *testing.T) {
 
 	t.Log("Verifying namespace: acs-central")
 	verifyNamespaceExists(t, "acs-central")
+	verifyNamespaceHasLabel(t, "acs-central", "app.kubernetes.io/managed-by", "roxie")
 
 	t.Log("Verifying namespace: acs-sensor")
 	verifyNamespaceExists(t, "acs-sensor")
+	verifyNamespaceHasLabel(t, "acs-sensor", "app.kubernetes.io/managed-by", "roxie")
 
 	// Verify Central has the pause-reconcile annotation.
 	t.Log("Verifying pause-reconcile annotation on Central CR")
@@ -420,9 +440,11 @@ func TestDeployCentralAndSecuredClusterViaHelm(t *testing.T) {
 
 	t.Log("Verifying namespace: acs-central")
 	verifyNamespaceExists(t, "acs-central")
+	verifyNamespaceHasLabel(t, "acs-central", "app.kubernetes.io/managed-by", "roxie")
 
 	t.Log("Verifying namespace: acs-sensor")
 	verifyNamespaceExists(t, "acs-sensor")
+	verifyNamespaceHasLabel(t, "acs-sensor", "app.kubernetes.io/managed-by", "roxie")
 }
 
 func verifyAnnotation(t *testing.T, resourceType, resourceName, namespace, annotationKey, expectedValue string) {
