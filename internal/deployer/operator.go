@@ -265,6 +265,8 @@ func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
 		rewrite("rhacs-scanner-db-slim-rhel8", "release-scanner-db-slim"),
 		rewrite("rhacs-collector-slim-rhel8", "release-collector-slim"),
 		rewrite("rhacs-collector-rhel8", "release-collector"),
+		rewrite("rhacs-fact-rhel8", "release-fact"),
+		rewrite("rhacs-fact-rhel9", "release-fact"),
 		rewrite("rhacs-roxctl-rhel8", "release-roxctl"),
 		rewrite("rhacs-central-db-rhel8", "release-central-db"),
 		rewrite("rhacs-scanner-v4-db-rhel8", "release-scanner-v4-db"),
