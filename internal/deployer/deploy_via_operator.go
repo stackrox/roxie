@@ -263,12 +263,7 @@ func (d *Deployer) createCentralCR(resources, exposure string) (map[string]inter
 	d.logger.Infof("Using Central resource profile: %s", resources)
 	resourcesOverlay := d.getCentralResourcesOperator(resources)
 
-	overrides, err := GetOverrides(d.overrideFile, d.overrideSetExpressions)
-	if err != nil {
-		return nil, fmt.Errorf("failed construct Central CR overrides: %w", err)
-	}
-
-	merged := helpers.MergeMaps(base, resourcesOverlay, overrides)
+	merged := helpers.MergeMaps(base, resourcesOverlay, d.centralOverrides)
 
 	return merged, nil
 }
@@ -667,12 +662,7 @@ func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[st
 
 	resourcesOverlay := d.getSecuredClusterResourcesOperator(resources)
 
-	overrides, err := GetOverrides(d.overrideFile, d.overrideSetExpressions)
-	if err != nil {
-		return nil, fmt.Errorf("failed construct Central CR overrides: %w", err)
-	}
-
-	merged := helpers.MergeMaps(base, resourcesOverlay, overrides)
+	merged := helpers.MergeMaps(base, resourcesOverlay, d.securedClusterOverrides)
 
 	return merged, nil
 }

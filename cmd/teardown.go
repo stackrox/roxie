@@ -41,7 +41,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 
 	log.Infof("Tearing down %s", component)
 
-	d, err := deployer.New(log, "", []string{})
+	d, err := deployer.New(log)
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
 	}

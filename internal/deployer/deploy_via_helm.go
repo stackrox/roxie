@@ -259,12 +259,7 @@ func (d *Deployer) createCentralValues(resourcesName, exposure string) (map[stri
 
 	resourcesOverlay := d.getCentralResourcesHelm(resourcesName)
 
-	overrides, err := GetOverrides(d.overrideFile, d.overrideSetExpressions)
-	if err != nil {
-		return nil, fmt.Errorf("failed construct Central Helm values overrides: %w", err)
-	}
-
-	merged := helpers.MergeMaps(base, imageSettings, resourcesOverlay, overrides)
+	merged := helpers.MergeMaps(base, imageSettings, resourcesOverlay, d.centralOverrides)
 
 	return merged, nil
 }
@@ -292,12 +287,7 @@ func (d *Deployer) createSecuredClusterValues(clusterName, resources string) (ma
 
 	resourcesOverlay := d.getSecuredClusterResourcesHelm(resources)
 
-	overrides, err := GetOverrides(d.overrideFile, d.overrideSetExpressions)
-	if err != nil {
-		return nil, fmt.Errorf("failed construct Central Helm values overrides: %w", err)
-	}
-
-	merged := helpers.MergeMaps(base, imageSettings, resourcesOverlay, overrides)
+	merged := helpers.MergeMaps(base, imageSettings, resourcesOverlay, d.securedClusterOverrides)
 
 	return merged, nil
 }
@@ -552,9 +542,4 @@ func (d *Deployer) deleteCRDs(ctx context.Context) {
 		Args:         args,
 		IgnoreErrors: true,
 	})
-}
-
-// SetOverrideFile sets the path to the override values file
-func (d *Deployer) SetOverrideFile(path string) {
-	d.overrideFile = path
 }
