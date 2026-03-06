@@ -60,6 +60,7 @@ var (
 		"clusterroles",
 		"clusterrolebindings",
 		"configmaps",
+		"consoleplugins",
 		"controllerrevisions",
 		"daemonsets",
 		"deployments",
