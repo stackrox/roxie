@@ -826,7 +826,11 @@ func (d *Deployer) WaitForCentral(timeout time.Duration) bool {
 		return false
 	}
 
-	d.logger.Infof("⏳ Waiting for Central to be ready at %s (timeout: %v)", d.centralEndpoint, timeout)
+	if env.RunningInteractively {
+		d.logger.Infof("⏳ Waiting for Central to be ready at %s (timeout: %v)", d.centralEndpoint, timeout)
+	} else {
+		d.logger.Infof("⏳ Waiting for Central to be ready (timeout: %v)", timeout)
+	}
 
 	deadline := time.Now().Add(timeout)
 	checkInterval := 5 * time.Second
