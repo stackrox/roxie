@@ -89,6 +89,64 @@ Similarly, the deployment(s) can be torn down using:
 ./bin/roxie teardown [ <component> ]
 ```
 
+## Local Image Support for Kind Clusters
+
+Roxie automatically detects and uses locally-built container images when deploying to kind clusters, eliminating the need to push images to quay.io during development.
+
+### How It Works
+
+When deploying to a kind cluster, roxie:
+
+1. Checks if images exist locally in podman
+2. Loads found images into the kind cluster
+3. Skips credential verification if all images are local
+4. Falls back to quay.io for any missing images
+
+### Requirements
+
+- kind cluster (context name must start with "kind")
+- podman with images built locally
+- Images tagged with `quay.io/<branding-org>/<image>:<tag>`
+
+### Supported Images
+
+Main images (7):
+- main, central-db
+- scanner, scanner-db
+- scanner-v4, scanner-v4-db
+- collector
+
+Operator images (2):
+- stackrox-operator
+- stackrox-operator-bundle
+
+### Environment Variables
+
+**ROX_PRODUCT_BRANDING**: Controls which registry organization to check
+- `RHACS_BRANDING` → `quay.io/rhacs-eng` (default)
+- `STACKROX_BRANDING` → `quay.io/stackrox-io`
+
+**ROXIE_SKIP_LOCAL_IMAGES**: Set to `true` to disable local image detection and force quay.io pulls
+
+### Example Workflow
+
+```bash
+# Build stackrox locally (images go to podman)
+cd /path/to/stackrox
+make image
+
+# Deploy to kind - roxie automatically uses local images
+cd /path/to/roxie
+./roxie deploy
+```
+
+### Behavior
+
+- **All images local**: Skips credential verification, fast deployment
+- **Some images local**: Loads local ones, pulls remaining from quay.io
+- **No images local**: Normal quay.io workflow (backward compatible)
+- **Non-kind cluster**: Skips local image detection entirely
+
 ## Development
 
 Enter the dev shell:

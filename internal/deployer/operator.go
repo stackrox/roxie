@@ -25,6 +25,43 @@ const (
 	operatorDeploymentName  = "rhacs-operator-controller-manager"
 )
 
+// clusterServiceVersion represents the relevant structure of a ClusterServiceVersion YAML
+// that we need to patch for local image references. Uses inline maps to preserve
+// all fields not explicitly defined.
+type clusterServiceVersion struct {
+	Spec struct {
+		Install struct {
+			Spec struct {
+				Deployments []struct {
+					Spec struct {
+						Template struct {
+							Spec struct {
+								Containers []struct {
+									Image string `yaml:"image"`
+									Env   []struct {
+										Name        string                 `yaml:"name"`
+										Value       string                 `yaml:"value"`
+										ExtraFields map[string]interface{} `yaml:",inline"`
+									} `yaml:"env"`
+									ExtraFields map[string]interface{} `yaml:",inline"`
+								} `yaml:"containers"`
+								ExtraFields map[string]interface{} `yaml:",inline"`
+							} `yaml:"spec"`
+							ExtraFields map[string]interface{} `yaml:",inline"`
+						} `yaml:"template"`
+						ExtraFields map[string]interface{} `yaml:",inline"`
+					} `yaml:"spec"`
+					ExtraFields map[string]interface{} `yaml:",inline"`
+				} `yaml:"deployments"`
+				ExtraFields map[string]interface{} `yaml:",inline"`
+			} `yaml:"spec"`
+			ExtraFields map[string]interface{} `yaml:",inline"`
+		} `yaml:"install"`
+		ExtraFields map[string]interface{} `yaml:",inline"`
+	} `yaml:"spec"`
+	ExtraFields map[string]interface{} `yaml:",inline"`
+}
+
 // deployOperator deploys the RHACS operator
 func (d *Deployer) deployOperator(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.operatorTag)
@@ -328,6 +365,14 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 		return errors.New("ClusterServiceVersion file not found in bundle")
 	}
 
+	// Patch CSV with local image references if using local images
+	if d.usingLocalImages {
+		d.logger.Info("Patching CSV with local image references")
+		if err := patchCSVWithLocalImages(csvFile, d.mainImageTag, d.operatorTag, d.localImages); err != nil {
+			return fmt.Errorf("failed to patch CSV with local images: %w", err)
+		}
+	}
+
 	d.logger.Info("🔍 Parsing ClusterServiceVersion deployment specification")
 
 	deploymentSpec, err := d.parseCSVDeploymentSpec(csvFile)
@@ -369,6 +414,103 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	}
 
 	d.logger.Success("🎉 Operator deployment completed successfully!")
+	return nil
+}
+
+// envVarToImageName converts a RELATED_IMAGE_* environment variable name to an image name.
+// e.g., RELATED_IMAGE_SCANNER_V4_DB → scanner-v4-db
+func envVarToImageName(envVar string) string {
+	name := strings.TrimPrefix(envVar, "RELATED_IMAGE_")
+	name = strings.ToLower(name)
+	name = strings.ReplaceAll(name, "_", "-")
+	return name
+}
+
+// patchCSVWithLocalImages patches the CSV file with local image references.
+// It updates:
+// 1. The operator image reference (spec.install.spec.deployments[0].spec.template.spec.containers[0].image)
+// 2. RELATED_IMAGE_* environment variables with local image tags
+//
+// The function only patches images that exist in the localImages map, leaving
+// other image references unchanged.
+func patchCSVWithLocalImages(csvFile, mainImageTag, operatorTag string, localImages map[string]string) error {
+	// Read the CSV file
+	content, err := os.ReadFile(csvFile)
+	if err != nil {
+		return fmt.Errorf("failed to read CSV file: %w", err)
+	}
+
+	var csvData clusterServiceVersion
+	if err := yaml.Unmarshal(content, &csvData); err != nil {
+		return fmt.Errorf("failed to parse CSV YAML: %w", err)
+	}
+
+	// Validate structure
+	if len(csvData.Spec.Install.Spec.Deployments) == 0 {
+		return errors.New("CSV missing deployments")
+	}
+	if len(csvData.Spec.Install.Spec.Deployments[0].Spec.Template.Spec.Containers) == 0 {
+		return errors.New("CSV missing containers")
+	}
+
+	// Get reference to the first container
+	container := &csvData.Spec.Install.Spec.Deployments[0].Spec.Template.Spec.Containers[0]
+
+	// Patch operator image if it exists in localImages
+	// Use the actual detected image reference to handle fallback branding cases
+	operatorImageKey := "stackrox-operator:" + operatorTag
+	if imageRef, ok := localImages[operatorImageKey]; ok {
+		container.Image = imageRef
+	}
+
+	// Build a reverse map from image name to full image reference for quick lookup
+	// Map[imagename] -> "quay.io/org/imagename:tag"
+	imageNameToRef := make(map[string]string)
+	for imageKey, imageRef := range localImages {
+		// Extract image name from "imagename:tag"
+		parts := strings.SplitN(imageKey, ":", 2)
+		if len(parts) == 2 {
+			imageNameToRef[parts[0]] = imageRef
+		}
+	}
+
+	// Patch RELATED_IMAGE_* environment variables
+	for i := range container.Env {
+		envVar := &container.Env[i]
+
+		// Check if this is a RELATED_IMAGE_* env var
+		if !strings.HasPrefix(envVar.Name, "RELATED_IMAGE_") {
+			continue
+		}
+
+		// Convert RELATED_IMAGE_FOO_BAR to foo-bar
+		// e.g., RELATED_IMAGE_SCANNER_V4_DB → scanner-v4-db
+		imageName := envVarToImageName(envVar.Name)
+
+		// Special case: scanner-v4-indexer and scanner-v4-matcher both use the scanner-v4 image
+		// The same image runs in different modes based on runtime configuration
+		if imageName == "scanner-v4-indexer" || imageName == "scanner-v4-matcher" {
+			imageName = "scanner-v4"
+		}
+
+		// Check if we have this image locally and use the actual detected reference
+		// This handles cases where an image was found at a fallback branding org
+		if imageRef, found := imageNameToRef[imageName]; found {
+			envVar.Value = imageRef
+		}
+	}
+
+	// Marshal back to YAML
+	patchedContent, err := yaml.Marshal(csvData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patched CSV: %w", err)
+	}
+
+	// Write back to file
+	if err := os.WriteFile(csvFile, patchedContent, 0644); err != nil {
+		return fmt.Errorf("failed to write patched CSV: %w", err)
+	}
+
 	return nil
 }
 
