@@ -114,8 +114,21 @@ test-e2e: build ## Run end-to-end tests (requires kubectl context and cluster ac
 	fi
 	$(GOTEST) -v -tags=e2e -timeout=120m -parallel=1 ./tests/e2e/...
 
+.PHONY: test-integration
+test-integration: build ## Run integration tests (requires kubectl context and cluster access)
+	@echo "🧪 Running integration tests..."
+	@if [ -z "$(shell kubectl config current-context 2>/dev/null)" ]; then \
+		echo "❌ No kubectl context found. Please configure kubectl first."; \
+		exit 1; \
+	fi
+	@if ! command -v podman >/dev/null 2>&1; then \
+		echo "❌ podman not found. Please install podman for integration tests."; \
+		exit 1; \
+	fi
+	$(GOTEST) -v -tags=integration -run=_Integration$$ -timeout=120m -parallel=1 ./...
+
 .PHONY: test-all
-test-all: test test-e2e ## Run all tests (unit + e2e)
+test-all: test test-integration test-e2e ## Run all tests (unit + integration + e2e)
 
 # Benchmarks
 .PHONY: bench

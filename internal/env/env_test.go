@@ -188,29 +188,6 @@ func TestDetectClusterType_GKE_DifferentProject(t *testing.T) {
 	}
 }
 
-func TestDetectClusterType_Integration(t *testing.T) {
-	Initialize(nil)
-
-	// This test uses the current kubectl context
-	// The result will depend on the active cluster
-	clusterType := GetCurrentClusterType()
-
-	t.Logf("Detected cluster type: %s", clusterType)
-
-	// The cluster type should never be invalid (even if Unknown)
-	validTypes := []ClusterType{ClusterTypeUnknown, InfraGKE, InfraOpenShift4, LocalKind}
-	found := false
-	for _, valid := range validTypes {
-		if clusterType == valid {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("DetectClusterType() returned invalid type: %v", clusterType)
-	}
-}
-
 func TestIsOpenShift4(t *testing.T) {
 	tests := []struct {
 		name         string
