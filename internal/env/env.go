@@ -90,12 +90,20 @@ func ensureInitialized(log *logger.Logger) error {
 
 // GetCurrentClusterType returns the current cluster type, initializing if needed
 func GetCurrentClusterType() ClusterType {
+	panicIfNotInitialized()
 	return currentClusterType
 }
 
 // GetCurrentContext returns the current kubectl context, initializing if needed
 func GetCurrentContext() string {
+	panicIfNotInitialized()
 	return currentContext
+}
+
+func panicIfNotInitialized() {
+	if !initialized {
+		panic("environment information not initialized")
+	}
 }
 
 // String returns the string representation of a ClusterType
