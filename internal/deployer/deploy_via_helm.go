@@ -11,6 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 )
 
@@ -54,8 +55,12 @@ func (d *Deployer) deployCentralHelm(ctx context.Context, resources, exposure st
 	valuesFile.Close()
 
 	if d.verbose {
-		d.logger.Dim("Central values YAML:")
-		d.logger.Dim(helmValuesYaml)
+		if env.RunningInteractively {
+			d.logger.Dim("Central values YAML:")
+			d.logger.Dim(helmValuesYaml)
+		} else {
+			d.logger.Dim("Skipping emitting Central values in non-interactive mode, because it could leak confidential information")
+		}
 	}
 
 	if err := d.verifyHelmChartImages(ctx, chartDir, valuesFile.Name()); err != nil {
@@ -143,8 +148,12 @@ func (d *Deployer) deploySecuredClusterHelm(ctx context.Context, resources strin
 	crsFile.Close()
 
 	if d.verbose {
-		d.logger.Dim("SecuredCluster values YAML:")
-		d.logger.Dim(helmValuesYaml)
+		if env.RunningInteractively {
+			d.logger.Dim("SecuredCluster values YAML:")
+			d.logger.Dim(helmValuesYaml)
+		} else {
+			d.logger.Dim("Skipping emitting SecuredCluster values in non-interactive mode, because it could leak confidential information")
+		}
 	}
 
 	if err := d.ensureNamespaceExists(d.sensorNamespace); err != nil {
