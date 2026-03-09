@@ -408,8 +408,12 @@ func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}
 	}
 
 	if d.verbose {
-		d.logger.Dim("Central CR YAML:")
-		d.logger.Dim(string(yamlData))
+		if env.RunningInteractively {
+			d.logger.Dim("Central CR YAML:")
+			d.logger.Dim(string(yamlData))
+		} else {
+			d.logger.Dim("Skipping emitting Central CR in non-interactive mode, because it could leak confidential information")
+		}
 	}
 
 	result, err := d.runKubectl(ctx, KubectlOptions{
@@ -486,7 +490,11 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 		if err == nil && result.Stdout != "" {
 			ip := strings.TrimSpace(result.Stdout)
 			if ip != "" && ip != "<pending>" {
-				d.logger.Successf("✓ LoadBalancer IP: %s", ip)
+				if env.RunningInteractively {
+					d.logger.Successf("✓ LoadBalancer IP: %s", ip)
+				} else {
+					d.logger.Success("✓ LoadBalancer IP")
+				}
 				return fmt.Sprintf("https://%s:443", ip), nil
 			}
 		}
@@ -498,7 +506,11 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 		if err == nil && result.Stdout != "" {
 			hostname := strings.TrimSpace(result.Stdout)
 			if hostname != "" && hostname != "<pending>" {
-				d.logger.Successf("✓ LoadBalancer hostname: %s", hostname)
+				if env.RunningInteractively {
+					d.logger.Successf("✓ LoadBalancer hostname: %s", hostname)
+				} else {
+					d.logger.Success("✓ LoadBalancer hostname")
+				}
 				return fmt.Sprintf("https://%s:443", hostname), nil
 			}
 		}
@@ -580,8 +592,10 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context, exposure string
 		d.logger.Warningf("Could not fetch CA cert: %v", err)
 	}
 
-	d.logger.Successf("✓ Central is ready at: %s", d.centralEndpoint)
-	d.logger.Successf("✓ Admin password: %s", d.centralPassword)
+	if env.RunningInteractively {
+		d.logger.Successf("✓ Central is ready at: %s", d.centralEndpoint)
+		d.logger.Successf("✓ Admin password: %s", d.centralPassword)
+	}
 
 	return nil
 }
@@ -743,8 +757,12 @@ func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]inte
 	}
 
 	if d.verbose {
-		d.logger.Dim("SecuredCluster CR YAML:")
-		d.logger.Dim(string(yamlData))
+		if env.RunningInteractively {
+			d.logger.Dim("SecuredCluster CR YAML:")
+			d.logger.Dim(string(yamlData))
+		} else {
+			d.logger.Dim("Skipping emitting SecuredCluster CR in non-interactive mode, because it could leak confidential information")
+		}
 	}
 
 	result, err := d.runKubectl(ctx, KubectlOptions{
