@@ -254,21 +254,20 @@ func kubeconfigChecks(log *logger.Logger) error {
 		return fmt.Errorf("getting kubeconfig path: %w", err)
 	}
 	log.Infof("Using kubeconfig %s", kubeConfigPath)
-	if _, err := os.Stat(kubeConfigPath); err != nil {
-		log.Warningf("Kubeconfig %s cannot be found.", kubeConfigPath)
-		if RunningInContainer {
-			log.Warningf("Make sure that your kubeconfig is mounted into the container, as in: -v $KUBECONFIG:/kubeconfig:U")
-		}
-		return fmt.Errorf("failed to stat kubeconfig %s: %w", kubeConfigPath, err)
-	}
 
 	file, err := os.Open(kubeConfigPath)
 	if err != nil {
 		log.Warningf("Kubeconfig %s cannot be opened for reading.", kubeConfigPath)
-		if RunningInContainer {
-			log.Warningf("Make sure that your kubeconfig is mounted with the 'U' option, as in: -v $KUBECONFIG:/kubeconfig:U")
+		if errors.Is(err, os.ErrNotExist) {
+			if RunningInContainer {
+				log.Warningf("Make sure that your kubeconfig is mounted into the container, as in: -v $KUBECONFIG:/kubeconfig:U")
+			}
+		} else {
+			if RunningInContainer {
+				log.Warningf("Make sure that your kubeconfig is mounted with the 'U' option, as in: -v $KUBECONFIG:/kubeconfig:U")
+			}
 		}
-		return fmt.Errorf("failed to open kubeconfig %s: %w", kubeConfigPath, err)
+		return fmt.Errorf("failed to open kubeconfig %q for reading: %w", kubeConfigPath, err)
 	}
 	_ = file.Close()
 	return nil
