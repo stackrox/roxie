@@ -26,39 +26,39 @@ Support for Helm charts might be dropped in the future.
 
 ## Quick start
 
-### Option 1: Deploying using Docker image (Recommended for non-developers)
+### Option 1: Deploying using image (Recommended for non-developers)
 
 **Requirements:**
-* Working Docker setup
+* Podman (or Docker) is set up
 * kubeconfig configuration file
-* quay.io registry credentials in the environment variables REGISTRY_USERNAME and REGISTRY_PASSWORD.
 
-Note that **Podman is currently not supported** for running
-containerized roxie due to incomplete mapping of user IDs on macOS. This prevents the passing-in of the gcloud
-configuration directory to be functional within the container, which is required for interacting with GKE clusters.
+And, depending on the cluster:
+* credentials for the `quay.io` registry in the environment variables `REGISTRY_USERNAME` and `REGISTRY_PASSWORD`.
 
-Example for deploying Central and SecuredCluster to the current Kubernetes cluster context:
+Infra OpenShift4 clusters come already equipped with image pull secrets for `quay.io`, so in this case
+passing of `REGISTRY_USERNAME` and `REGISTRY_PASSWORD` to the container is not required:
+
+Example for deploying Central and SecuredCluster to an Infra OpenShift 4 cluster:
 ```bash
-docker run --rm -it --privileged \
-    -v ~/.config/gcloud:/.config/gcloud \
-    -v $KUBECONFIG:/kubeconfig \
+podman run --rm -it --privileged \
+    -v $KUBECONFIG:/kubeconfig:U \
+    -e MAIN_IMAGE_TAG=4.9.2 \
+    quay.io/rhacs-eng/roxie:latest deploy --resources=auto
+```
+Specify the `MAIN_IMAGE_TAG` as desired.
+
+Deploying to a GKE cluster requires passing of some more arguments:
+```
+podman run --rm -it --privileged \
+    -v ~/.config/gcloud:/.config/gcloud:U \
+    -v $KUBECONFIG:/kubeconfig:U \
+    -e MAIN_IMAGE_TAG=4.9.2 \
     -e REGISTRY_USERNAME=$REGISTRY_USERNAME \
     -e REGISTRY_PASSWORD=$REGISTRY_PASSWORD \
-    ghcr.io/stackrox/roxie:latest deploy
+    quay.io/rhacs-eng/roxie:latest deploy --resources=auto
 ```
-
-A new roxie image for the current platform can be built using:
-
-```bash
-make docker-build
-```
-
-This creates two tags:
-- `localhost/roxie:latest`
-- `localhost/roxie:<version-tag>`
-
-Docker images can be built for the platforms `linux/amd64` and `linux/arm64`. See the `Makefile` for more
-docker related targets.
+Note that in this case we also need to pass the gcloud configuration for the authentication towards
+the cluster to succeed.
 
 ### Option 2: Deploying using local build
 
@@ -80,9 +80,10 @@ Get help:
 
 Deploy using:
 ```bash
-./roxie deploy [ <component> ]
+MAIN_IMAGE_TAG=4.9.2 ./roxie deploy [ <component> ]
 ```
 where `component` can be `central` or `sensor`. If not specified, both components will be deployed.
+Specify the `MAIN_IMAGE_TAG` as desired.
 
 Similarly, the deployment(s) can be torn down using:
 ```bash
@@ -103,6 +104,20 @@ make lint         # Lint (ruff)
 make test         # Unit tests
 make test-e2e     # E2E tests (requires a real cluster context)
 ```
+
+A new roxie image for the current platform can be built using:
+
+```bash
+make docker-build
+```
+
+This creates two tags:
+- `localhost/roxie:latest`
+- `localhost/roxie:<version-tag>`
+
+Docker images can be built for the platforms `linux/amd64` and `linux/arm64`. See the `Makefile` for more
+docker related targets.
+
 
 ## Testing (E2E)
 

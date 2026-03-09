@@ -2,13 +2,16 @@ package env
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/stackrox/roxie/internal/containerutil"
+	"github.com/stackrox/roxie/internal/logger"
 	"golang.org/x/term"
 )
 
@@ -65,26 +68,42 @@ func isRunningInteractively() bool {
 
 // ensureInitialized performs lazy initialization of cluster information
 // This avoids contacting the cluster on package import
-func ensureInitialized() {
+func ensureInitialized(log *logger.Logger) error {
 	if !initialized {
-		kubeConfig := fetchKubeConfig()
+		if RunningInContainer {
+			log.Dim("Running containerized.")
+		}
+		kubeConfig, err := fetchKubeConfig(log)
+		if err != nil {
+			return err
+		}
 		currentContext = kubeConfig.CurrentContext
-		apiResources := fetchAPIResources()
+		apiResources, err := fetchAPIResources()
+		if err != nil {
+			return err
+		}
 		currentClusterType = detectClusterType(kubeConfig, apiResources)
 		initialized = true
 	}
+	return nil
 }
 
 // GetCurrentClusterType returns the current cluster type, initializing if needed
 func GetCurrentClusterType() ClusterType {
-	ensureInitialized()
+	panicIfNotInitialized()
 	return currentClusterType
 }
 
 // GetCurrentContext returns the current kubectl context, initializing if needed
 func GetCurrentContext() string {
-	ensureInitialized()
+	panicIfNotInitialized()
 	return currentContext
+}
+
+func panicIfNotInitialized() {
+	if !initialized {
+		panic("environment information not initialized")
+	}
 }
 
 // String returns the string representation of a ClusterType
@@ -113,13 +132,15 @@ type KubeCluster struct {
 	Server string
 }
 
-// DetectClusterType identifies the cluster type for the current kubectl context
-// This is a convenience wrapper that fetches the kubeconfig and API resources,
-// then delegates to detectClusterType for the actual detection logic
-func DetectClusterType() ClusterType {
-	kubeConfig := fetchKubeConfig()
-	apiResources := fetchAPIResources()
-	return detectClusterType(kubeConfig, apiResources)
+// Initialize performs environment initialization and sets the global variables.
+func Initialize(log *logger.Logger) error {
+	if log == nil {
+		log = logger.New()
+	}
+	if err := ensureInitialized(log); err != nil {
+		return fmt.Errorf("failed to initialize environment: %w", err)
+	}
+	return nil
 }
 
 // detectClusterType implements the cluster type detection logic
@@ -180,12 +201,15 @@ func isOpenShift4(apiResources []string) bool {
 }
 
 // fetchKubeConfig retrieves the current kubectl configuration
-func fetchKubeConfig() KubeConfig {
+func fetchKubeConfig(log *logger.Logger) (KubeConfig, error) {
+	if err := kubeconfigChecks(log); err != nil {
+		return KubeConfig{}, err
+	}
 	// Get current context
 	cmd := exec.Command("kubectl", "config", "current-context")
 	output, err := cmd.Output()
 	if err != nil {
-		return KubeConfig{}
+		return KubeConfig{}, errors.New("failed to get current context")
 	}
 	currentContext := strings.TrimSpace(string(output))
 
@@ -193,7 +217,7 @@ func fetchKubeConfig() KubeConfig {
 	cmd = exec.Command("kubectl", "config", "view", "--minify", "-o", "json")
 	output, err = cmd.Output()
 	if err != nil {
-		return KubeConfig{CurrentContext: currentContext}
+		return KubeConfig{}, fmt.Errorf("failed to obtain minified kubeconfig: %w", err)
 	}
 
 	var rawConfig struct {
@@ -207,7 +231,7 @@ func fetchKubeConfig() KubeConfig {
 	}
 
 	if err := json.Unmarshal(output, &rawConfig); err != nil {
-		return KubeConfig{CurrentContext: currentContext}
+		return KubeConfig{}, fmt.Errorf("failed to unmarshal kubeconfig: %w", err)
 	}
 
 	clusters := make([]KubeCluster, len(rawConfig.Clusters))
@@ -221,19 +245,56 @@ func fetchKubeConfig() KubeConfig {
 	return KubeConfig{
 		CurrentContext: currentContext,
 		Clusters:       clusters,
+	}, nil
+}
+
+func kubeconfigChecks(log *logger.Logger) error {
+	kubeConfigPath, err := getKubeConfigPath()
+	if err != nil {
+		return fmt.Errorf("getting kubeconfig path: %w", err)
 	}
+	log.Infof("Using kubeconfig %s", kubeConfigPath)
+
+	file, err := os.Open(kubeConfigPath)
+	if err != nil {
+		log.Warningf("Kubeconfig %s cannot be opened for reading.", kubeConfigPath)
+		if errors.Is(err, os.ErrNotExist) {
+			if RunningInContainer {
+				log.Warningf("Make sure that your kubeconfig is mounted into the container, as in: -v $KUBECONFIG:/kubeconfig:U")
+			}
+		} else {
+			if RunningInContainer {
+				log.Warningf("Make sure that your kubeconfig is mounted with the 'U' option, as in: -v $KUBECONFIG:/kubeconfig:U")
+			}
+		}
+		return fmt.Errorf("failed to open kubeconfig %q for reading: %w", kubeConfigPath, err)
+	}
+	_ = file.Close()
+	return nil
+}
+
+func getKubeConfigPath() (string, error) {
+	kubeConfigPath := os.Getenv("KUBECONFIG")
+	if kubeConfigPath == "" {
+		home := os.Getenv("HOME")
+		if home == "" {
+			return "", errors.New("HOME environment variable is not set")
+		}
+		kubeConfigPath = filepath.Join(home, ".kube", "config")
+	}
+	return kubeConfigPath, nil
 }
 
 // fetchAPIResources retrieves the list of API resources from the cluster
-func fetchAPIResources() []string {
+func fetchAPIResources() ([]string, error) {
 	cmd := exec.Command("kubectl", "api-resources", "-o", "name")
 	output, err := cmd.Output()
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to retrieve API resources: %w", err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	return lines
+	return lines, nil
 }
 
 func IsInStackroxRepository() bool {

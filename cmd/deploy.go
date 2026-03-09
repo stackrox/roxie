@@ -51,9 +51,8 @@ Examples:
 
 func runDeploy(cmd *cobra.Command, args []string) error {
 	log := logger.New()
-
-	if env.RunningInContainer {
-		log.Dim("Running containerized.")
+	if err := env.Initialize(log); err != nil {
+		return err
 	}
 
 	if env.RunningInteractively {
@@ -99,9 +98,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 
 		// On infra OpenShift we already get image pull secrets for Quay automatically.
-		if env.GetCurrentClusterType() != env.InfraOpenShift4 {
+		if clusterType := env.GetCurrentClusterType(); clusterType != env.InfraOpenShift4 {
 			if os.Getenv("REGISTRY_USERNAME") == "" || os.Getenv("REGISTRY_PASSWORD") == "" {
-				return errors.New("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables")
+				return fmt.Errorf("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables for clusters of type %s", clusterType)
 			}
 			if _, err := os.Stat("/kubeconfig"); err != nil {
 				return fmt.Errorf("containerized mode requires /kubeconfig file: %w", err)

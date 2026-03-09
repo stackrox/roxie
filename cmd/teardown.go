@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/deployer"
+	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/logger"
 )
 
@@ -28,12 +29,15 @@ func newTeardownCmd() *cobra.Command {
 }
 
 func runTeardown(cmd *cobra.Command, args []string) error {
+	log := logger.New()
+	if err := env.Initialize(log); err != nil {
+		return err
+	}
+
 	component := "both"
 	if len(args) > 0 {
 		component = args[0]
 	}
-
-	log := logger.New()
 
 	log.Infof("Tearing down %s", component)
 
