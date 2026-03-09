@@ -585,12 +585,20 @@ func (d *Deployer) ensureNamespaceExists(namespace string) error {
 	}
 
 	d.logger.Infof("Creating namespace %s", namespace)
-
 	_, err := d.runKubectl(context.Background(), KubectlOptions{
 		Args: []string{"create", "namespace", namespace},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create namespace: %w", err)
+	}
+
+	// Label namespace as managed by roxie since we just created it
+	_, err = d.runKubectl(context.Background(), KubectlOptions{
+		Args: []string{"label", "namespace", namespace,
+			"app.kubernetes.io/managed-by=roxie", "--overwrite"},
+	})
+	if err != nil {
+		d.logger.Warningf("failed to label namespace %s: %v", namespace, err)
 	}
 
 	return nil

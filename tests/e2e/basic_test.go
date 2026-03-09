@@ -28,12 +28,14 @@ func TestDeployBothSimple(t *testing.T) {
 	args := append([]string{roxieBinary, "deploy", "--early-readiness", "both", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
 	runCommand(t, deployTimeout*2, nil, args...)
 
-	// Verify namespaces exist
+	// Verify namespaces exist and have managed-by labels
 	t.Log("Verifying namespace: acs-central")
 	verifyNamespaceExists(t, "acs-central")
+	verifyNamespaceHasLabel(t, "acs-central", "app.kubernetes.io/managed-by", "roxie")
 
 	t.Log("Verifying namespace: acs-sensor")
 	verifyNamespaceExists(t, "acs-sensor")
+	verifyNamespaceHasLabel(t, "acs-sensor", "app.kubernetes.io/managed-by", "roxie")
 
 	// Brief pause before cleanup
 	time.Sleep(5 * time.Second)
