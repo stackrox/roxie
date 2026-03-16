@@ -266,11 +266,26 @@ func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
 		rewrite("rhacs-collector-slim-rhel8", "release-collector-slim"),
 		rewrite("rhacs-collector-rhel8", "release-collector"),
 		rewrite("rhacs-fact-rhel8", "release-fact"),
-		rewrite("rhacs-fact-rhel9", "release-fact"),
 		rewrite("rhacs-roxctl-rhel8", "release-roxctl"),
 		rewrite("rhacs-central-db-rhel8", "release-central-db"),
 		rewrite("rhacs-scanner-v4-db-rhel8", "release-scanner-v4-db"),
 		rewrite("rhacs-scanner-v4-rhel8", "release-scanner-v4"),
+
+		// Also support downstream image rewriting for upcoming UBI9/rhel9 images.
+		rewrite("rhacs-operator-bundle-rhel9", "release-operator-bundle"),
+		rewrite("rhacs-rhel9-operator", "release-operator"),
+		rewrite("rhacs-main-rhel9", "release-main"),
+		rewrite("rhacs-scanner-rhel9", "release-scanner"),
+		rewrite("rhacs-scanner-slim-rhel9", "release-scanner-slim"),
+		rewrite("rhacs-scanner-db-rhel9", "release-scanner-db"),
+		rewrite("rhacs-scanner-db-slim-rhel9", "release-scanner-db-slim"),
+		rewrite("rhacs-collector-slim-rhel9", "release-collector-slim"),
+		rewrite("rhacs-collector-rhel9", "release-collector"),
+		rewrite("rhacs-fact-rhel9", "release-fact"),
+		rewrite("rhacs-roxctl-rhel9", "release-roxctl"),
+		rewrite("rhacs-central-db-rhel9", "release-central-db"),
+		rewrite("rhacs-scanner-v4-db-rhel9", "release-scanner-v4-db"),
+		rewrite("rhacs-scanner-v4-rhel9", "release-scanner-v4"),
 	}
 
 	icsp := map[string]interface{}{
