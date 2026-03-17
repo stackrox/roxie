@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	"gopkg.in/yaml.v3"
 
 	"github.com/stackrox/roxie/internal/clusterdefaults"
 	"github.com/stackrox/roxie/internal/dockerauth"
@@ -89,36 +90,36 @@ var (
 
 // Deployer is the base deployer for ACS
 type Deployer struct {
-	logger                 *logger.Logger
-	startTime              time.Time
-	dockerAuth             *dockerauth.DockerAuth
-	imageCache             *imagecache.ImageCache
-	portForward            *portforward.Manager
-	clusterDefaults        *clusterdefaults.Manager
-	kubectl                string
-	roxctlVersion          string
-	centralNamespace       string
-	sensorNamespace        string
-	mainImageTag           string
-	operatorTag            string
-	centralEndpoint        string
-	centralPassword        string
-	roxCACertFile          string
-	kubeContext            string
-	portForwardEnabled     bool
-	pauseReconciliation    bool
-	exposure               string
-	overrideFile           string
-	overrideSetExpressions []string
-	envrcFile              string
-	useHelm                bool
-	useOLM                 bool
-	useKonflux             bool
-	shouldDeployOperator   bool
-	verbose                bool
-	earlyReadiness         bool
-	dockerCreds            *dockerauth.Credentials
-	clusterResourceKinds   map[string]struct{}
+	logger                  *logger.Logger
+	startTime               time.Time
+	dockerAuth              *dockerauth.DockerAuth
+	imageCache              *imagecache.ImageCache
+	portForward             *portforward.Manager
+	clusterDefaults         *clusterdefaults.Manager
+	kubectl                 string
+	roxctlVersion           string
+	centralNamespace        string
+	sensorNamespace         string
+	mainImageTag            string
+	operatorTag             string
+	centralEndpoint         string
+	centralPassword         string
+	roxCACertFile           string
+	kubeContext             string
+	portForwardEnabled      bool
+	pauseReconciliation     bool
+	exposure                string
+	centralOverrides        map[string]interface{}
+	securedClusterOverrides map[string]interface{}
+	envrcFile               string
+	useHelm                 bool
+	useOLM                  bool
+	useKonflux              bool
+	shouldDeployOperator    bool
+	verbose                 bool
+	earlyReadiness          bool
+	dockerCreds             *dockerauth.Credentials
+	clusterResourceKinds    map[string]struct{}
 }
 
 type ResourceKindWithName struct {
@@ -308,7 +309,137 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context, wait bool)
 	return nil
 }
 
-func New(log *logger.Logger, overrideFile string, overrideSetExpressions []string) (*Deployer, error) {
+var (
+	centralOverridePrefix        = "central"
+	securedClusterOverridePrefix = "securedCluster"
+)
+
+func unmarshalYamlFile(filePath string) (map[string]interface{}, error) {
+	rawContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read override file: %w", err)
+	}
+	var content map[string]interface{}
+	if err := yaml.Unmarshal(rawContent, &content); err != nil {
+		return nil, fmt.Errorf("failed to parse override file: %w", err)
+	}
+	return content, nil
+}
+
+func (d *Deployer) SetCombinedOverrideFile(overrideFile string) error {
+	overrides, err := unmarshalYamlFile(overrideFile)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal override file: %w", err)
+	}
+
+	for key, value := range overrides {
+		switch key {
+		case centralOverridePrefix:
+			d.centralOverrides = value.(map[string]interface{})
+		case securedClusterOverridePrefix:
+			d.securedClusterOverrides = value.(map[string]interface{})
+		default:
+			d.logger.Errorf("override file contains key %q; combined deployments require extra nesting under 'central' or 'securedCluster'", key)
+			return fmt.Errorf("unexpected key %q in override file", key)
+		}
+	}
+
+	return nil
+}
+
+// Returns remaining set expressions.
+func setOverrideSetExpressions(overrides map[string]interface{}, prefix string, overrideSetExpressions []string) ([]string, error) {
+	remainingSetExpressions := make([]string, 0)
+	for _, expr := range overrideSetExpressions {
+		parts := splitAtFirstEquals(expr)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid override expression '%s': expected format 'key.path=value'", expr)
+		}
+		key := parts[0]
+		if prefix != "" {
+			if !strings.HasPrefix(parts[0], prefix) {
+				remainingSetExpressions = append(remainingSetExpressions, expr)
+				continue
+			}
+			key = strings.TrimPrefix(key, prefix+".")
+		}
+		var val interface{}
+		if err := yaml.Unmarshal([]byte(parts[1]), &val); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal value '%s' for key '%s': %w", parts[1], key, err)
+		}
+		if err := setNestedValue(overrides, key, val); err != nil {
+			return nil, fmt.Errorf("failed to set value for key '%s': %w", key, err)
+		}
+	}
+
+	return remainingSetExpressions, nil
+}
+
+func (d *Deployer) SetCombinedOverrideSetExpressions(overrideSetExpressions []string) error {
+	if d.centralOverrides == nil {
+		d.centralOverrides = make(map[string]interface{})
+	}
+	if d.securedClusterOverrides == nil {
+		d.securedClusterOverrides = make(map[string]interface{})
+	}
+
+	remainingSetExpressions, err := setOverrideSetExpressions(d.centralOverrides, centralOverridePrefix, overrideSetExpressions)
+	if err != nil {
+		return fmt.Errorf("failed to set central override set expressions: %w", err)
+	}
+	remainingSetExpressions, err = setOverrideSetExpressions(d.securedClusterOverrides, securedClusterOverridePrefix, remainingSetExpressions)
+	if err != nil {
+		return fmt.Errorf("failed to set secured cluster override set expressions: %w", err)
+	}
+
+	if len(remainingSetExpressions) > 0 {
+		return fmt.Errorf("some override expressions were not properly prefixed with 'central.' or 'securedCluster.': %v", remainingSetExpressions)
+	}
+
+	return nil
+}
+
+func (d *Deployer) SetCentralOverrideFile(overrideYaml string) error {
+	centralOverrides, err := unmarshalYamlFile(overrideYaml)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal override file: %w", err)
+	}
+	d.centralOverrides = centralOverrides
+	return nil
+}
+
+func (d *Deployer) SetCentralOverrideSetExpressions(overrideSetExpressions []string) error {
+	if d.centralOverrides == nil {
+		d.centralOverrides = make(map[string]interface{})
+	}
+	_, err := setOverrideSetExpressions(d.centralOverrides, "", overrideSetExpressions)
+	if err != nil {
+		return fmt.Errorf("failed to set central override set expressions: %w", err)
+	}
+	return nil
+}
+
+func (d *Deployer) SetSecuredClusterOverrideFile(overrideYaml string) error {
+	securedClusterOverrides, err := unmarshalYamlFile(overrideYaml)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal override file: %w", err)
+	}
+	d.securedClusterOverrides = securedClusterOverrides
+	return nil
+}
+
+func (d *Deployer) SetSecuredClusterOverrideSetExpressions(overrideSetExpressions []string) error {
+	if d.securedClusterOverrides == nil {
+		d.securedClusterOverrides = make(map[string]interface{})
+	}
+	_, err := setOverrideSetExpressions(d.securedClusterOverrides, "", overrideSetExpressions)
+	if err != nil {
+		return fmt.Errorf("failed to set secured cluster override set expressions: %w", err)
+	}
+	return nil
+}
+
+func New(log *logger.Logger) (*Deployer, error) {
 	// Check required tools first
 	if err := checkRequiredTools(); err != nil {
 		return nil, err
@@ -322,16 +453,14 @@ func New(log *logger.Logger, overrideFile string, overrideSetExpressions []strin
 	kubectl := getKubectl()
 
 	d := &Deployer{
-		logger:                 log,
-		startTime:              time.Now(),
-		kubectl:                kubectl,
-		roxctlVersion:          roxctlVersion,
-		centralNamespace:       centralNamespace,
-		sensorNamespace:        sensorNamespace,
-		exposure:               defaultExposure,
-		overrideFile:           overrideFile,
-		overrideSetExpressions: overrideSetExpressions,
-		shouldDeployOperator:   true,
+		logger:               log,
+		startTime:            time.Now(),
+		kubectl:              kubectl,
+		roxctlVersion:        roxctlVersion,
+		centralNamespace:     centralNamespace,
+		sensorNamespace:      sensorNamespace,
+		exposure:             defaultExposure,
+		shouldDeployOperator: true,
 	}
 
 	d.dockerAuth = dockerauth.New(log)

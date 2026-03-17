@@ -132,9 +132,39 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return errors.New("cannot use --deploy-operator=false with --olm (OLM requires operator deployment)")
 	}
 
-	d, err := deployer.New(log, overrideFile, overrideSetExpressions)
+	d, err := deployer.New(log)
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
+	}
+
+	if overrideFile != "" {
+		var err error
+		switch component {
+		case "both", "all":
+			err = d.SetCombinedOverrideFile(overrideFile)
+		case "central":
+			err = d.SetCentralOverrideFile(overrideFile)
+		case "secured-cluster":
+			err = d.SetSecuredClusterOverrideFile(overrideFile)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to set override file: %w", err)
+		}
+	}
+
+	if len(overrideSetExpressions) > 0 {
+		var err error
+		switch component {
+		case "both", "all":
+			err = d.SetCombinedOverrideSetExpressions(overrideSetExpressions)
+		case "central":
+			err = d.SetCentralOverrideSetExpressions(overrideSetExpressions)
+		case "secured-cluster":
+			err = d.SetSecuredClusterOverrideSetExpressions(overrideSetExpressions)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to set override set expressions: %w", err)
+		}
 	}
 
 	switch component {
