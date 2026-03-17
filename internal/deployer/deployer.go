@@ -331,22 +331,17 @@ func (d *Deployer) SetCombinedOverrideFile(overrideFile string) error {
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal override file: %w", err)
 	}
-	centralOverrides, ok := overrides[centralOverridePrefix]
-	if ok {
-		centralOverridesMap, ok := centralOverrides.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("central overrides are not a map")
-		}
-		d.centralOverrides = centralOverridesMap
-	}
 
-	securedClusterOverrides, ok := overrides[securedClusterOverridePrefix]
-	if ok {
-		securedClusterOverridesMap, ok := securedClusterOverrides.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("secured cluster overrides are not a map")
+	for key, value := range overrides {
+		switch key {
+		case centralOverridePrefix:
+			d.centralOverrides = value.(map[string]interface{})
+		case securedClusterOverridePrefix:
+			d.securedClusterOverrides = value.(map[string]interface{})
+		default:
+			d.logger.Errorf("override file contains key %q; combined deployments require extra nesting under 'central' or 'securedCluster'", key)
+			return fmt.Errorf("unexpected key %q in override file", key)
 		}
-		d.securedClusterOverrides = securedClusterOverridesMap
 	}
 
 	return nil
