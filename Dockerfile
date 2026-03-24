@@ -12,9 +12,6 @@ ARG TARGETARCH
 
 WORKDIR /build
 
-# Install build dependencies
-RUN apk add --no-cache git ca-certificates
-
 # Copy go mod files first for better layer caching
 COPY go.mod go.sum ./
 RUN go mod download
@@ -34,8 +31,7 @@ RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
 
 # Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
 ARG GCLOUD_VERSION=latest
-RUN apk add --no-cache curl python3 && \
-    ARCH=${TARGETARCH:-amd64} && \
+RUN ARCH=${TARGETARCH:-amd64} && \
     if [ "${ARCH}" = "amd64" ]; then \
         GCLOUD_ARCH="x86_64"; \
     elif [ "${ARCH}" = "arm64" ]; then \
