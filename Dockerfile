@@ -34,7 +34,7 @@ RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
     ./cmd
 
 # Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
-ARG GCLOUD_VERSION=latest
+ARG GCLOUD_VERSION=561.0.0
 RUN ARCH=${TARGETARCH:-amd64} && \
     if [ "${ARCH}" = "amd64" ]; then \
         GCLOUD_ARCH="x86_64"; \
@@ -43,7 +43,7 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     else \
         echo "ERROR: Unsupported architecture: ${ARCH}"; exit 1; \
     fi && \
-    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" | \
+    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VERSION}-linux-${GCLOUD_ARCH}.tar.gz" | \
     tar -xz -C /tmp && \
     /tmp/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet
 
@@ -76,7 +76,7 @@ RUN microdnf install -y \
     && rm -rf /var/cache/yum
 
 # Install kubectl - architecture-aware
-ARG KUBECTL_VERSION=v1.29.0
+ARG KUBECTL_VERSION=v1.35.3
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing kubectl for ${ARCH}" && \
     curl -fsSLo /usr/local/bin/kubectl \
@@ -84,7 +84,7 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     && chmod +x /usr/local/bin/kubectl
 
 # Install helm - architecture-aware
-ARG HELM_VERSION=v3.14.0
+ARG HELM_VERSION=v3.20.1
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing helm for ${ARCH}" && \
     curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" | \
@@ -94,7 +94,7 @@ RUN ARCH=${TARGETARCH:-amd64} && \
 # Install roxctl - architecture-aware
 # The mirror has architecture-specific binaries: 'roxctl' (amd64) and 'roxctl-arm64'
 # Override with --build-arg ROXCTL_VERSION=4.x.x for specific versions
-ARG ROXCTL_VERSION=latest
+ARG ROXCTL_VERSION=4.10.0
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing roxctl for ${ARCH}" && \
     if [ "${ARCH}" = "arm64" ]; then \
@@ -127,16 +127,18 @@ RUN ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
     ln -s /opt/google-cloud-sdk/bin/gke-gcloud-auth-plugin /usr/local/bin/gke-gcloud-auth-plugin
 
 # 2. AWS (EKS) - aws-iam-authenticator
+# Using GitHub releases for latest version (AWS S3 bucket has outdated versions)
+ARG AWS_IAM_AUTH_VERSION=0.7.12
 RUN ARCH=${TARGETARCH:-amd64} && \
-    echo "Installing aws-iam-authenticator for ${ARCH}" && \
+    echo "Installing aws-iam-authenticator v${AWS_IAM_AUTH_VERSION} for ${ARCH}" && \
     curl -fsSLo /usr/local/bin/aws-iam-authenticator \
-    "https://amazon-eks.s3.us-west-2.amazonaws.com/1.30.0/2024-05-12/bin/linux/${ARCH}/aws-iam-authenticator" && \
+    "https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v${AWS_IAM_AUTH_VERSION}/aws-iam-authenticator_${AWS_IAM_AUTH_VERSION}_linux_${ARCH}" && \
     chmod +x /usr/local/bin/aws-iam-authenticator
 
 # 3. Azure (AKS) - kubelogin
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing kubelogin (Azure) for ${ARCH}" && \
-    KUBELOGIN_VERSION="v0.1.4" && \
+    KUBELOGIN_VERSION="v0.2.16" && \
     curl -fsSL "https://github.com/Azure/kubelogin/releases/download/${KUBELOGIN_VERSION}/kubelogin-linux-${ARCH}.zip" \
     -o /tmp/kubelogin.zip && \
     unzip -q /tmp/kubelogin.zip -d /tmp && \
