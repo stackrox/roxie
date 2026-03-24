@@ -83,14 +83,6 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" \
     && chmod +x /usr/local/bin/kubectl
 
-# Install helm - architecture-aware
-ARG HELM_VERSION=v3.20.1
-RUN ARCH=${TARGETARCH:-amd64} && \
-    echo "Installing helm for ${ARCH}" && \
-    curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" | \
-    tar -xzO "linux-${ARCH}/helm" > /usr/local/bin/helm && \
-    chmod +x /usr/local/bin/helm
-
 # Install roxctl - architecture-aware
 # The mirror has architecture-specific binaries: 'roxctl' (amd64) and 'roxctl-arm64'
 # Override with --build-arg ROXCTL_VERSION=4.x.x for specific versions
