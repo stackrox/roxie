@@ -10,7 +10,11 @@ FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.25 A
 ARG TARGETOS
 ARG TARGETARCH
 
+# Create build directory with proper permissions for the default user
+USER 0
 WORKDIR /build
+RUN chown -R 1001:0 /build
+USER 1001
 
 # Copy go mod files first for better layer caching
 COPY go.mod go.sum ./
