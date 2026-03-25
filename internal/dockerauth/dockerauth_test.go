@@ -12,12 +12,8 @@ import (
 
 func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	// Set environment variables for test
-	os.Setenv("REGISTRY_USERNAME", "user")
-	os.Setenv("REGISTRY_PASSWORD", "pass")
-	defer func() {
-		os.Unsetenv("REGISTRY_USERNAME")
-		os.Unsetenv("REGISTRY_PASSWORD")
-	}()
+	t.Setenv("REGISTRY_USERNAME", "user")
+	t.Setenv("REGISTRY_PASSWORD", "pass")
 
 	log := logger.New()
 	da := New(log)
@@ -87,22 +83,8 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	os.Unsetenv("REGISTRY_USERNAME")
 	os.Unsetenv("REGISTRY_PASSWORD")
 
-	// Remove docker config if it exists (temporarily)
-	homeDir, _ := os.UserHomeDir()
-	dockerConfigPath := homeDir + "/.docker/config.json"
-	var backupConfig []byte
-	var configExisted bool
-
-	if data, err := os.ReadFile(dockerConfigPath); err == nil {
-		backupConfig = data
-		configExisted = true
-		os.Remove(dockerConfigPath)
-	}
-	defer func() {
-		if configExisted {
-			os.WriteFile(dockerConfigPath, backupConfig, 0644)
-		}
-	}()
+	// Use a temporary home directory to simulate missing credentials.
+	t.Setenv("HOME", t.TempDir())
 
 	log := logger.New()
 	da := New(log)
