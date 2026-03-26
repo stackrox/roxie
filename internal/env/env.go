@@ -290,7 +290,12 @@ func fetchAPIResources() ([]string, error) {
 	cmd := exec.Command("kubectl", "api-resources", "-o", "name")
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve API resources: %w", err)
+		var stderrMsg string
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderrMsg = fmt.Sprintf(", stderr: %s", string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("failed to retrieve API resources: %w%s", err, stderrMsg)
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
