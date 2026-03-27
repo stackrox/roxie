@@ -265,6 +265,11 @@ func (d *Deployer) createCentralCR(resources, exposure string) (map[string]inter
 
 	merged := helpers.MergeMaps(base, resourcesOverlay, d.centralOverrides)
 
+	// Apply feature flag overrides last with smart envVars merging
+	if d.featureFlagOverrides != nil {
+		merged = mergeWithEnvVarSupport(merged, d.featureFlagOverrides)
+	}
+
 	return merged, nil
 }
 
@@ -663,6 +668,11 @@ func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[st
 	resourcesOverlay := d.getSecuredClusterResourcesOperator(resources)
 
 	merged := helpers.MergeMaps(base, resourcesOverlay, d.securedClusterOverrides)
+
+	// Apply feature flag overrides last with smart envVars merging
+	if d.featureFlagOverrides != nil {
+		merged = mergeWithEnvVarSupport(merged, d.featureFlagOverrides)
+	}
 
 	return merged, nil
 }
