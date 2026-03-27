@@ -3,7 +3,7 @@
 # Supports multi-architecture builds (amd64, arm64)
 
 # Stage 1: Build roxie binary
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.25 AS builder
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.25@sha256:2830e4bd1c394ed506c00a9abbb4d00445e2e72e8ef4e3cd51e0da0db66dee12 AS builder
 
 # Build arguments for cross-compilation
 # These are automatically provided by Docker buildx
@@ -35,20 +35,28 @@ RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
 
 # Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
 ARG GCLOUD_VERSION=561.0.0
+ARG GCLOUD_ARM64_SHA256=f403765193caad58991650872773780d1683a78f668eee591277383ab45e6148
+ARG GCLOUD_AMD64_SHA256=10e0f4ff6e6a09a50636245a14786530ee8e8d1cbe2f2ce068e2dee7857d99cc
 RUN ARCH=${TARGETARCH:-amd64} && \
     if [ "${ARCH}" = "amd64" ]; then \
         GCLOUD_ARCH="x86_64"; \
+        GCLOUD_SHA256=${GCLOUD_AMD64_SHA256}; \
     elif [ "${ARCH}" = "arm64" ]; then \
         GCLOUD_ARCH="arm"; \
+        GCLOUD_SHA256=${GCLOUD_ARM64_SHA256}; \
     else \
         echo "ERROR: Unsupported architecture: ${ARCH}"; exit 1; \
     fi && \
-    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VERSION}-linux-${GCLOUD_ARCH}.tar.gz" | \
-    tar -xz -C /tmp && \
+    filename="google-cloud-cli-${GCLOUD_VERSION}-linux-${GCLOUD_ARCH}.tar.gz" && \
+    url="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/${filename}" && \
+    echo "Downloading gcloud SDK from: ${url}" && \
+    curl -o "/tmp/${filename}" -fsSL "${url}" && \
+    echo "${GCLOUD_SHA256}  /tmp/${filename}" | sha256sum -c - && \
+    tar -xz -C /tmp "/tmp/${filename}" && \
     /tmp/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet
 
 # Stage 2: Runtime image based on Red Hat UBI Minimal
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:83006d535923fcf1345067873524a3980316f51794f01d8655be55d6e9387183
 
 # Architecture detection for multi-arch builds
 ARG TARGETARCH
@@ -77,31 +85,44 @@ RUN microdnf install -y \
 
 # Install kubectl - architecture-aware
 ARG KUBECTL_VERSION=v1.35.3
+ARG KUBECTL_ARM64_SHA256=6f0cd088a82dde5d5807122056069e2fac4ed447cc518efc055547ae46525f14
+ARG KUBECTL_AMD64_SHA256=fd31c7d7129260e608f6faf92d5984c3267ad0b5ead3bced2fe125686e286ad6
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing kubectl for ${ARCH}" && \
-    curl -fsSLo /usr/local/bin/kubectl \
-    "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" \
-    && chmod +x /usr/local/bin/kubectl
+    if [ "${ARCH}" = "arm64" ]; then \
+        KUBECTL_SHA256=${KUBECTL_ARM64_SHA256}; \
+    elif [ "${ARCH}" = "amd64" ]; then \
+        KUBECTL_SHA256=${KUBECTL_AMD64_SHA256}; \
+    else \
+        echo "ERROR: Unsupported architecture: ${ARCH}"; exit 1; \
+    fi && \
+    url="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" && \
+    echo "Downloading kubectl from: ${url}" && \
+    curl -fsSLo /usr/local/bin/kubectl "${url}" && \
+    echo "${KUBECTL_SHA256}  /usr/local/bin/kubectl" | sha256sum -c - && \
+    chmod +x /usr/local/bin/kubectl
 
 # Install roxctl - architecture-aware
 # The mirror has architecture-specific binaries: 'roxctl' (amd64) and 'roxctl-arm64'
-# Override with --build-arg ROXCTL_VERSION=4.x.x for specific versions
 ARG ROXCTL_VERSION=4.10.0
+ARG ROXCTL_ARM64_SHA256=a3951413d56671e46413009d31004d984e9c77c7520f35c8f062f5bd4e4f8212
+ARG ROXCTL_AMD64_SHA256=5db647b14569465866c0162522e83393ebf02f671f4556b1b3ed551b9f8433bc
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing roxctl for ${ARCH}" && \
     if [ "${ARCH}" = "arm64" ]; then \
         ROXCTL_BINARY="roxctl-arm64"; \
+        ROXCTL_SHA256=${ROXCTL_ARM64_SHA256}; \
     elif [ "${ARCH}" = "amd64" ]; then \
         ROXCTL_BINARY="roxctl"; \
+        ROXCTL_SHA256=${ROXCTL_AMD64_SHA256}; \
     else \
         echo "ERROR: Unsupported architecture: ${ARCH}"; exit 1; \
     fi && \
-    ROXCTL_PATH=$([ "${ROXCTL_VERSION}" = "latest" ] && echo "latest" || echo "${ROXCTL_VERSION}") && \
-    ROXCTL_URL="https://mirror.openshift.com/pub/rhacs/assets/${ROXCTL_PATH}/bin/Linux/${ROXCTL_BINARY}" && \
-    echo "Downloading from: ${ROXCTL_URL}" && \
-    curl -fsSLo /usr/local/bin/roxctl "${ROXCTL_URL}" && \
-    chmod +x /usr/local/bin/roxctl && \
-    echo "roxctl installed successfully for ${ARCH}"
+    url="https://mirror.openshift.com/pub/rhacs/assets/${ROXCTL_VERSION}/bin/Linux/${ROXCTL_BINARY}" && \
+    echo "Downloading from: ${url}" && \
+    curl -fsSLo /usr/local/bin/roxctl "${url}" && \
+    echo "${ROXCTL_SHA256}  /usr/local/bin/roxctl" | sha256sum -c - && \
+    chmod +x /usr/local/bin/roxctl
 
 # Install podman (required for extracting operator bundles)
 # fuse-overlayfs provides better performance but vfs driver is more compatible
