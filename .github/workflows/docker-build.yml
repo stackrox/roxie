@@ -60,7 +60,26 @@ jobs:
             # Tag with version string from 'make version'.
             type=raw,value=${{ steps.build-meta.outputs.version }}
 
-      - name: Build and push Docker image
+      - name: Build and push slim image
+        id: docker_build_slim
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-slim
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.build-meta.outputs.version }}
+            GIT_COMMIT=${{ steps.build-meta.outputs.git_commit }}
+            BUILD_DATE=${{ steps.build-meta.outputs.build_date }}
+            VARIANT=slim
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=gha,mode=max
+
+      - name: Build and push image
         id: docker_build
         uses: docker/build-push-action@v6
         with:
@@ -78,5 +97,8 @@ jobs:
             type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=gha,mode=max
 
-      - name: Image digest
-        run: echo "Image pushed with digest ${{ steps.docker_build.outputs.digest }}"
+      - name: Images pushed
+        run: |
+          echo "Images pushed:"
+          echo "- ${{ steps.meta.outputs.tags }}-slim:${{ steps.docker_build_slim.outputs.imageid }}"
+          echo "- ${{ steps.meta.outputs.tags }}:${{ steps.docker_build.outputs.imageid }}"
