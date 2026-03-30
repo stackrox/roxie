@@ -34,9 +34,11 @@ RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
     ./cmd
 
 # Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
-ARG GCLOUD_VERSION=561.0.0
-ARG GCLOUD_ARM64_SHA256=f403765193caad58991650872773780d1683a78f668eee591277383ab45e6148
-ARG GCLOUD_AMD64_SHA256=10e0f4ff6e6a09a50636245a14786530ee8e8d1cbe2f2ce068e2dee7857d99cc
+# Latest version including checksums can be found at:
+#   https://docs.cloud.google.com/sdk/docs/install-sdk#linux
+ARG GCLOUD_VERSION=562.0.0
+ARG GCLOUD_ARM64_SHA256=4fde7da4176fdc8e88f33a2293a050afada0d72d77686cdcdedeee9e807d69b6
+ARG GCLOUD_AMD64_SHA256=38bd4f203392354fa7cc5514ee38ea02bb808aa5f1f7e00257806abf782dde38
 RUN ARCH=${TARGETARCH:-amd64} && \
     if [ "${ARCH}" = "amd64" ]; then \
         GCLOUD_ARCH="x86_64"; \
