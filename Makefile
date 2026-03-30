@@ -191,24 +191,36 @@ CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || command -v docker 
 PLATFORMS ?= linux/amd64,linux/arm64
 BUILD_PLATFORM := $(shell uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
 
+VARIANT ?= standard
+
 .PHONY: docker-build
 docker-build: ## Build roxie Docker image for current platform
-	@echo "🐳 Building roxie container image for current platform..."
+	@echo "🐳 Building roxie container image for current platform (variant: $(VARIANT))..."
 	@if [ -z "$(CONTAINER_RUNTIME)" ]; then \
 		echo "❌ No container runtime found. Please install docker or podman."; \
 		exit 1; \
 	fi
+	@VARIANT_SUFFIX=""; \
+	if [ "$(VARIANT)" != "standard" ]; then \
+		VARIANT_SUFFIX="-$(VARIANT)"; \
+	fi; \
+	LATEST_TAG="$(IMAGE_REGISTRY)/$(IMAGE_NAME):latest$$VARIANT_SUFFIX"; \
+	VERSION_TAG="$(IMAGE_REGISTRY)/$(IMAGE_NAME):$(VERSION)$$VARIANT_SUFFIX"; \
 	$(CONTAINER_RUNTIME) build \
+		--build-arg VARIANT=$(VARIANT) \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
-		-t $(IMAGE_LATEST_TAG) \
-		-t $(IMAGE_VERSION_TAG) \
-		-f Dockerfile .
-	@echo "✅ Built container images:"
-	@echo "   - $(IMAGE_LATEST_TAG)"
-	@echo "   - $(IMAGE_VERSION_TAG)"
+		-t $$LATEST_TAG \
+		-t $$VERSION_TAG \
+		-f Dockerfile . && \
+	echo "✅ Built container images:" && \
+	echo "   - $$LATEST_TAG" && \
+	echo "   - $$VERSION_TAG"
 
+.PHONY: docker-build-slim
+docker-build-slim: VARIANT=slim
+docker-build-slim: docker-build
 
 .PHONY: docker-build-arm64
 docker-build-arm64: ## Build roxie Docker image for arm64

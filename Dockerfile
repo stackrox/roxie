@@ -2,11 +2,26 @@
 # Produces a compact container image with roxie and all required dependencies
 # Supports multi-architecture builds (amd64, arm64)
 
-# Stage 1: Build roxie binary
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.25@sha256:2830e4bd1c394ed506c00a9abbb4d00445e2e72e8ef4e3cd51e0da0db66dee12 AS builder
+# Supports standard and slim variant.
+# Slim variant doesn't come with support for GKE gcloud authentication, Azure, AWS.
+# Useful for distributing roxie binaries via image registry.
+ARG VARIANT=standard
 
-# Build arguments for cross-compilation
-# These are automatically provided by Docker buildx
+# STAGE: builder-slim.
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.25@sha256:2830e4bd1c394ed506c00a9abbb4d00445e2e72e8ef4e3cd51e0da0db66dee12 AS builder-slim
+
+# # Install required tools via microdnf.
+# RUN microdnf install -y \
+#     podman fuse-overlayfs \
+#     # Core utilities
+#     tar \
+#     gzip \
+#     unzip \
+#     ca-certificates \
+#     # Clean up
+#     && microdnf clean all \
+#     && rm -rf /var/cache/yum
+
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -20,14 +35,16 @@ RUN go mod download
 COPY . .
 
 # Build roxie binary with version info and cross-compilation support
-ARG VERSION=0.1
-ARG GIT_COMMIT=unknown
-ARG BUILD_DATE=unknown
-RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-    -ldflags "-w -s -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" \
-    -o roxie \
-    ./cmd
+ARG VERSION
+ARG BUILD_DATE
+ARG GIT_COMMIT
+RUN CGO_ENABLED=0 \
+    GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH} \
+    VERSION=${VERSION} \
+    BUILD_DATE=${BUILD_DATE} \
+    GIT_COMMIT=${GIT_COMMIT} \
+    make build && cp /build/roxie /usr/local/bin/roxie
 
 # Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
 # Latest version including checksums can be found at:
@@ -155,29 +172,44 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     echo "${ROXCTL_SHA256}  /usr/local/bin/roxctl" | sha256sum -c - && \
     chmod +x /usr/local/bin/roxctl
 
-# Install podman (required for extracting operator bundles)
-# fuse-overlayfs provides better performance but vfs driver is more compatible
-RUN microdnf install -y podman fuse-overlayfs \
-    && microdnf clean all
+# Install kubectl - architecture-aware
+ARG KUBECTL_VERSION=v1.35.3
+RUN ARCH=${TARGETARCH:-amd64} && \
+    echo "Installing kubectl for ${ARCH}" && \
+    curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
 
-# Install common kubectl credential plugins for cloud provider authentication
-# This enables kubectl to work with GKE, EKS, AKS, and OpenShift clusters
-# without requiring users to manage different auth plugins
+COPY scripts/roxcurl /usr/local/bin/roxcurl
 
-# 1. Google Cloud (GKE) - gke-gcloud-auth-plugin
-# Copy gcloud SDK from builder stage (extracted there to avoid UBI filesystem restrictions)
-COPY --from=builder /tmp/google-cloud-sdk /opt/google-cloud-sdk
-RUN ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
-    ln -s /opt/google-cloud-sdk/bin/gke-gcloud-auth-plugin /usr/local/bin/gke-gcloud-auth-plugin
+RUN chmod +x /usr/local/bin/*
+
+# STAGE: builder-standard (based on builder-slim).
+
+FROM builder-slim AS builder-standard
+
+ARG TARGETARCH
+
+# Default python 3.9 from the go-toolset image is not supported by the gcloud SDK.
+RUN dnf install -y python312 && alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+# Download gcloud SDK in builder stage to avoid UBI filesystem restrictions.
+ARG GCLOUD_VERSION=561.0.0
+RUN ARCH=${TARGETARCH:-amd64} && \
+    if [ "${ARCH}" = "amd64" ]; then \
+        GCLOUD_ARCH="x86_64"; \
+    elif [ "${ARCH}" = "arm64" ]; then \
+        GCLOUD_ARCH="arm"; \
+    else \
+        echo "ERROR: Unsupported architecture: ${ARCH}"; exit 1; \
+    fi && \
+    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VERSION}-linux-${GCLOUD_ARCH}.tar.gz" | \
+    tar -xz -C /tmp && \
+    /tmp/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet
 
 # 2. AWS (EKS) - aws-iam-authenticator
 # Using GitHub releases for latest version (AWS S3 bucket has outdated versions)
 ARG AWS_IAM_AUTH_VERSION=0.7.12
 RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Installing aws-iam-authenticator v${AWS_IAM_AUTH_VERSION} for ${ARCH}" && \
-    curl -fsSLo /usr/local/bin/aws-iam-authenticator \
-    "https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v${AWS_IAM_AUTH_VERSION}/aws-iam-authenticator_${AWS_IAM_AUTH_VERSION}_linux_${ARCH}" && \
-    chmod +x /usr/local/bin/aws-iam-authenticator
+    curl -fsSLo /usr/local/bin/aws-iam-authenticator "https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v${AWS_IAM_AUTH_VERSION}/aws-iam-authenticator_${AWS_IAM_AUTH_VERSION}_linux_${ARCH}"
 
 # 3. Azure (AKS) - kubelogin
 RUN ARCH=${TARGETARCH:-amd64} && \
@@ -187,13 +219,26 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     -o /tmp/kubelogin.zip && \
     unzip -q /tmp/kubelogin.zip -d /tmp && \
     mv /tmp/bin/linux_${ARCH}/kubelogin /usr/local/bin/kubelogin && \
-    chmod +x /usr/local/bin/kubelogin && \
     rm -rf /tmp/kubelogin.zip /tmp/bin
 
-# Copy roxie binary and scripts from builder
-COPY --from=builder /build/roxie /usr/local/bin/roxie
-COPY scripts/roxcurl /usr/local/bin/roxcurl
-RUN chmod +x /usr/local/bin/roxcurl
+RUN chmod +x /usr/local/bin/*
+
+# STAGE: runtime-slim (copies from builder-slim).
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:83006d535923fcf1345067873524a3980316f51794f01d8655be55d6e9387183 AS runtime-slim
+
+ARG VARIANT=standard
+
+USER 0
+
+RUN microdnf install -y \
+    podman fuse-overlayfs \
+    # Core utilities
+    tar \
+    gzip \
+    unzip \
+    ca-certificates && \
+    # Clean up
+    microdnf clean all && rm -rf /var/cache/yum
 
 # Create non-root user with / as home directory for simplified volume mounting
 # This allows users to mount credentials directly at their standard paths:
@@ -213,13 +258,17 @@ RUN mkdir -p /etc/containers && \
     echo 'graphroot = "/.local/share/containers/storage"' >> /etc/containers/storage.conf && \
     chmod 644 /etc/containers/storage.conf /etc/containers/registries.conf
 
-# Set working directory
-WORKDIR /workspace
+LABEL maintainer="StackRox" \
+    description="roxie - Advanced Cluster Security deployment tool with all dependencies" \
+    io.k8s.description="Deploy and manage Red Hat Advanced Cluster Security on Kubernetes clusters" \
+    io.k8s.display-name="roxie ACS Deployment Tool (${VARIANT} variant)"
 
-# Switch to non-root user (users can override with --user root if needed)
+# Copy executables from builder.
+COPY --from=builder-slim /usr/local/bin/* /usr/local/bin
+
 USER roxie
+WORKDIR /
 
-# Set environment variables
 ENV HOME=/ \
     KUBECONFIG=/kubeconfig \
     PATH=/usr/local/bin:$PATH
@@ -227,3 +276,30 @@ ENV HOME=/ \
 # Display version information on container start
 ENTRYPOINT ["/usr/local/bin/roxie"]
 CMD ["--help"]
+
+FROM runtime-slim AS runtime-standard
+
+USER 0
+
+# Install required tools via microdnf.
+RUN microdnf install -y python312 && \
+    alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
+    microdnf clean all && \
+    rm -rf /var/cache/yum
+
+# Copy executables from builder.
+COPY --from=builder-slim --chown=0:0 /usr/local/bin/* /usr/local/bin
+
+# Install common kubectl credential plugins for cloud provider authentication
+# This enables kubectl to work with GKE, EKS, AKS, and OpenShift clusters
+# without requiring users to manage different auth plugins
+
+# 1. Google Cloud (GKE) - gke-gcloud-auth-plugin
+# Copy gcloud SDK from builder stage (extracted there to avoid UBI filesystem restrictions)
+COPY --from=builder-standard /tmp/google-cloud-sdk /opt/google-cloud-sdk
+RUN ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
+    ln -s /opt/google-cloud-sdk/bin/gke-gcloud-auth-plugin /usr/local/bin/gke-gcloud-auth-plugin
+
+USER roxie
+
+FROM runtime-${VARIANT} AS final
