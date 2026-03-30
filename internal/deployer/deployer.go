@@ -111,6 +111,7 @@ type Deployer struct {
 	exposure                string
 	centralOverrides        map[string]interface{}
 	securedClusterOverrides map[string]interface{}
+	featureFlagOverrides    map[string]interface{}
 	envrcFile               string
 	useHelm                 bool
 	useOLM                  bool
@@ -436,6 +437,31 @@ func (d *Deployer) SetSecuredClusterOverrideSetExpressions(overrideSetExpression
 	if err != nil {
 		return fmt.Errorf("failed to set secured cluster override set expressions: %w", err)
 	}
+	return nil
+}
+
+// SetFeatureFlags parses feature flags and stores them as overrides.
+// Feature flags are applied last (after file-based overrides and --set) to ensure highest precedence.
+func (d *Deployer) SetFeatureFlags(featureFlags []string) error {
+	if len(featureFlags) == 0 {
+		return nil
+	}
+
+	flags, err := parseFeatureFlags(featureFlags)
+	if err != nil {
+		return fmt.Errorf("failed to parse feature flags: %w", err)
+	}
+
+	if len(flags) == 0 {
+		return nil
+	}
+
+	for name, value := range flags {
+		d.logger.Dimf("Feature flag: %s=%t", name, value)
+	}
+
+	d.featureFlagOverrides = featureFlagsToOverrides(flags)
+
 	return nil
 }
 

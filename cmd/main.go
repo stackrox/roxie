@@ -25,6 +25,7 @@ var (
 	envrc                  string
 	singleNamespace        bool
 	tag                    string
+	featureFlags           []string
 )
 
 func main() {
