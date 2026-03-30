@@ -142,10 +142,12 @@ func TestParseFeatureFlags(t *testing.T) {
 
 func TestMergeEnvVars(t *testing.T) {
 	tests := []struct {
-		name     string
-		base     []interface{}
-		overlay  []interface{}
-		expected map[string]string
+		name          string
+		base          []interface{}
+		overlay       []interface{}
+		expected      map[string]string
+		checkOrdering bool
+		expectedOrder []string
 	}{
 		{
 			name: "overlapping names - overlay wins",
@@ -208,6 +210,23 @@ func TestMergeEnvVars(t *testing.T) {
 				"ROX_BAR": "bar",
 			},
 		},
+		{
+			name: "result is sorted alphabetically",
+			base: []interface{}{
+				map[string]interface{}{"name": "ROX_ZZZ", "value": "z"},
+				map[string]interface{}{"name": "ROX_AAA", "value": "a"},
+			},
+			overlay: []interface{}{
+				map[string]interface{}{"name": "ROX_MMM", "value": "m"},
+			},
+			expected: map[string]string{
+				"ROX_AAA": "a",
+				"ROX_MMM": "m",
+				"ROX_ZZZ": "z",
+			},
+			checkOrdering: true,
+			expectedOrder: []string{"ROX_AAA", "ROX_MMM", "ROX_ZZZ"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -228,6 +247,17 @@ func TestMergeEnvVars(t *testing.T) {
 
 			if !reflect.DeepEqual(resultMap, tt.expected) {
 				t.Errorf("got %v, want %v", resultMap, tt.expected)
+			}
+
+			if tt.checkOrdering {
+				actualOrder := make([]string, len(result))
+				for i, item := range result {
+					envVar := item.(map[string]interface{})
+					actualOrder[i] = envVar["name"].(string)
+				}
+				if !reflect.DeepEqual(actualOrder, tt.expectedOrder) {
+					t.Errorf("ordering: got %v, want %v", actualOrder, tt.expectedOrder)
+				}
 			}
 		})
 	}
