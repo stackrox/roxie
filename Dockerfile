@@ -32,9 +32,40 @@ RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
 # Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
 # Latest version including checksums can be found at:
 #   https://docs.cloud.google.com/sdk/docs/install-sdk#linux
+#
+# Unfortunately Googles release pipelines currently do not properly support versioned, checksum-protected downloads, 
+#
+# THE PROBLEM
+#
+#   The page https://docs.cloud.google.com/sdk/docs/install-sdk#linux references download links which are
+#   unversioned, which is not suitable for CI. For these unversioned links the page contains checksums.
+#
+#   The SDK can also be downloaded throught versioned links, which is suitable for CI usage. However, these
+#   versioned links are not referenced in the page and -- more importantly -- the checksums of both
+#   files (versioned and unversioned) are *not* the same. They differ in the filename contained in the gzip header.
+#
+# THE WORKAROUND
+#
+#   I have downloaded both files, versioned and unversioned, together with the latest checksum
+#   from the download page for the unversioned file. Then I have decompressed both files, verified
+#   that both archives are bytewise identical and then I have compted the sha256 of the versioned file
+#   and inserted it here.
+#
+#   Example:
+#
+#   ❯ curl -sLfO https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
+#   ❯ curl -sLfO https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-562.0.0-linux-x86_64.tar.gz
+#   ❯ UNVERSIONED_CHECKSUM=38bd4f203392354fa7cc5514ee38ea02bb808aa5f1f7e00257806abf782dde38
+#   ❯ gzip -dk google-cloud-cli-562.0.0-linux-x86_64.tar.gz; gzip -dk google-cloud-cli-linux-x86_64.tar.gz
+#   ❯ echo "${UNVERSIONED_CHECKSUM} google-cloud-cli-linux-x86_64.tar.gz" | sha256sum -c -
+#   google-cloud-cli-linux-x86_64.tar.gz: OK
+#   ❯ cmp google-cloud-cli-562.0.0-linux-x86_64.tar google-cloud-cli-linux-x86_64.tar
+#   ❯ sha256 google-cloud-cli-562.0.0-linux-x86_64.tar.gz
+#   SHA256 (google-cloud-cli-562.0.0-linux-x86_64.tar.gz) = 016a4b1702f8c97b585f9ae12c6182762758c17ef5302cb8561c7f6be5cc9af3
+#
 ARG GCLOUD_VERSION=562.0.0
-ARG GCLOUD_ARM64_SHA256=4fde7da4176fdc8e88f33a2293a050afada0d72d77686cdcdedeee9e807d69b6
-ARG GCLOUD_AMD64_SHA256=38bd4f203392354fa7cc5514ee38ea02bb808aa5f1f7e00257806abf782dde38
+ARG GCLOUD_ARM64_SHA256=a9ebaa0f4020ea0487c2c935af3d4566d1b4a1ccae685c6b7141211fc96424ee
+ARG GCLOUD_AMD64_SHA256=016a4b1702f8c97b585f9ae12c6182762758c17ef5302cb8561c7f6be5cc9af3
 RUN ARCH=${TARGETARCH:-amd64} && \
     if [ "${ARCH}" = "amd64" ]; then \
         GCLOUD_ARCH="x86_64"; \
@@ -49,8 +80,8 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     url="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/${filename}" && \
     echo "Downloading gcloud SDK from: ${url}" && \
     curl -o "/tmp/${filename}" -fsSL "${url}" && \
-    echo "${GCLOUD_SHA256}  /tmp/${filename}" | sha256sum -c - && \
-    tar -xz -C /tmp "/tmp/${filename}" && \
+    echo "${GCLOUD_SHA256} /tmp/${filename}" | sha256sum -c - && \
+    tar -xz -C /tmp -f "/tmp/${filename}" && \
     /tmp/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet
 
 # Stage 2: Runtime image based on Red Hat UBI Minimal
