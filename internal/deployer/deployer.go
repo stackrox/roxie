@@ -460,12 +460,7 @@ func (d *Deployer) SetFeatureFlags(featureFlags []string) error {
 		d.logger.Dimf("Feature flag: %s=%t", name, value)
 	}
 
-	featureFlagOverrides := featureFlagsToOverrides(flags)
-	if featureFlagOverrides == nil {
-		return nil
-	}
-
-	d.featureFlagOverrides = featureFlagOverrides
+	d.featureFlagOverrides = featureFlagsToOverrides(flags)
 
 	return nil
 }
