@@ -22,13 +22,8 @@ FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.25@s
 #     && microdnf clean all \
 #     && rm -rf /var/cache/yum
 
-# Build arguments for cross-compilation.
-# These are automatically provided by Docker buildx.
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION
-ARG BUILD_DATE
-ARG GIT_COMMIT
 
 WORKDIR /build
 
@@ -38,6 +33,18 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+
+# Build roxie binary with version info and cross-compilation support
+ARG VERSION
+ARG BUILD_DATE
+ARG GIT_COMMIT
+RUN CGO_ENABLED=0 \
+    GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH} \
+    VERSION=${VERSION} \
+    BUILD_DATE=${BUILD_DATE} \
+    GIT_COMMIT=${GIT_COMMIT} \
+    make build && cp /build/roxie /usr/local/bin/roxie
 
 # Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
 # Latest version including checksums can be found at:
@@ -143,14 +150,6 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     echo "${KUBECTL_SHA256}  /usr/local/bin/kubectl" | sha256sum -c - && \
     chmod +x /usr/local/bin/kubectl
 
-RUN CGO_ENABLED=0 \
-    GOOS=${TARGETOS} \
-    GOARCH=${TARGETARCH} \
-    VERSION=${VERSION} \
-    BUILD_DATE=${BUILD_DATE} \
-    GIT_COMMIT=${GIT_COMMIT} \
-    make build && cp /build/roxie /usr/local/bin/roxie
-
 # Install roxctl - architecture-aware
 # The mirror has architecture-specific binaries: 'roxctl' (amd64) and 'roxctl-arm64'
 ARG ROXCTL_VERSION=4.10.0
@@ -181,7 +180,7 @@ RUN ARCH=${TARGETARCH:-amd64} && \
 
 COPY scripts/roxcurl /usr/local/bin/roxcurl
 
-RUN chown 1001:0 /usr/local/bin/* && chmod +x /usr/local/bin/*
+RUN chmod +x /usr/local/bin/*
 
 # STAGE: builder-standard (based on builder-slim).
 
