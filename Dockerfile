@@ -82,6 +82,8 @@ RUN microdnf install -y \
     && rm -rf /var/cache/yum
 
 # Install kubectl - architecture-aware
+# Checksums can be found at
+#   https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl.sha256.
 ARG KUBECTL_VERSION=v1.35.3
 ARG KUBECTL_ARM64_SHA256=6f0cd088a82dde5d5807122056069e2fac4ed447cc518efc055547ae46525f14
 ARG KUBECTL_AMD64_SHA256=fd31c7d7129260e608f6faf92d5984c3267ad0b5ead3bced2fe125686e286ad6
