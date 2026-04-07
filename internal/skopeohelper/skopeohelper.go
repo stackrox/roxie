@@ -133,8 +133,12 @@ func extractManifestsFromDir(log *logger.Logger, skopeoDir, destDir string) erro
 func extractLayers(log *logger.Logger, layers []imageLayer, skopeoDir, destDir string) error {
 	for i, layer := range layers {
 		log.Dimf("Extracting layer %d/%d...", i+1, len(layers))
-		layerFilename := strings.TrimPrefix(layer.Digest, "sha256:")
-		layerFile := filepath.Join(skopeoDir, layerFilename)
+		// Strip algorithm prefix (sha256:, sha512:, blake3:, etc.) from digest to obtain the filename.
+		_, encoded, ok := strings.Cut(layer.Digest, ":")
+		if !ok {
+			return fmt.Errorf("invalid digest format (missing ':' separator): %s", layer.Digest)
+		}
+		layerFile := filepath.Join(skopeoDir, encoded)
 		if err := extractTarToDir(layerFile, destDir); err != nil {
 			return fmt.Errorf("failed to extract layer %s: %w", layer.Digest, err)
 		}
