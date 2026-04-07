@@ -104,8 +104,8 @@ RUN microdnf install -y \
     gzip \
     unzip \
     ca-certificates \
-    # Container tools
-    podman \
+    # Container tools (skopeo for OCI image operations, no daemon required)
+    skopeo \
     # Python (required for gcloud SDK)
     python3 \
     # Clean up
@@ -155,10 +155,6 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     echo "${ROXCTL_SHA256}  /usr/local/bin/roxctl" | sha256sum -c - && \
     chmod +x /usr/local/bin/roxctl
 
-# Install podman (required for extracting operator bundles)
-# fuse-overlayfs provides better performance but vfs driver is more compatible
-RUN microdnf install -y podman fuse-overlayfs \
-    && microdnf clean all
 
 # Install common kubectl credential plugins for cloud provider authentication
 # This enables kubectl to work with GKE, EKS, AKS, and OpenShift clusters
@@ -199,19 +195,8 @@ RUN chmod +x /usr/local/bin/roxcurl
 # This allows users to mount credentials directly at their standard paths:
 #   -v ~/.kube:/.kube:ro instead of -v ~/.kube:/home/roxie/.kube:ro
 RUN useradd -r -u 1000 -d / -s /bin/bash roxie \
-    && mkdir -p /.kube /.roxie /.local/share/containers /.config /.aws /.azure \
-    && chown -R roxie:roxie /.kube /.roxie /.local /.config /.aws /.azure
-
-# Configure podman for rootless operation inside container
-# This is critical for roxie's operator bundle extraction functionality
-# Using VFS storage driver for maximum compatibility in containerized environments
-RUN mkdir -p /etc/containers && \
-    echo 'unqualified-search-registries = ["docker.io", "quay.io"]' > /etc/containers/registries.conf && \
-    echo '[storage]' > /etc/containers/storage.conf && \
-    echo 'driver = "vfs"' >> /etc/containers/storage.conf && \
-    echo 'runroot = "/tmp/containers/storage"' >> /etc/containers/storage.conf && \
-    echo 'graphroot = "/.local/share/containers/storage"' >> /etc/containers/storage.conf && \
-    chmod 644 /etc/containers/storage.conf /etc/containers/registries.conf
+    && mkdir -p /.kube /.roxie /.config /.aws /.azure \
+    && chown -R roxie:roxie /.kube /.roxie /.config /.aws /.azure
 
 # Set working directory
 WORKDIR /workspace
