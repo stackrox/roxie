@@ -81,8 +81,7 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     echo "Downloading gcloud SDK from: ${url}" && \
     curl -o "/tmp/${filename}" -fsSL "${url}" && \
     echo "${GCLOUD_SHA256} /tmp/${filename}" | sha256sum -c - && \
-    tar -xz -C /tmp -f "/tmp/${filename}" && \
-    /tmp/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet
+    tar -xz -C /tmp -f "/tmp/${filename}"
 
 # Stage 2: Runtime image based on Red Hat UBI Minimal
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:83006d535923fcf1345067873524a3980316f51794f01d8655be55d6e9387183
@@ -164,6 +163,7 @@ RUN ARCH=${TARGETARCH:-amd64} && \
 # Copy gcloud SDK from builder stage (extracted there to avoid UBI filesystem restrictions)
 COPY --from=builder /tmp/google-cloud-sdk /opt/google-cloud-sdk
 RUN ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud && \
+    /opt/google-cloud-sdk/bin/gcloud components install gke-gcloud-auth-plugin --quiet && \
     ln -s /opt/google-cloud-sdk/bin/gke-gcloud-auth-plugin /usr/local/bin/gke-gcloud-auth-plugin
 
 # 2. AWS (EKS) - aws-iam-authenticator
