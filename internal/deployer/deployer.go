@@ -797,25 +797,13 @@ func (d *Deployer) waitForNamespaceDeletion(namespace string) error {
 
 // checkRequiredTools verifies that required CLI tools are available
 func checkRequiredTools() error {
-	requiredTools := []string{"kubectl", "roxctl"}
+	requiredTools := []string{"kubectl", "roxctl", "skopeo"}
 
 	var missing []string
 	for _, tool := range requiredTools {
 		if _, err := exec.LookPath(tool); err != nil {
 			missing = append(missing, tool)
 		}
-	}
-
-	// Check for container tool (podman or docker)
-	containerTool := ""
-	if _, err := exec.LookPath("podman"); err == nil {
-		containerTool = "podman"
-	} else if _, err := exec.LookPath("docker"); err == nil {
-		containerTool = "docker"
-	}
-
-	if containerTool == "" {
-		missing = append(missing, "podman or docker")
 	}
 
 	if len(missing) > 0 {
