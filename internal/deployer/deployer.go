@@ -664,7 +664,13 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 		if err := d.teardownSecuredCluster(ctx); err != nil {
 			d.logger.Warningf("Error tearing down secured cluster: %v", err)
 		}
-		return d.teardownCentral(ctx)
+		if err := d.teardownCentral(ctx); err != nil {
+			d.logger.Warningf("Error tearing down central: %v", err)
+		}
+		if err := d.teardownOperator(ctx); err != nil {
+			d.logger.Warningf("Error tearing down operator: %v", err)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unknown component: %s", components)
 	}
