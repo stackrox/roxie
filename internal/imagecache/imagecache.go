@@ -1,14 +1,15 @@
 package imagecache
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/logger"
+	"github.com/stackrox/roxie/internal/skopeohelper"
 )
 
 // ImageCache manages cache of verified pullable Docker images
@@ -132,21 +133,14 @@ func (ic *ImageCache) VerifyImagePullable(imageRef string) bool {
 		return true
 	}
 
-	_, stderr, err := helpers.RunCommandWithOutput(
-		"Verifying image pullability",
-		"podman",
-		[]string{"manifest", "inspect", imageRef},
-	)
-
+	// Use skopeo inspect to verify image accessibility.
+	err := skopeohelper.InspectImage(context.Background(), ic.logger, imageRef)
 	if err == nil {
 		ic.AddToCache(imageRef)
 		return true
 	}
 
-	if stderr != "" {
-		fmt.Fprintln(os.Stderr, stderr)
-	}
-
+	fmt.Fprintf(os.Stderr, "Failed to verify image %s: %v\n", imageRef, err)
 	return false
 }
 
