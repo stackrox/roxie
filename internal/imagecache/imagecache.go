@@ -1,14 +1,15 @@
 package imagecache
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/logger"
+	"github.com/stackrox/roxie/internal/skopeohelper"
 )
 
 // ImageCache manages cache of verified pullable Docker images
@@ -127,31 +128,24 @@ func (ic *ImageCache) AddToCache(imageRef string) {
 }
 
 // VerifyImagePullable verifies if image is pullable using cache when possible
-func (ic *ImageCache) VerifyImagePullable(imageRef string) bool {
+func (ic *ImageCache) VerifyImagePullable(ctx context.Context, imageRef string) bool {
 	if ic.IsCached(imageRef) {
 		return true
 	}
 
-	_, stderr, err := helpers.RunCommandWithOutput(
-		"Verifying image pullability",
-		"podman",
-		[]string{"manifest", "inspect", imageRef},
-	)
-
+	// Use skopeo inspect to verify image accessibility.
+	err := skopeohelper.InspectImage(ctx, ic.logger, imageRef)
 	if err == nil {
 		ic.AddToCache(imageRef)
 		return true
 	}
 
-	if stderr != "" {
-		fmt.Fprintln(os.Stderr, stderr)
-	}
-
+	fmt.Fprintf(os.Stderr, "Failed to verify image %s: %v\n", imageRef, err)
 	return false
 }
 
 // VerifyImagesPullable verifies that Docker images are pullable using cached results
-func (ic *ImageCache) VerifyImagesPullable(images ...string) bool {
+func (ic *ImageCache) VerifyImagesPullable(ctx context.Context, images ...string) bool {
 	if len(images) == 0 {
 		return true
 	}
@@ -207,7 +201,7 @@ func (ic *ImageCache) VerifyImagesPullable(images ...string) bool {
 				sem <- struct{}{}        // Acquire semaphore
 				defer func() { <-sem }() // Release semaphore
 
-				success := ic.VerifyImagePullable(image)
+				success := ic.VerifyImagePullable(ctx, image)
 				if success {
 					results <- result{img: image, success: true}
 				} else {

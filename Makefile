@@ -121,10 +121,6 @@ test-integration: build ## Run integration tests (requires kubectl context and c
 		echo "❌ No kubectl context found. Please configure kubectl first."; \
 		exit 1; \
 	fi
-	@if ! command -v podman >/dev/null 2>&1; then \
-		echo "❌ podman not found. Please install podman for integration tests."; \
-		exit 1; \
-	fi
 	$(GOTEST) -v -tags=integration -run=_Integration$$ -timeout=120m -parallel=1 ./...
 
 .PHONY: test-all

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,7 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/stackrox/roxie/internal/env"
-	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/skopeohelper"
 )
 
 const (
@@ -70,46 +69,11 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
-	d.logger.Dim(fmt.Sprintf("Created temporary directory: %s", bundleDir))
+	d.logger.Dimf("Created temporary directory: %s", bundleDir)
+	d.logger.Info("Pulling and extracting operator bundle image...")
 
-	containerTool := helpers.GetContainerTool()
-	d.logger.Dim(fmt.Sprintf("Using %s to extract bundle", containerTool))
-
-	// Check if image exists locally
-	inspectCmd := exec.CommandContext(ctx, containerTool, "inspect", bundleImage)
-	if err := inspectCmd.Run(); err != nil {
-		// Image doesn't exist locally, pull it
-		d.logger.Info("Pulling operator bundle image...")
-		// Force amd64 platform for pulling the operator bundle image.
-		// This is
-		//   1. fine because bundle images only contain platform-agnostic YAML files and
-		//   2. required to pull the image after the recent changes to the operator bundle image build process.
-		pullCmd := exec.CommandContext(ctx, containerTool, "pull", "--platform", "linux/amd64", bundleImage)
-		if output, err := pullCmd.CombinedOutput(); err != nil {
-			os.RemoveAll(bundleDir)
-			d.logger.Dim("Command output:")
-			d.logger.Dim(string(output))
-			return "", fmt.Errorf("failed to pull bundle image: %w", err)
-		}
-	} else {
-		d.logger.Dim("Bundle image already available locally, skipping pull")
-	}
-
-	containerID := fmt.Sprintf("stackrox-bundle-extract-%d", time.Now().Unix())
-
-	createCmd := exec.CommandContext(ctx, containerTool, "create", "--name", containerID, bundleImage)
-	if err := createCmd.Run(); err != nil {
-		os.RemoveAll(bundleDir)
-		return "", fmt.Errorf("failed to create container: %w", err)
-	}
-
-	defer func() {
-		rmCmd := exec.Command(containerTool, "rm", containerID)
-		rmCmd.Run()
-	}()
-
-	cpCmd := exec.CommandContext(ctx, containerTool, "cp", fmt.Sprintf("%s:/manifests/.", containerID), bundleDir)
-	if err := cpCmd.Run(); err != nil {
+	// Force amd64 platform - the bundle images only contain platform-agnostic YAML files.
+	if err := skopeohelper.ExtractManifestsFromImage(ctx, d.logger, bundleImage, bundleDir); err != nil {
 		os.RemoveAll(bundleDir)
 		return "", fmt.Errorf("failed to copy bundle contents: %w", err)
 	}
