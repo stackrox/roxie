@@ -44,14 +44,7 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 func InspectImage(ctx context.Context, log *logger.Logger, imageRef string) error {
 	log.Dimf("Inspecting image %s", imageRef)
 
-	args := []string{
-		"inspect",
-		"--override-os", "linux",
-		"--override-arch", "amd64",
-		withDockerTransport(imageRef),
-	}
-
-	cmd := exec.CommandContext(ctx, "skopeo", args...)
+	cmd := exec.CommandContext(ctx, "skopeo", "inspect", "--raw", withDockerTransport(imageRef))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Dimf("skopeo command output: %s", string(output))
