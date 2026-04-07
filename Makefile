@@ -108,10 +108,6 @@ test-e2e: build ## Run end-to-end tests (requires kubectl context and cluster ac
 		echo "❌ No kubectl context found. Please configure kubectl first."; \
 		exit 1; \
 	fi
-	@if ! command -v podman >/dev/null 2>&1; then \
-		echo "❌ podman not found. Please install podman for E2E tests."; \
-		exit 1; \
-	fi
 	$(GOTEST) -v -tags=e2e -timeout=120m -parallel=1 ./tests/e2e/...
 
 .PHONY: test-integration
