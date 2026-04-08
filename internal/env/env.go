@@ -143,7 +143,7 @@ func Initialize(log *logger.Logger) error {
 	}
 
 	const maxRetries = 3
-	const delay = 20 * time.Millisecond
+	const delay = 500 * time.Millisecond
 	var lastErr error
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
