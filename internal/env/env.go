@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/stackrox/roxie/internal/containerutil"
@@ -19,6 +20,7 @@ import (
 var (
 	RunningInContainer   bool
 	RunningInteractively bool
+	initializationMutex  sync.Mutex
 )
 
 // ClusterType represents different types of Kubernetes clusters
@@ -70,6 +72,9 @@ func isRunningInteractively() bool {
 // ensureInitialized performs lazy initialization of cluster information
 // This avoids contacting the cluster on package import
 func ensureInitialized(log *logger.Logger) error {
+	initializationMutex.Lock()
+	defer initializationMutex.Unlock()
+
 	if !initialized {
 		kubeConfig, err := fetchKubeConfig(log)
 		if err != nil {
