@@ -155,7 +155,7 @@ func Initialize(log *logger.Logger) error {
 		lastErr = err
 
 		if attempt < maxRetries {
-			log.Dim("Retrying...")
+			log.Dimf("Attempt %d/%d failed: %v, retrying...", attempt, maxRetries, err)
 			time.Sleep(delay)
 		}
 	}
