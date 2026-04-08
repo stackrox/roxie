@@ -46,11 +46,21 @@ Examples:
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
 	cmd.Flags().BoolVar(&singleNamespace, "single-namespace", false, "Deploy all components in a single namespace ('stackrox' by default)")
 	cmd.Flags().StringVarP(&tag, "tag", "t", "", "Main image tag to use for deployment (takes precedence over MAIN_IMAGE_TAG environment variable)")
+	cmd.Flags().StringSliceVar(&featureFlags, "features", []string{}, "Feature flag settings (e.g., +ROX_FOO,-ROX_BAR,ROX_BAZ=true)")
 
 	return cmd
 }
 
 func runDeploy(cmd *cobra.Command, args []string) error {
+	// Validate flag combinations early, before env initialization
+	if helm && olm {
+		return errors.New("cannot use both --helm and --olm flags together")
+	}
+
+	if helm && len(featureFlags) > 0 {
+		return errors.New("--features flag is not supported with --helm (feature flags only work with operator-based deployments)")
+	}
+
 	log := logger.New()
 	if err := env.Initialize(log); err != nil {
 		return err
@@ -109,11 +119,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 		log.Dim("Using KUBECONFIG=/kubeconfig.")
 		os.Setenv("KUBECONFIG", "/kubeconfig")
-	}
-
-	// Validate flag combinations early
-	if helm && olm {
-		return errors.New("cannot use both --helm and --olm flags together")
 	}
 
 	if konflux {
@@ -217,6 +222,11 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 	}
 	d.SetMainImageTag(mainImageTag)
+
+	// Parse and set feature flags (these will have highest precedence)
+	if err := d.SetFeatureFlags(featureFlags); err != nil {
+		return fmt.Errorf("failed to set feature flags: %w", err)
+	}
 
 	// Resolve "auto" resources based on cluster type
 	resolvedResources := resources

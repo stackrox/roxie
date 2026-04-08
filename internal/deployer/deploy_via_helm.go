@@ -443,7 +443,7 @@ func (d *Deployer) verifyHelmChartImages(ctx context.Context, chartDir, valuesFi
 		d.logger.Dim(fmt.Sprintf("  - %s", img))
 	}
 
-	if !d.imageCache.VerifyImagesPullable(imageRefs...) {
+	if !d.imageCache.VerifyImagesPullable(ctx, imageRefs...) {
 		return errors.New("one or more images not found or not pullable")
 	}
 

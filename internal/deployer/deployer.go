@@ -112,6 +112,7 @@ type Deployer struct {
 	exposure                string
 	centralOverrides        map[string]interface{}
 	securedClusterOverrides map[string]interface{}
+	featureFlagOverrides    map[string]interface{}
 	envrcFile               string
 	useHelm                 bool
 	useOLM                  bool
@@ -440,6 +441,31 @@ func (d *Deployer) SetSecuredClusterOverrideSetExpressions(overrideSetExpression
 	return nil
 }
 
+// SetFeatureFlags parses feature flags and stores them as overrides.
+// Feature flags are applied last (after file-based overrides and --set) to ensure highest precedence.
+func (d *Deployer) SetFeatureFlags(featureFlags []string) error {
+	if len(featureFlags) == 0 {
+		return nil
+	}
+
+	flags, err := parseFeatureFlags(featureFlags)
+	if err != nil {
+		return fmt.Errorf("failed to parse feature flags: %w", err)
+	}
+
+	if len(flags) == 0 {
+		return nil
+	}
+
+	for name, value := range flags {
+		d.logger.Dimf("Feature flag: %s=%t", name, value)
+	}
+
+	d.featureFlagOverrides = featureFlagsToOverrides(flags)
+
+	return nil
+}
+
 func New(log *logger.Logger) (*Deployer, error) {
 	// Check required tools first
 	if err := checkRequiredTools(); err != nil {
@@ -756,25 +782,13 @@ func (d *Deployer) waitForNamespaceDeletion(namespace string) error {
 
 // checkRequiredTools verifies that required CLI tools are available
 func checkRequiredTools() error {
-	requiredTools := []string{"kubectl", "roxctl"}
+	requiredTools := []string{"kubectl", "roxctl", "skopeo"}
 
 	var missing []string
 	for _, tool := range requiredTools {
 		if _, err := exec.LookPath(tool); err != nil {
 			missing = append(missing, tool)
 		}
-	}
-
-	// Check for container tool (podman or docker)
-	containerTool := ""
-	if _, err := exec.LookPath("podman"); err == nil {
-		containerTool = "podman"
-	} else if _, err := exec.LookPath("docker"); err == nil {
-		containerTool = "docker"
-	}
-
-	if containerTool == "" {
-		missing = append(missing, "podman or docker")
 	}
 
 	if len(missing) > 0 {
