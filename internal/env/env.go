@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/stackrox/roxie/internal/containerutil"
 	"github.com/stackrox/roxie/internal/logger"
@@ -18,6 +20,7 @@ import (
 var (
 	RunningInContainer   bool
 	RunningInteractively bool
+	initializationMutex  sync.Mutex
 )
 
 // ClusterType represents different types of Kubernetes clusters
@@ -69,10 +72,10 @@ func isRunningInteractively() bool {
 // ensureInitialized performs lazy initialization of cluster information
 // This avoids contacting the cluster on package import
 func ensureInitialized(log *logger.Logger) error {
+	initializationMutex.Lock()
+	defer initializationMutex.Unlock()
+
 	if !initialized {
-		if RunningInContainer {
-			log.Dim("Running containerized.")
-		}
 		kubeConfig, err := fetchKubeConfig(log)
 		if err != nil {
 			return err
@@ -133,14 +136,36 @@ type KubeCluster struct {
 }
 
 // Initialize performs environment initialization and sets the global variables.
+// Retries on failure to handle race conditions during container startup, which I have
+// observed in relation with podman :U mounts: the container was starting before the gcloud config
+// was writable by the container user, hence GKE authentication failed immediately.
 func Initialize(log *logger.Logger) error {
 	if log == nil {
 		log = logger.New()
 	}
-	if err := ensureInitialized(log); err != nil {
-		return fmt.Errorf("failed to initialize environment: %w", err)
+	if RunningInContainer {
+		log.Dim("Running containerized.")
 	}
-	return nil
+
+	const maxRetries = 3
+	const delay = 500 * time.Millisecond
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		err := ensureInitialized(log)
+		if err == nil {
+			return nil
+		}
+
+		lastErr = err
+
+		if attempt < maxRetries {
+			log.Dimf("Attempt %d/%d failed: %v, retrying...", attempt, maxRetries, err)
+			time.Sleep(delay)
+		}
+	}
+
+	return fmt.Errorf("failed to initialize environment after %d attempts: %w", maxRetries, lastErr)
 }
 
 // detectClusterType implements the cluster type detection logic
