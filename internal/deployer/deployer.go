@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/stackrox/roxie/internal/clusterdefaults"
+	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
@@ -547,22 +548,7 @@ func (d *Deployer) getClusterResourceKinds() (map[string]struct{}, error) {
 	return kinds, nil
 }
 
-func formatComponentName(component string) string {
-	switch component {
-	case "both", "all":
-		return "Central and Secured Cluster"
-	case "secured-cluster", "sensor":
-		return "Secured Cluster"
-	case "central":
-		return "Central"
-	case "operator":
-		return "Operator"
-	default:
-		return component
-	}
-}
-
-func (d *Deployer) Deploy(ctx context.Context, component, resources, exposure string) error {
+func (d *Deployer) Deploy(ctx context.Context, components component.Component, resources, exposure string) error {
 	adjustedResources, adjustedExposure, adjustedPortForward := d.clusterDefaults.ApplyConvenienceDefaults(
 		d.kubeContext,
 		resources,
@@ -583,23 +569,22 @@ func (d *Deployer) Deploy(ctx context.Context, component, resources, exposure st
 		}
 	}
 
-	d.logger.Infof("Initiating deployment of %s", formatComponentName(component))
+	d.logger.Infof("Initiating deployment of %s", components)
 
-	switch component {
-	case "operator":
+	if components.IncludesOperator() {
 		return d.deployOperatorOnly(ctx)
-	case "central":
-		return d.deployCentral(ctx, resources, exposure)
-	case "secured-cluster", "sensor":
-		return d.deploySecuredCluster(ctx, resources)
-	case "both", "all":
+	}
+	if components.IncludesCentral() {
 		if err := d.deployCentral(ctx, resources, exposure); err != nil {
 			return fmt.Errorf("failed to deploy central: %w", err)
 		}
-		return d.deploySecuredCluster(ctx, resources)
-	default:
-		return fmt.Errorf("unknown component: %s", component)
 	}
+	if components.IncludesSensor() {
+		if err := d.deploySecuredCluster(ctx, resources); err != nil {
+			return fmt.Errorf("failed to deploy secured cluster: %w", err)
+		}
+	}
+	return nil
 }
 
 // prepareCredentials prepares and verifies Docker credentials early to fail fast.
@@ -667,21 +652,21 @@ func (d *Deployer) deploySecuredCluster(ctx context.Context, resources string) e
 	return d.deploySecuredClusterOperator(ctx, resources)
 }
 
-func (d *Deployer) Teardown(ctx context.Context, component string) error {
-	d.logger.Infof("Starting teardown of %s", component)
+func (d *Deployer) Teardown(ctx context.Context, components component.Component) error {
+	d.logger.Infof("Starting teardown of %s", components)
 
-	switch component {
-	case "central":
+	switch components {
+	case component.Central:
 		return d.teardownCentral(ctx)
-	case "secured-cluster", "sensor":
+	case component.SecuredCluster:
 		return d.teardownSecuredCluster(ctx)
-	case "both", "all":
+	case component.All:
 		if err := d.teardownSecuredCluster(ctx); err != nil {
 			d.logger.Warningf("Error tearing down secured cluster: %v", err)
 		}
 		return d.teardownCentral(ctx)
 	default:
-		return fmt.Errorf("unknown component: %s", component)
+		return fmt.Errorf("unknown component: %s", components)
 	}
 }
 

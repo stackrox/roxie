@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/logger"
@@ -34,12 +35,12 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	component := "both"
-	if len(args) > 0 {
-		component = args[0]
+	components, err := component.FromArgs(args)
+	if err != nil {
+		return err
 	}
 
-	log.Infof("Tearing down %s", component)
+	log.Infof("Tearing down %s", components)
 
 	d, err := deployer.New(log)
 	if err != nil {
@@ -51,7 +52,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	if err := d.Teardown(ctx, component); err != nil {
+	if err := d.Teardown(ctx, components); err != nil {
 		return fmt.Errorf("teardown failed: %w", err)
 	}
 
