@@ -24,8 +24,8 @@ const (
 	operatorDeploymentName  = "rhacs-operator-controller-manager"
 )
 
-// deployOperator deploys the RHACS operator
-func (d *Deployer) deployOperator(ctx context.Context) error {
+// deployOperatorNonOLM deploys the RHACS operator without OLM
+func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.operatorTag)
 	if d.useKonflux {
 		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {

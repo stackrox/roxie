@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -571,9 +572,19 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component, r
 
 	d.logger.Infof("Initiating deployment of %s", components)
 
-	if components.IncludesOperator() {
+	// If only deploying operator, use the operator-only flow
+	if components.IncludesOperatorExplicitly() {
 		return d.deployOperatorOnly(ctx)
 	}
+
+	// Deploy operator first if needed (unless using Helm)
+	// Operator is required for central/sensor deployments when not using Helm
+	if !d.useHelm {
+		if err := d.deployOperator(ctx); err != nil {
+			return fmt.Errorf("failed to deploy operator: %w", err)
+		}
+	}
+
 	if components.IncludesCentral() {
 		if err := d.deployCentral(ctx, resources, exposure); err != nil {
 			return fmt.Errorf("failed to deploy central: %w", err)
@@ -660,16 +671,39 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 		return d.teardownCentral(ctx)
 	case component.SecuredCluster:
 		return d.teardownSecuredCluster(ctx)
-	case component.All:
-		if err := d.teardownSecuredCluster(ctx); err != nil {
-			d.logger.Warningf("Error tearing down secured cluster: %v", err)
+	case component.Both, component.All:
+		// Tear down components in parallel for better performance
+		var wg sync.WaitGroup
+
+		// Always tear down central and sensor
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			if err := d.teardownSecuredCluster(ctx); err != nil {
+				d.logger.Warningf("Error tearing down secured cluster: %v", err)
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			if err := d.teardownCentral(ctx); err != nil {
+				d.logger.Warningf("Error tearing down central: %v", err)
+			}
+		}()
+
+		// For 'all', also tear down the operator in parallel
+		if components == component.All {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := d.teardownOperator(ctx); err != nil {
+					d.logger.Warningf("Error tearing down operator: %v", err)
+				}
+			}()
 		}
-		if err := d.teardownCentral(ctx); err != nil {
-			d.logger.Warningf("Error tearing down central: %v", err)
-		}
-		if err := d.teardownOperator(ctx); err != nil {
-			d.logger.Warningf("Error tearing down operator: %v", err)
-		}
+
+		wg.Wait()
 		return nil
 	default:
 		return fmt.Errorf("unknown component: %s", components)

@@ -5,7 +5,8 @@ import "fmt"
 type Component int
 
 const (
-	All Component = iota
+	Both Component = iota
+	All
 	Central
 	SecuredCluster
 	Operator
@@ -14,7 +15,9 @@ const (
 func FromArgs(args []string) (Component, error) {
 	if len(args) > 0 {
 		switch args[0] {
-		case "both", "all":
+		case "both":
+			return Both, nil
+		case "all":
 			return All, nil
 		case "central":
 			return Central, nil
@@ -31,8 +34,10 @@ func FromArgs(args []string) (Component, error) {
 
 func (c Component) String() string {
 	switch c {
-	case All:
+	case Both:
 		return "Central and Secured Cluster"
+	case All:
+		return "Central, Secured Cluster, and Operator"
 	case Central:
 		return "Central"
 	case SecuredCluster:
@@ -45,21 +50,15 @@ func (c Component) String() string {
 }
 
 func (c Component) IncludesCentral() bool {
-	if c == SecuredCluster || c == Operator {
-		return false
-	}
-	return true
+	return c == Both || c == All || c == Central
 }
 
 func (c Component) IncludesSensor() bool {
-	if c == Central || c == Operator {
-		return false
-	}
-	return true
+	return c == Both || c == All || c == SecuredCluster
 }
 
 func (c Component) IncludesOperator() bool {
-	return c == Operator || c == All
+	return c == All || c == Operator
 }
 
 func (c Component) IncludesOperatorExplicitly() bool {
@@ -67,5 +66,5 @@ func (c Component) IncludesOperatorExplicitly() bool {
 }
 
 func (c Component) IncludesBothCentralAndSensor() bool {
-	return c == Central || c == SecuredCluster || c == All
+	return c == Both || c == All
 }
