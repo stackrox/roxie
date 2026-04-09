@@ -18,7 +18,7 @@ import (
 func (d *Deployer) deployOperatorOnly(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying Operator only...")
 
-	if err := d.deployOperator(ctx); err != nil {
+	if err := d.ensureOperatorDeployed(ctx); err != nil {
 		return err
 	}
 
@@ -27,8 +27,8 @@ func (d *Deployer) deployOperatorOnly(ctx context.Context) error {
 	return nil
 }
 
-// deployOperator deploys the operator with the correct version and mode
-func (d *Deployer) deployOperator(ctx context.Context) error {
+// ensureOperatorDeployed ensures the operator is deployed with the correct version and mode
+func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	// Skip operator deployment/checks if flag is set to false
 	if !d.shouldDeployOperator {
 		d.logger.Info("ℹ️  Skipping operator deployment checks (--deploy-operator=false)")

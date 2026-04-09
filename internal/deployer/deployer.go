@@ -580,7 +580,7 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component, r
 	// Deploy operator first if needed (unless using Helm)
 	// Operator is required for central/sensor deployments when not using Helm
 	if !d.useHelm {
-		if err := d.deployOperator(ctx); err != nil {
+		if err := d.ensureOperatorDeployed(ctx); err != nil {
 			return fmt.Errorf("failed to deploy operator: %w", err)
 		}
 	}

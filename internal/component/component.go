@@ -57,10 +57,6 @@ func (c Component) IncludesSensor() bool {
 	return c == Both || c == All || c == SecuredCluster
 }
 
-func (c Component) IncludesOperator() bool {
-	return c == All || c == Operator
-}
-
 func (c Component) IncludesOperatorExplicitly() bool {
 	return c == Operator
 }
