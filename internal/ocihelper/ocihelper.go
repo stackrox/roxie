@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -140,8 +139,14 @@ func extractTarGzToDir(r io.Reader, destDir string) error {
 	}
 	defer gzr.Close()
 
+	// Open a Root directory to prevent path traversal attacks.
+	root, err := os.OpenRoot(destDir)
+	if err != nil {
+		return fmt.Errorf("failed to open directory %q as root directory: %w", destDir, err)
+	}
+	defer root.Close()
+
 	tr := tar.NewReader(gzr)
-	dirPermissions := make(map[string]os.FileMode) // Map to track directory permissions.
 
 	for {
 		header, err := tr.Next()
@@ -152,42 +157,32 @@ func extractTarGzToDir(r io.Reader, destDir string) error {
 			return fmt.Errorf("failed to read tar header: %w", err)
 		}
 
-		// Prevent path traversal attacks.
-		target := filepath.Join(destDir, header.Name)
-		relPath, err := filepath.Rel(destDir, target)
-		if err != nil || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) || relPath == ".." {
-			continue
-		}
+		// Clean the path to remove redundant separators and .. components.
+		// This optimization reduces the cost of Root operations.
+		cleanPath := filepath.Clean(header.Name)
 
 		switch header.Typeflag {
 		case tar.TypeSymlink, tar.TypeLink:
 			// Skip symlinks and hardlinks for security.
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0755); err != nil {
-				return fmt.Errorf("failed to create directory: %w", err)
+			// Create directory using Root (automatically prevents traversal).
+			// Root will reject absolute paths, "..", and other traversal attempts.
+			err := root.Mkdir(cleanPath, 0755)
+			if err != nil && !os.IsExist(err) {
+				return err
 			}
-			dirPermissions[target] = os.FileMode(header.Mode)
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				return fmt.Errorf("failed to create parent directory: %w", err)
-			}
-
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
+			// Create file using Root (automatically prevents traversal).
+			outFile, err := root.OpenFile(cleanPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
 			if err != nil {
-				return fmt.Errorf("failed to create file %s: %w", target, err)
+				return fmt.Errorf("failed to create file %s: %w", cleanPath, err)
 			}
 
 			if _, err := io.Copy(outFile, tr); err != nil {
 				outFile.Close()
-				return fmt.Errorf("failed to write file %s: %w", target, err)
+				return fmt.Errorf("failed to write file %s: %w", cleanPath, err)
 			}
 			outFile.Close()
-		}
-	}
-
-	for dir, perm := range dirPermissions {
-		if err := os.Chmod(dir, perm); err != nil {
-			return fmt.Errorf("failed to set directory permissions for %s: %w", dir, err)
 		}
 	}
 
