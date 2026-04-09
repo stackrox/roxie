@@ -4,21 +4,24 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 
 	"github.com/stackrox/roxie/internal/logger"
 )
 
 // ExtractManifestsFromImage extracts the /manifests/ directory from an operator bundle image.
-// Authentication is handled automatically by skopeo from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
+// Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
 func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef, destDir string) error {
-	tempDir, err := os.MkdirTemp("", "skopeo-image-")
+	tempDir, err := os.MkdirTemp("", "oci-image-")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
@@ -26,12 +29,13 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 
 	log.Dimf("Using temporary directory: %s", tempDir)
 
-	if err := copyImageToDir(ctx, log, imageRef, tempDir); err != nil {
+	img, err := fetchImage(ctx, log, imageRef)
+	if err != nil {
 		return err
 	}
 
 	log.Dim("Extracting /manifests/ directory from image layers...")
-	if err := extractManifestsFromDir(log, tempDir, destDir); err != nil {
+	if err := extractManifestsFromImage(log, img, tempDir, destDir); err != nil {
 		return err
 	}
 
@@ -40,75 +44,70 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 }
 
 // InspectImage verifies that an OCI image is accessible.
-// Authentication is handled automatically by skopeo from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
+// Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
 func InspectImage(ctx context.Context, log *logger.Logger, imageRef string) error {
 	log.Dimf("Inspecting image %s", imageRef)
 
-	cmd := exec.CommandContext(ctx, "skopeo", "inspect", "--raw", withDockerTransport(imageRef))
-	output, err := cmd.CombinedOutput()
+	ref, err := name.ParseReference(imageRef)
 	if err != nil {
-		log.Dimf("skopeo command output: %s", string(output))
-		return fmt.Errorf("skopeo inspect failed: %w", err)
+		return fmt.Errorf("invalid image reference: %w", err)
+	}
+
+	// Use HEAD request to verify image exists without downloading
+	_, err = remote.Head(ref,
+		remote.WithContext(ctx),
+		remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	if err != nil {
+		return fmt.Errorf("image inspection failed: %w", err)
 	}
 
 	log.Dim("✓ Image is accessible")
 	return nil
 }
 
-// copyImageToDir downloads an OCI image to a local directory.
-func copyImageToDir(ctx context.Context, log *logger.Logger, imageRef, destDir string) error {
-	log.Dimf("Copying image %s to %s", imageRef, destDir)
+// fetchImage downloads an OCI image from a registry.
+func fetchImage(ctx context.Context, log *logger.Logger, imageRef string) (v1.Image, error) {
+	log.Dimf("Fetching image %s", imageRef)
 
-	args := []string{
-		"copy",
-		"--override-os", "linux",
-		"--override-arch", "amd64",
-		withDockerTransport(imageRef),
-		fmt.Sprintf("dir:%s", destDir),
-	}
-
-	cmd := exec.CommandContext(ctx, "skopeo", args...)
-	output, err := cmd.CombinedOutput()
+	ref, err := name.ParseReference(imageRef)
 	if err != nil {
-		log.Dimf("skopeo command output: %s", string(output))
-		return fmt.Errorf("skopeo copy failed: %w", err)
+		return nil, fmt.Errorf("invalid image reference: %w", err)
 	}
 
-	log.Dim("✓ Image copied successfully")
-	return nil
+	// For operator bundles, we fetch linux/amd64 by default as they contain
+	// platform-agnostic YAML files.
+	platform := v1.Platform{
+		OS:           "linux",
+		Architecture: "amd64",
+	}
+
+	img, err := remote.Image(ref,
+		remote.WithContext(ctx),
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithPlatform(platform))
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch image: %w", err)
+	}
+
+	log.Dim("✓ Image fetched successfully")
+	return img, nil
 }
 
-type imageManifest struct {
-	Layers []imageLayer `json:"layers"`
-}
-
-type imageLayer struct {
-	Digest string `json:"digest"`
-}
-
-// extractManifestsFromDir extracts /manifests/ from a skopeo dir-format image.
-func extractManifestsFromDir(log *logger.Logger, skopeoDir, destDir string) error {
-	manifestPath := filepath.Join(skopeoDir, "manifest.json")
-	manifestData, err := os.ReadFile(manifestPath)
+// extractManifestsFromImage extracts /manifests/ from an OCI image.
+func extractManifestsFromImage(log *logger.Logger, img v1.Image, tempExtractDir, destDir string) error {
+	layers, err := img.Layers()
 	if err != nil {
-		return fmt.Errorf("failed to read manifest: %w", err)
+		return fmt.Errorf("failed to get image layers: %w", err)
 	}
 
-	var manifest imageManifest
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		return fmt.Errorf("failed to parse manifest: %w", err)
-	}
+	log.Dimf("Found %d layer(s) in image", len(layers))
 
-	// Extract all image layers into tempExtractDir.
-	log.Dimf("Found %d layer(s) in image", len(manifest.Layers))
-	tempExtractDir, err := os.MkdirTemp("", "layer-extract-")
-	if err != nil {
-		return fmt.Errorf("failed to create temp extract dir: %w", err)
-	}
-	defer os.RemoveAll(tempExtractDir)
-
-	if err := extractLayers(log, manifest.Layers, skopeoDir, tempExtractDir); err != nil {
-		return err
+	// Extract all layers into tempExtractDir
+	for i, layer := range layers {
+		log.Dimf("Extracting layer %d/%d...", i+1, len(layers))
+		if err := extractLayerToDir(layer, tempExtractDir); err != nil {
+			return fmt.Errorf("failed to extract layer %d: %w", i+1, err)
+		}
 	}
 
 	// From the directory into which all layers have been extracted, copy the
@@ -122,32 +121,20 @@ func extractManifestsFromDir(log *logger.Logger, skopeoDir, destDir string) erro
 	return os.CopyFS(destDir, os.DirFS(manifestsDir))
 }
 
-// extractLayers extracts all image layers to a destination directory.
-func extractLayers(log *logger.Logger, layers []imageLayer, skopeoDir, destDir string) error {
-	for i, layer := range layers {
-		log.Dimf("Extracting layer %d/%d...", i+1, len(layers))
-		// Strip algorithm prefix (sha256:, sha512:, blake3:, etc.) from digest to obtain the filename.
-		_, encoded, ok := strings.Cut(layer.Digest, ":")
-		if !ok {
-			return fmt.Errorf("invalid digest format (missing ':' separator): %s", layer.Digest)
-		}
-		layerFile := filepath.Join(skopeoDir, encoded)
-		if err := extractTarToDir(layerFile, destDir); err != nil {
-			return fmt.Errorf("failed to extract layer %s: %w", layer.Digest, err)
-		}
+// extractLayerToDir extracts a single image layer to a directory.
+func extractLayerToDir(layer v1.Layer, destDir string) error {
+	rc, err := layer.Compressed()
+	if err != nil {
+		return fmt.Errorf("failed to get layer contents: %w", err)
 	}
-	return nil
+	defer rc.Close()
+
+	return extractTarGzToDir(rc, destDir)
 }
 
-// extractTarToDir extracts a gzip-compressed tar file to a directory.
-func extractTarToDir(tarPath, destDir string) error {
-	f, err := os.Open(tarPath)
-	if err != nil {
-		return fmt.Errorf("failed to open tar file: %w", err)
-	}
-	defer f.Close()
-
-	gzr, err := gzip.NewReader(f)
+// extractTarGzToDir extracts a gzip-compressed tar stream to a directory.
+func extractTarGzToDir(r io.Reader, destDir string) error {
+	gzr, err := gzip.NewReader(r)
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
@@ -205,8 +192,4 @@ func extractTarToDir(tarPath, destDir string) error {
 	}
 
 	return nil
-}
-
-func withDockerTransport(imageRef string) string {
-	return "docker://" + imageRef
 }

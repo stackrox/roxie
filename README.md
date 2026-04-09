@@ -64,7 +64,6 @@ the cluster to succeed.
 
 Prerequisites:
 - `kubectl` configured to point at your target cluster
-- `skopeo` is available (for OCI image operations)
 - The `roxctl` CLI
 - The `roxie` branch forked and cloned to your local machine
 

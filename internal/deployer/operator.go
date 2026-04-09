@@ -80,7 +80,7 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 	d.logger.Dimf("Created temporary directory: %s", bundleDir)
 	d.logger.Info("Pulling and extracting operator bundle image...")
 
-	// Force amd64 platform - the bundle images only contain platform-agnostic YAML files.
+	// The bundle images only contain platform-agnostic YAML files.
 	if err := skopeohelper.ExtractManifestsFromImage(ctx, d.logger, bundleImage, bundleDir); err != nil {
 		os.RemoveAll(bundleDir)
 		return "", fmt.Errorf("failed to copy bundle contents: %w", err)

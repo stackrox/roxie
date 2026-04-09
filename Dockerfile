@@ -106,8 +106,6 @@ RUN microdnf install -y \
     gzip \
     unzip \
     ca-certificates \
-    # Container tools (skopeo for OCI image operations, no daemon required)
-    skopeo \
     # Python (required for gcloud SDK)
     python3 \
     # Clean up

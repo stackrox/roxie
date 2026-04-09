@@ -133,7 +133,7 @@ func (ic *ImageCache) VerifyImagePullable(ctx context.Context, imageRef string) 
 		return true
 	}
 
-	// Use skopeo inspect to verify image accessibility.
+	// Use OCI registry client to verify image accessibility.
 	err := skopeohelper.InspectImage(ctx, ic.logger, imageRef)
 	if err == nil {
 		ic.AddToCache(imageRef)
