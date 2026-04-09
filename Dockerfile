@@ -11,6 +11,7 @@ ARG TARGETOS
 ARG TARGETARCH
 
 WORKDIR /build
+USER root
 
 # Copy go mod files first for better layer caching
 COPY go.mod go.sum ./
@@ -33,7 +34,7 @@ RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
 # Latest version including checksums can be found at:
 #   https://docs.cloud.google.com/sdk/docs/install-sdk#linux
 #
-# Unfortunately Googles release pipelines currently do not properly support versioned, checksum-protected downloads, 
+# Unfortunately Googles release pipelines currently do not properly support versioned, checksum-protected downloads,
 #
 # THE PROBLEM
 #
