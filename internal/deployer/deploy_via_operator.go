@@ -87,7 +87,7 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 				return fmt.Errorf("failed to deploy operator via OLM: %w", err)
 			}
 		} else {
-			if err := d.deployOperator(ctx); err != nil {
+			if err := d.deployOperatorNonOLM(ctx); err != nil {
 				return fmt.Errorf("failed to deploy operator: %w", err)
 			}
 		}
@@ -99,10 +99,6 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 // deployCentralOperator deploys Central using the operator
 func (d *Deployer) deployCentralOperator(ctx context.Context, resources, exposure string) error {
 	d.logger.Info("🚀 Deploying Central via Operator...")
-
-	if err := d.ensureOperatorDeployed(ctx); err != nil {
-		return err
-	}
 
 	if err := d.prepareNamespace(ctx, d.centralNamespace); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
@@ -603,10 +599,6 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context, exposure string
 // deploySecuredClusterOperator deploys SecuredCluster using the operator.
 func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources string) error {
 	d.logger.Info("🚀 Deploying SecuredCluster via Operator...")
-
-	if err := d.ensureOperatorDeployed(ctx); err != nil {
-		return err
-	}
 
 	if err := d.prepareNamespace(ctx, d.sensorNamespace); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)

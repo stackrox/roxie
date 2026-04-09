@@ -24,8 +24,8 @@ const (
 	operatorDeploymentName  = "rhacs-operator-controller-manager"
 )
 
-// deployOperator deploys the RHACS operator
-func (d *Deployer) deployOperator(ctx context.Context) error {
+// deployOperatorNonOLM deploys the RHACS operator without OLM
+func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.operatorTag)
 	if d.useKonflux {
 		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
@@ -396,6 +396,7 @@ metadata:
   name: %s
   labels:
     name: %s
+    app.kubernetes.io/managed-by: roxie
 `, operatorNamespace, operatorNamespace)
 
 	_, err := d.runKubectl(ctx, KubectlOptions{
@@ -633,4 +634,18 @@ func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 
 	d.logger.Success("✓ Non-OLM operator resources removed")
 	return nil
+}
+
+// teardownOperator removes the operator if it exists, detecting the deployment mode automatically.
+func (d *Deployer) teardownOperator(ctx context.Context) error {
+	operatorExists, operatorMode := d.detectOperatorDeploymentMode(ctx)
+	if !operatorExists {
+		d.logger.Dim("No operator deployment found, skipping operator teardown")
+		return nil
+	}
+
+	if operatorMode == OperatorModeOLM {
+		return d.teardownOperatorOLM(ctx)
+	}
+	return d.teardownOperatorNonOLM(ctx)
 }
