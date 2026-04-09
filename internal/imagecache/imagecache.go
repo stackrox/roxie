@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/stackrox/roxie/internal/logger"
-	"github.com/stackrox/roxie/internal/skopeohelper"
+	"github.com/stackrox/roxie/internal/ocihelper"
 )
 
 // ImageCache manages cache of verified pullable Docker images
@@ -134,7 +134,7 @@ func (ic *ImageCache) VerifyImagePullable(ctx context.Context, imageRef string) 
 	}
 
 	// Use OCI registry client to verify image accessibility.
-	err := skopeohelper.InspectImage(ctx, ic.logger, imageRef)
+	err := ocihelper.InspectImage(ctx, ic.logger, imageRef)
 	if err == nil {
 		ic.AddToCache(imageRef)
 		return true

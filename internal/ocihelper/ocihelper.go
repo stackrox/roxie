@@ -1,4 +1,4 @@
-package skopeohelper
+package ocihelper
 
 import (
 	"archive/tar"

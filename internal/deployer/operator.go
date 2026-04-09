@@ -15,7 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/stackrox/roxie/internal/env"
-	"github.com/stackrox/roxie/internal/skopeohelper"
+	"github.com/stackrox/roxie/internal/ocihelper"
 )
 
 const (
@@ -81,7 +81,7 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 	d.logger.Info("Pulling and extracting operator bundle image...")
 
 	// The bundle images only contain platform-agnostic YAML files.
-	if err := skopeohelper.ExtractManifestsFromImage(ctx, d.logger, bundleImage, bundleDir); err != nil {
+	if err := ocihelper.ExtractManifestsFromImage(ctx, d.logger, bundleImage, bundleDir); err != nil {
 		os.RemoveAll(bundleDir)
 		return "", fmt.Errorf("failed to copy bundle contents: %w", err)
 	}
