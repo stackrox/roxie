@@ -18,9 +18,9 @@ import (
 )
 
 var (
-	RunningInContainer   bool
-	RunningInteractively bool
-	initializationMutex  sync.Mutex
+	RunningInRoxieContainer bool
+	RunningInteractively    bool
+	initializationMutex     sync.Mutex
 )
 
 // ClusterType represents different types of Kubernetes clusters
@@ -51,8 +51,8 @@ var (
 )
 
 func init() {
-	RunningInContainer = containerutil.IsRunningInContainer()
-	if RunningInContainer {
+	RunningInRoxieContainer = containerutil.IsRunningInRoxieContainer()
+	if RunningInRoxieContainer {
 		os.Setenv("KUBECONFIG", "/kubeconfig")
 	}
 	RunningInteractively = isRunningInteractively()
@@ -143,7 +143,7 @@ func Initialize(log *logger.Logger) error {
 	if log == nil {
 		log = logger.New()
 	}
-	if RunningInContainer {
+	if RunningInRoxieContainer {
 		log.Dim("Running containerized.")
 	}
 
@@ -284,11 +284,11 @@ func kubeconfigChecks(log *logger.Logger) error {
 	if err != nil {
 		log.Warningf("Kubeconfig %s cannot be opened for reading.", kubeConfigPath)
 		if errors.Is(err, os.ErrNotExist) {
-			if RunningInContainer {
+			if RunningInRoxieContainer {
 				log.Warningf("Make sure that your kubeconfig is mounted into the container, as in: -v $KUBECONFIG:/kubeconfig:U")
 			}
 		} else {
-			if RunningInContainer {
+			if RunningInRoxieContainer {
 				log.Warningf("Make sure that your kubeconfig is mounted with the 'U' option, as in: -v $KUBECONFIG:/kubeconfig:U")
 			}
 		}
