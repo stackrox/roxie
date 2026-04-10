@@ -70,7 +70,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.build-meta.outputs.version }}
+            ROXIE_VERSION=${{ steps.build-meta.outputs.version }}
             GIT_COMMIT=${{ steps.build-meta.outputs.git_commit }}
             BUILD_DATE=${{ steps.build-meta.outputs.build_date }}
           cache-from: |
