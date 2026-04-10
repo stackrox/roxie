@@ -85,7 +85,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
 	}
 
-	if !env.RunningInteractively && envrc == "" {
+	if components.IncludesCentral() && !env.RunningInteractively && envrc == "" {
 		return errors.New("running without a controlling terminal requires --envrc to be set")
 	}
 
