@@ -179,7 +179,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	if envrc != "" {
-		log.Dimf("Writing environment variables to %s", envrc)
 		d.SetEnvrcFile(envrc)
 	}
 

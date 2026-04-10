@@ -640,6 +640,7 @@ func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string
 
 	// envrc may be used from different processes, so use actual endpoint not port-forward
 	if d.envrcFile != "" {
+		d.logger.Dimf("Writing environment variables to %s", d.envrcFile)
 		if err := d.writeEnvrcFile(ctx, exposure, portForwardWanted); err != nil {
 			d.logger.Warningf("Failed to write envrc file: %v", err)
 		}
