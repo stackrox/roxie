@@ -18,7 +18,7 @@ BUILD_DIR := .
 BINARY := $(BUILD_DIR)/$(BINARY_NAME)
 
 # Version information
-GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
+GIT_COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 # Convention is that the git tags are of the form
 #      v<major>.<minor>.<patch>-<build-number>-<commit-hash>[-dirty]
 #   or v<major>.<minor>.<patch>
@@ -30,7 +30,7 @@ GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 #
 # This will also become the tag of the docker images.
 ROXIE_VERSION ?= $(shell git describe --tags --always --dirty | sed -E 's/^v([0-9]+\.[0-9]+\.[0-9]+-[0-9]+-[a-z0-9]+(-dirty)?$$)/\1/')
-BUILD_DATE := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+BUILD_DATE ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -X main.version=$(ROXIE_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildDate=$(BUILD_DATE)
 
 .PHONY: get-build-date
