@@ -2,22 +2,17 @@ package containerutil
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIsRunningInRoxieContainer(t *testing.T) {
-	// This test simply verifies the function doesn't panic
-	// The actual result depends on whether the test is running
-	// inside a container or not
-	result := IsRunningInRoxieContainer()
+	t.Setenv("RUNNING_IN_ROXIE_CONTAINER", "true")
+	assert.True(t, IsRunningInRoxieContainer(), "Expected to detect running in roxie container when environment variable is set")
 
-	// Log the result for informational purposes
-	t.Logf("IsRunningInRoxieContainer() = %v", result)
+	t.Setenv("RUNNING_IN_ROXIE_CONTAINER", "")
+	assert.False(t, IsRunningInRoxieContainer(), "Expected to not detect running in roxie container when environment variable is unset")
 
-	// We can't assert a specific value since it depends on the environment
-	// But we can verify it returns a boolean without errors
-	if result {
-		t.Log("Detected running inside a roxie container")
-	} else {
-		t.Log("Running outside of roxie container")
-	}
+	t.Setenv("RUNNING_IN_ROXIE_CONTAINER", "garbage")
+	assert.False(t, IsRunningInRoxieContainer(), "Expected to not detect running in roxie container when environment variable has invalid value")
 }
