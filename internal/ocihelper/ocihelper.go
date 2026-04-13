@@ -165,8 +165,8 @@ func extractTarGzToDir(r io.Reader, destDir string) error {
 		case tar.TypeSymlink, tar.TypeLink:
 			// Skip symlinks and hardlinks for security.
 		case tar.TypeDir:
-			err := root.Mkdir(cleanPath, 0755)
-			if err != nil && !os.IsExist(err) {
+			err := root.MkdirAll(cleanPath, 0755)
+			if err != nil {
 				return err
 			}
 		case tar.TypeReg:
