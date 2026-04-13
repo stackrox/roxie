@@ -33,7 +33,6 @@ vendor/
 tests/
 
 # Configuration
-Makefile
 .envrc
 *.yaml
 *.yml

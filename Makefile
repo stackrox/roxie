@@ -18,7 +18,7 @@ BUILD_DIR := .
 BINARY := $(BUILD_DIR)/$(BINARY_NAME)
 
 # Version information
-GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
+GIT_COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 # Convention is that the git tags are of the form
 #      v<major>.<minor>.<patch>-<build-number>-<commit-hash>[-dirty]
 #   or v<major>.<minor>.<patch>
@@ -29,9 +29,9 @@ GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 #     <major>.<minor>.<patch> or <major>.<minor>.<patch>-<build-number>-<commit-hash>[-dirty]
 #
 # This will also become the tag of the docker images.
-VERSION := $(shell git describe --tags --always --dirty | sed -E 's/^v([0-9]+\.[0-9]+\.[0-9]+-[0-9]+-[a-z0-9]+(-dirty)?$$)/\1/')
-BUILD_DATE := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
-LDFLAGS := -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildDate=$(BUILD_DATE)
+ROXIE_VERSION ?= $(shell git describe --tags --always --dirty | sed -E 's/^v([0-9]+\.[0-9]+\.[0-9]+-[0-9]+-[a-z0-9]+(-dirty)?$$)/\1/')
+BUILD_DATE ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+LDFLAGS := -X main.version=$(ROXIE_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildDate=$(BUILD_DATE)
 
 .PHONY: get-build-date
 get-build-date:
@@ -43,7 +43,7 @@ get-commit-hash:
 
 .PHONY: version
 version:
-	@echo $(VERSION)
+	@echo $(ROXIE_VERSION)
 
 # Build targets
 .PHONY: build
@@ -194,7 +194,7 @@ IMAGE_DEFAULT_REGISTRY := localhost
 IMAGE_REGISTRY := $(shell if [ -z "$(IMAGE_REGISTRY)" ]; then echo $(IMAGE_DEFAULT_REGISTRY); else echo $(IMAGE_REGISTRY); fi)
 IMAGE_NAME := roxie
 IMAGE_LATEST_TAG := $(IMAGE_REGISTRY)/$(IMAGE_NAME):latest
-IMAGE_VERSION_TAG := $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(VERSION)
+IMAGE_VERSION_TAG := $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(ROXIE_VERSION)
 CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
 
 # Multi-architecture support
@@ -209,7 +209,7 @@ docker-build: ## Build roxie Docker image for current platform
 		exit 1; \
 	fi
 	$(CONTAINER_RUNTIME) build \
-		--build-arg VERSION=$(VERSION) \
+		--build-arg ROXIE_VERSION=$(ROXIE_VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
 		-t $(IMAGE_LATEST_TAG) \
@@ -229,7 +229,7 @@ docker-build-arm64: ## Build roxie Docker image for arm64
 	fi
 	$(CONTAINER_RUNTIME) build \
 		--platform linux/arm64 \
-		--build-arg VERSION=$(VERSION) \
+		--build-arg ROXIE_VERSION=$(ROXIE_VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
 		-t $(IMAGE_LATEST_TAG)-arm64 \
@@ -248,7 +248,7 @@ docker-build-amd64: ## Build roxie Docker image for amd64
 	fi
 	$(CONTAINER_RUNTIME) build \
 		--platform linux/amd64 \
-		--build-arg VERSION=$(VERSION) \
+		--build-arg ROXIE_VERSION=$(ROXIE_VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
 		-t $(IMAGE_LATEST_TAG)-amd64 \

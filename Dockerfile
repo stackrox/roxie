@@ -21,14 +21,16 @@ RUN go mod download
 COPY . .
 
 # Build roxie binary with version info and cross-compilation support
-ARG VERSION=0.1
-ARG GIT_COMMIT=unknown
-ARG BUILD_DATE=unknown
-RUN echo "Building for ${TARGETOS}/${TARGETARCH}" && \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-    -ldflags "-w -s -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildDate=${BUILD_DATE}" \
-    -o roxie \
-    ./cmd
+ARG ROXIE_VERSION
+ARG BUILD_DATE
+ARG GIT_COMMIT
+RUN CGO_ENABLED=0 \
+    GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH} \
+    ROXIE_VERSION=${ROXIE_VERSION} \
+    BUILD_DATE=${BUILD_DATE} \
+    GIT_COMMIT=${GIT_COMMIT} \
+    make build
 
 # Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
 # Latest version including checksums can be found at:
