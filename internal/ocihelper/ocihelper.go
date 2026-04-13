@@ -2,7 +2,6 @@ package ocihelper
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -16,6 +15,28 @@ import (
 
 	"github.com/stackrox/roxie/internal/logger"
 )
+
+// VerifyImageExistence verifies that an OCI image is accessible.
+// Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
+func VerifyImageExistence(ctx context.Context, log *logger.Logger, imageRef string) error {
+	log.Dimf("Inspecting image %s", imageRef)
+
+	ref, err := name.ParseReference(imageRef)
+	if err != nil {
+		return fmt.Errorf("invalid image reference: %w", err)
+	}
+
+	// Use HEAD request to verify image exists without downloading
+	_, err = remote.Head(ref,
+		remote.WithContext(ctx),
+		remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	if err != nil {
+		return fmt.Errorf("image inspection failed: %w", err)
+	}
+
+	log.Dim("✓ Image is accessible")
+	return nil
+}
 
 // ExtractManifestsFromImage extracts the /manifests/ directory from an operator bundle image.
 // Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
@@ -39,28 +60,6 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 	}
 
 	log.Dimf("✓ Manifests extracted to: %s", destDir)
-	return nil
-}
-
-// VerifyImageExistence verifies that an OCI image is accessible.
-// Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
-func VerifyImageExistence(ctx context.Context, log *logger.Logger, imageRef string) error {
-	log.Dimf("Inspecting image %s", imageRef)
-
-	ref, err := name.ParseReference(imageRef)
-	if err != nil {
-		return fmt.Errorf("invalid image reference: %w", err)
-	}
-
-	// Use HEAD request to verify image exists without downloading
-	_, err = remote.Head(ref,
-		remote.WithContext(ctx),
-		remote.WithAuthFromKeychain(authn.DefaultKeychain))
-	if err != nil {
-		return fmt.Errorf("image inspection failed: %w", err)
-	}
-
-	log.Dim("✓ Image is accessible")
 	return nil
 }
 
@@ -122,23 +121,17 @@ func extractManifestsFromImage(log *logger.Logger, img v1.Image, tempExtractDir,
 
 // extractLayerToDir extracts a single image layer to a directory.
 func extractLayerToDir(log *logger.Logger, layer v1.Layer, destDir string) error {
-	rc, err := layer.Compressed()
+	rc, err := layer.Uncompressed()
 	if err != nil {
 		return fmt.Errorf("failed to get layer contents: %w", err)
 	}
 	defer rc.Close()
 
-	return extractTarGzToDir(log, rc, destDir)
+	return extractTarToDir(log, rc, destDir)
 }
 
-// extractTarGzToDir extracts a gzip-compressed tar stream to a directory.
-func extractTarGzToDir(log *logger.Logger, r io.Reader, destDir string) error {
-	gzr, err := gzip.NewReader(r)
-	if err != nil {
-		return fmt.Errorf("failed to create gzip reader: %w", err)
-	}
-	defer gzr.Close()
-
+// extractTarToDir extracts an uncompressed tar stream to a directory.
+func extractTarToDir(log *logger.Logger, r io.Reader, destDir string) error {
 	// Open a Root directory to prevent path traversal attacks.
 	root, err := os.OpenRoot(destDir)
 	if err != nil {
@@ -146,7 +139,7 @@ func extractTarGzToDir(log *logger.Logger, r io.Reader, destDir string) error {
 	}
 	defer root.Close()
 
-	tr := tar.NewReader(gzr)
+	tr := tar.NewReader(r)
 
 	for {
 		header, err := tr.Next()
