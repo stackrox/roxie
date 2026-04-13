@@ -52,6 +52,24 @@ build: ## Build the roxie binary
 	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd
 	@echo "✅ Build complete: $(BINARY)"
 
+build-%: ## Build the roxie binary for a specific OS/ARCH (e.g., build-linux-amd64)
+	@$(eval PARTS := $(subst -, ,$*))
+	@$(eval TARGET_OS := $(word 1,$(PARTS)))
+	@$(eval TARGET_ARCH := $(word 2,$(PARTS)))
+	@if ! echo "linux darwin" | grep -qw "$(TARGET_OS)"; then \
+		echo "❌ Unsupported OS: $(TARGET_OS)"; \
+		echo "Supported: linux, darwin"; \
+		exit 1; \
+	fi
+	@if ! echo "amd64 arm64" | grep -qw "$(TARGET_ARCH)"; then \
+		echo "❌ Unsupported ARCH: $(TARGET_ARCH)"; \
+		echo "Supported: amd64, arm64"; \
+		exit 1; \
+	fi
+	@echo "🔨 Building roxie for $(TARGET_OS)/$(TARGET_ARCH)..."
+	CGO_ENABLED=0 GOOS=$(TARGET_OS) GOARCH=$(TARGET_ARCH) $(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BINARY)-$* ./cmd
+	@echo "✅ Build complete: $(BINARY)-$*"
+
 .PHONY: build-all
 build-all: fmt vet build ## Format, vet, and build
 
