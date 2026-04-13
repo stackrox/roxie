@@ -104,7 +104,7 @@ func extractManifestsFromImage(log *logger.Logger, img v1.Image, tempExtractDir,
 	// Extract all layers into tempExtractDir
 	for i, layer := range layers {
 		log.Dimf("Extracting layer %d/%d...", i+1, len(layers))
-		if err := extractLayerToDir(layer, tempExtractDir); err != nil {
+		if err := extractLayerToDir(log, layer, tempExtractDir); err != nil {
 			return fmt.Errorf("failed to extract layer %d: %w", i+1, err)
 		}
 	}
@@ -121,18 +121,18 @@ func extractManifestsFromImage(log *logger.Logger, img v1.Image, tempExtractDir,
 }
 
 // extractLayerToDir extracts a single image layer to a directory.
-func extractLayerToDir(layer v1.Layer, destDir string) error {
+func extractLayerToDir(log *logger.Logger, layer v1.Layer, destDir string) error {
 	rc, err := layer.Compressed()
 	if err != nil {
 		return fmt.Errorf("failed to get layer contents: %w", err)
 	}
 	defer rc.Close()
 
-	return extractTarGzToDir(rc, destDir)
+	return extractTarGzToDir(log, rc, destDir)
 }
 
 // extractTarGzToDir extracts a gzip-compressed tar stream to a directory.
-func extractTarGzToDir(r io.Reader, destDir string) error {
+func extractTarGzToDir(log *logger.Logger, r io.Reader, destDir string) error {
 	gzr, err := gzip.NewReader(r)
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %w", err)
@@ -160,8 +160,6 @@ func extractTarGzToDir(r io.Reader, destDir string) error {
 		entryName := header.Name
 
 		switch header.Typeflag {
-		case tar.TypeSymlink, tar.TypeLink:
-			// Skip symlinks and hardlinks for security.
 		case tar.TypeDir:
 			err := root.MkdirAll(entryName, 0755)
 			if err != nil {
@@ -178,6 +176,9 @@ func extractTarGzToDir(r io.Reader, destDir string) error {
 				return fmt.Errorf("failed to write file %s: %w", entryName, err)
 			}
 			outFile.Close()
+		default:
+			log.Dimf("Skipping unsupported tar entry %s of type %c", entryName, header.Typeflag)
+			continue
 		}
 	}
 
