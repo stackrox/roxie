@@ -14,6 +14,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var (
+	smallScale = map[string]interface{}{
+		"autoScaling": "Enabled",
+		"replicas":    1,
+	}
+	noScaling = map[string]interface{}{
+		"autoScaling": "Disabled",
+		"replicas":    1,
+	}
+)
+
 // deployOperatorOnly deploys only the operator without any Central or SecuredCluster resources
 func (d *Deployer) deployOperatorOnly(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying Operator only...")
@@ -283,10 +294,7 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 				"scanner": map[string]interface{}{
 					"scannerComponent": "Disabled",
 					"analyzer": map[string]interface{}{
-						"scaling": map[string]interface{}{
-							"autoScaling": "Disabled",
-							"replicas":    1,
-						},
+						"scaling": noScaling,
 					},
 				},
 				"scannerV4": map[string]interface{}{
@@ -295,17 +303,11 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 					},
 					"indexer": map[string]interface{}{
 						"resources": centralScannerV4IndexerResourcesSmall,
-						"scaling": map[string]interface{}{
-							"autoScaling": "Disabled",
-							"replicas":    1,
-						},
+						"scaling":   noScaling,
 					},
 					"matcher": map[string]interface{}{
 						"resources": centralScannerV4MatcherResourcesSmall,
-						"scaling": map[string]interface{}{
-							"autoScaling": "Disabled",
-							"replicas":    1,
-						},
+						"scaling":   noScaling,
 					},
 				},
 			},
@@ -322,10 +324,7 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 				"scanner": map[string]interface{}{
 					"scannerComponent": "Disabled",
 					"analyzer": map[string]interface{}{
-						"scaling": map[string]interface{}{
-							"autoScaling": "Disabled",
-							"replicas":    1,
-						},
+						"scaling": noScaling,
 					},
 				},
 				"scannerV4": map[string]interface{}{
@@ -334,17 +333,11 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 					},
 					"indexer": map[string]interface{}{
 						"resources": centralScannerV4IndexerResourcesMedium,
-						"scaling": map[string]interface{}{
-							"autoScaling": "Disabled",
-							"replicas":    1,
-						},
+						"scaling":   noScaling,
 					},
 					"matcher": map[string]interface{}{
 						"resources": centralScannerV4MatcherResourcesMedium,
-						"scaling": map[string]interface{}{
-							"autoScaling": "Disabled",
-							"replicas":    1,
-						},
+						"scaling":   noScaling,
 					},
 				},
 			},
@@ -672,19 +665,13 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 				"scanner": map[string]interface{}{
 					"scannerComponent": "Disabled",
 					"analyzer": map[string]interface{}{
-						"scaling": map[string]interface{}{
-							"autoScaling": "Enabled",
-							"replicas":    1,
-						},
+						"scaling": smallScale,
 					},
 				},
 				"scannerV4": map[string]interface{}{
 					"scannerComponent": "Disabled",
 					"indexer": map[string]interface{}{
-						"scaling": map[string]interface{}{
-							"autoScaling": "Disabled",
-							"replicas":    1,
-						},
+						"scaling": noScaling,
 					},
 				},
 			},
@@ -698,10 +685,7 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 				"scanner": map[string]interface{}{
 					"scannerComponent": "Disabled",
 					"analyzer": map[string]interface{}{
-						"scaling": map[string]interface{}{
-							"autoScaling": "Enabled",
-							"replicas":    1,
-						},
+						"scaling": smallScale,
 					},
 				},
 				"sensor": map[string]interface{}{
@@ -710,10 +694,7 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 				"scannerV4": map[string]interface{}{
 					"scannerComponent": "Disabled",
 					"indexer": map[string]interface{}{
-						"scaling": map[string]interface{}{
-							"autoScaling": "Disabled",
-							"replicas":    1,
-						},
+						"scaling": noScaling,
 					},
 				},
 			},
