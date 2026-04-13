@@ -182,7 +182,7 @@ func printBanner(endpoint, exposure string, haproxyAvailable, haproxyStarted boo
 		cyan.Println("[roxie] Central UI: http://localhost:8080 (username: admin, password: see $ROX_ADMIN_PASSWORD)")
 	} else if exposure != "none" && exposure != "" {
 		cyan.Printf("[roxie] Central UI: https://%s", endpoint)
-	} else if !env.RunningInContainer {
+	} else if !env.RunningInRoxieContainer {
 		cyan.Println("[roxie] Note: Installing haproxy enables automatic HTTP access to Central at http://localhost:8080")
 	}
 

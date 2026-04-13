@@ -1,19 +1,22 @@
 package containerutil
 
 import (
-	"github.com/moby/sys/mountinfo"
+	"fmt"
+	"os"
+	"strconv"
 )
 
-// IsRunningInContainer detects if the current process is running inside
-// a Docker, Podman, or Kubernetes container by checking if the root
-// filesystem is an overlay filesystem (standard for containers).
-func IsRunningInContainer() bool {
-	// Get root mount info using efficient filter
-	rootMounts, err := mountinfo.GetMounts(mountinfo.SingleEntryFilter("/"))
-	if err != nil || len(rootMounts) == 0 {
+// IsRunningInRoxieContainer checks if we are running inside the released roxie container.
+// This knowledge allows us to adjust behavior accordingly, allowing for some UX improvements.
+func IsRunningInRoxieContainer() bool {
+	strVal, exists := os.LookupEnv("RUNNING_IN_ROXIE_CONTAINER")
+	if !exists || strVal == "" {
 		return false
 	}
-
-	// Containers use overlay filesystem for root
-	return rootMounts[0].FSType == "overlay"
+	val, err := strconv.ParseBool(strVal)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Invalid value for RUNNING_IN_ROXIE_CONTAINER: %s. Expected a boolean value (true/false). Defaulting to false.\n", strVal)
+		return false
+	}
+	return val
 }

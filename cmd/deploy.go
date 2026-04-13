@@ -99,7 +99,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	portForwardEnabledFinal := portForwarding || exposure == "none"
 
-	if env.RunningInContainer {
+	if env.RunningInRoxieContainer {
 		// For running containerized we have specific requirements.
 		if portForwardEnabledFinal {
 			return errors.New("containerized mode does not support port-forwarding")
@@ -117,8 +117,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("containerized mode requires /kubeconfig file: %w", err)
 			}
 		}
-		log.Dim("Using KUBECONFIG=/kubeconfig.")
-		os.Setenv("KUBECONFIG", "/kubeconfig")
 	}
 
 	if konflux {

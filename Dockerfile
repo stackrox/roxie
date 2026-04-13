@@ -207,6 +207,7 @@ USER roxie
 
 # Set environment variables
 ENV HOME=/ \
+    RUNNING_IN_ROXIE_CONTAINER=true \
     KUBECONFIG=/kubeconfig \
     PATH=/usr/local/bin:$PATH
 
