@@ -42,9 +42,9 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 	return nil
 }
 
-// InspectImage verifies that an OCI image is accessible.
+// VerifyImageExistence verifies that an OCI image is accessible.
 // Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
-func InspectImage(ctx context.Context, log *logger.Logger, imageRef string) error {
+func VerifyImageExistence(ctx context.Context, log *logger.Logger, imageRef string) error {
 	log.Dimf("Inspecting image %s", imageRef)
 
 	ref, err := name.ParseReference(imageRef)

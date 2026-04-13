@@ -134,7 +134,7 @@ func (ic *ImageCache) VerifyImagePullable(ctx context.Context, imageRef string) 
 	}
 
 	// Use OCI registry client to verify image accessibility.
-	err := ocihelper.InspectImage(ctx, ic.logger, imageRef)
+	err := ocihelper.VerifyImageExistence(ctx, ic.logger, imageRef)
 	if err == nil {
 		ic.AddToCache(imageRef)
 		return true
