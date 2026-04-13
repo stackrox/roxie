@@ -268,7 +268,7 @@ func (d *Deployer) createCentralValues(resourcesName, exposure string) (map[stri
 func (d *Deployer) createSecuredClusterValues(clusterName, resources string) (map[string]interface{}, error) {
 	base := map[string]interface{}{
 		"clusterName":               clusterName,
-		"centralEndpoint":           "https://central.acs-central.svc:443",
+		"centralEndpoint":           "https://central." + centralNamespace + ".svc:443",
 		"allowNonstandardNamespace": true,
 	}
 
@@ -318,102 +318,90 @@ func (d *Deployer) getCentralExposureConfigHelm(exposure string) map[string]inte
 
 // getCentralResourcesHelm returns resource overlays for Central Helm deployment
 func (d *Deployer) getCentralResourcesHelm(resourcesName string) map[string]interface{} {
-	resourcesSmall := map[string]interface{}{
-		"central": map[string]interface{}{
-			"resources": centralResourcesSmall,
-			"db": map[string]interface{}{
-				"resources": centralDbResourcesSmall,
-			},
-		},
-		"scanner": map[string]interface{}{
-			"resources":   centralScannerResourcesSmall,
-			"dbResources": centralScannerDbResourcesSmall,
-		},
-		"scannerV4": map[string]interface{}{
-			"indexer": map[string]interface{}{
-				"resources": centralScannerV4IndexerResourcesSmall,
-			},
-			"matcher": map[string]interface{}{
-				"resources": centralScannerV4MatcherResourcesSmall,
-			},
-			"db": map[string]interface{}{
-				"resources": centralScannerV4DbResourcesSmall,
-			},
-		},
-	}
-
-	resourcesMedium := map[string]interface{}{
-		"central": map[string]interface{}{
-			"resources": centralResourcesMedium,
-			"db": map[string]interface{}{
-				"resources": centralDbResourcesMedium,
-			},
-		},
-		"scanner": map[string]interface{}{
-			"resources":   centralScannerResourcesMedium,
-			"dbResources": centralScannerDbResourcesMedium,
-		},
-		"scannerV4": map[string]interface{}{
-			"indexer": map[string]interface{}{
-				"resources": centralScannerV4IndexerResourcesMedium,
-			},
-			"matcher": map[string]interface{}{
-				"resources": centralScannerV4MatcherResourcesMedium,
-			},
-			"db": map[string]interface{}{
-				"resources": centralScannerV4DbResourcesMedium,
-			},
-		},
-	}
-
-	var resources map[string]interface{}
-
 	switch resourcesName {
 	case "small":
-		resources = resourcesSmall
+		return map[string]interface{}{
+			"central": map[string]interface{}{
+				"resources": centralResourcesSmall,
+				"db": map[string]interface{}{
+					"resources": centralDbResourcesSmall,
+				},
+			},
+			"scanner": map[string]interface{}{
+				"resources":   centralScannerResourcesSmall,
+				"dbResources": centralScannerDbResourcesSmall,
+			},
+			"scannerV4": map[string]interface{}{
+				"indexer": map[string]interface{}{
+					"resources": centralScannerV4IndexerResourcesSmall,
+				},
+				"matcher": map[string]interface{}{
+					"resources": centralScannerV4MatcherResourcesSmall,
+				},
+				"db": map[string]interface{}{
+					"resources": centralScannerV4DbResourcesSmall,
+				},
+			},
+		}
 	case "medium":
-		resources = resourcesMedium
+		return map[string]interface{}{
+			"central": map[string]interface{}{
+				"resources": centralResourcesMedium,
+				"db": map[string]interface{}{
+					"resources": centralDbResourcesMedium,
+				},
+			},
+			"scanner": map[string]interface{}{
+				"resources":   centralScannerResourcesMedium,
+				"dbResources": centralScannerDbResourcesMedium,
+			},
+			"scannerV4": map[string]interface{}{
+				"indexer": map[string]interface{}{
+					"resources": centralScannerV4IndexerResourcesMedium,
+				},
+				"matcher": map[string]interface{}{
+					"resources": centralScannerV4MatcherResourcesMedium,
+				},
+				"db": map[string]interface{}{
+					"resources": centralScannerV4DbResourcesMedium,
+				},
+			},
+		}
+	default:
+		return nil
 	}
-
-	return resources
 }
 
 // getSecuredClusterResourcesHelm returns resource overlays for SecuredCluster Helm deployment
 func (d *Deployer) getSecuredClusterResourcesHelm(resourcesName string) map[string]interface{} {
-	resourcesSmall := map[string]interface{}{
-		"sensor": map[string]interface{}{
-			"resources": securedClusterSensorResourcesSmall,
-		},
-		"scanner": map[string]interface{}{
-			"disable": true,
-		},
-		"scannerV4": map[string]interface{}{
-			"disable": true,
-		},
-	}
-
-	resourcesMedium := map[string]interface{}{
-		"sensor": map[string]interface{}{
-			"resources": securedClusterSensorResourcesMedium,
-		},
-		"scanner": map[string]interface{}{
-			"disable": true,
-		},
-		"scannerV4": map[string]interface{}{
-			"disable": true,
-		},
-	}
-
-	var resources map[string]interface{}
-
 	switch resourcesName {
 	case "small":
-		resources = resourcesSmall
+		return map[string]interface{}{
+			"sensor": map[string]interface{}{
+				"resources": securedClusterSensorResourcesSmall,
+			},
+			"scanner": map[string]interface{}{
+				"disable": true,
+			},
+			"scannerV4": map[string]interface{}{
+				"disable": true,
+			},
+		}
 	case "medium":
-		resources = resourcesMedium
+		return map[string]interface{}{
+			"sensor": map[string]interface{}{
+				"resources": securedClusterSensorResourcesMedium,
+			},
+			"scanner": map[string]interface{}{
+				"disable": true,
+			},
+			"scannerV4": map[string]interface{}{
+				"disable": true,
+			},
+		}
+	default:
+		return nil
 	}
-
-	return resources
 }
 
 // verifyHelmChartImages renders the Helm template and verifies that images are pullable
@@ -431,7 +419,7 @@ func (d *Deployer) verifyHelmChartImages(ctx context.Context, chartDir, valuesFi
 		return fmt.Errorf("failed to render helm template: %w", err)
 	}
 
-	imageRefs := extractImageReferences(string(output))
+	imageRefs := extractMainImageReferences(string(output))
 
 	if len(imageRefs) == 0 {
 		d.logger.Warning("No images found in rendered template")
@@ -451,8 +439,8 @@ func (d *Deployer) verifyHelmChartImages(ctx context.Context, chartDir, valuesFi
 	return nil
 }
 
-// extractImageReferences extracts unique image references from rendered YAML
-func extractImageReferences(renderedYAML string) []string {
+// extractMainImageReferences extracts unique image references from rendered YAML
+func extractMainImageReferences(renderedYAML string) []string {
 	seen := make(map[string]bool)
 	var images []string
 

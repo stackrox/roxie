@@ -19,10 +19,18 @@ import (
 )
 
 const (
-	adminPasswordSecretName = "admin-password"
-	operatorNamespace       = "rhacs-operator-system"
-	operatorDeploymentName  = "rhacs-operator-controller-manager"
+	adminPasswordSecretName        = "admin-password"
+	operatorNamespace              = "rhacs-operator-system"
+	operatorDeploymentName         = "rhacs-operator-controller-manager"
+	operatorBundleImageRepo        = "quay.io/rhacs-eng/stackrox-operator-bundle"
+	operatorBundleImageReleaseRepo = "quay.io/rhacs-eng/release-operator-bundle"
 )
+
+var requiredCRDs = []string{
+	"centrals.platform.stackrox.io",
+	"securedclusters.platform.stackrox.io",
+	"securitypolicies.config.stackrox.io",
+}
 
 // deployOperatorNonOLM deploys the RHACS operator without OLM
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
@@ -46,7 +54,7 @@ func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 
 	d.logger.Infof("Bundle image: %s", bundleImage)
 
-	crdFiles, err := d.identifyCRDFiles(bundleDir)
+	crdFiles, err := d.identifyCRDFileNames(bundleDir)
 	if err != nil {
 		return err
 	}
@@ -82,8 +90,8 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 	return bundleDir, nil
 }
 
-// identifyCRDFiles identifies CRD files in the bundle directory
-func (d *Deployer) identifyCRDFiles(bundleDir string) ([]string, error) {
+// identifyCRDFileNames identifies CRD files in the bundle directory
+func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 	var crdFiles []string
 
 	err := filepath.Walk(bundleDir, func(path string, info os.FileInfo, err error) error {
@@ -149,12 +157,6 @@ func (d *Deployer) applyCRDsToCluster(ctx context.Context, crdFiles []string) er
 
 // ensureCRDsInstalled ensures required CRDs exist
 func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
-	requiredCRDs := []string{
-		"centrals.platform.stackrox.io",
-		"securedclusters.platform.stackrox.io",
-		"securitypolicies.config.stackrox.io",
-	}
-
 	var missing []string
 	for _, crd := range requiredCRDs {
 		_, err := d.runKubectl(ctx, KubectlOptions{
@@ -176,7 +178,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 		}
 		defer d.cleanupTempDir(bundleDir, "CRD bundle directory")
 
-		crdFiles, err := d.identifyCRDFiles(bundleDir)
+		crdFiles, err := d.identifyCRDFileNames(bundleDir)
 		if err != nil {
 			return err
 		}
@@ -190,9 +192,9 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 func (d *Deployer) getOperatorBundleImage() string {
 	if d.useKonflux {
 		d.logger.Infof("Using Konflux-built operator bundle image")
-		return fmt.Sprintf("quay.io/rhacs-eng/release-operator-bundle:v%s", d.operatorTag)
+		return fmt.Sprintf(operatorBundleImageReleaseRepo+":v%s", d.operatorTag)
 	}
-	return fmt.Sprintf("quay.io/rhacs-eng/stackrox-operator-bundle:v%s", d.operatorTag)
+	return fmt.Sprintf(operatorBundleImageRepo+":v%s", d.operatorTag)
 }
 
 // ensureKonfluxImageRewriting configures image rewriting for Konflux images

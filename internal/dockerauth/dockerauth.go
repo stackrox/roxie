@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	acsImageRegistry = "quay.io"
+	acsImageRegistry    = "quay.io"
+	mainImageRepository = "rhacs-eng/main"
 )
 
 // DockerAuth handles Docker authentication and pull secret management.
@@ -186,9 +187,8 @@ func (d *DockerAuth) VerifyCredentials(username, password string) error {
 	// Try to get a token from quay.io's OAuth2 endpoint for a specific repository
 	// This mimics what kubelet does when pulling images - it requests a token with pull scope
 	// for the specific repository.
-	repository := "rhacs-eng/main"
 	authURL := fmt.Sprintf("https://%s/v2/auth?service=%s&scope=repository:%s:pull",
-		acsImageRegistry, acsImageRegistry, repository)
+		acsImageRegistry, acsImageRegistry, mainImageRepository)
 
 	cmd := exec.Command("curl", "-s", "-f",
 		"-H", fmt.Sprintf("Authorization: Basic %s", encodedAuth),
@@ -211,7 +211,7 @@ func (d *DockerAuth) VerifyCredentials(username, password string) error {
 		return fmt.Errorf("credential verification failed: no token received from %s", acsImageRegistry)
 	}
 
-	d.logger.Dimf("Successfully verified credentials for %s (repository: %s)", acsImageRegistry, repository)
+	d.logger.Dimf("Successfully verified credentials for %s (repository: %s)", acsImageRegistry, mainImageRepository)
 	return nil
 }
 

@@ -141,18 +141,7 @@ func (d *Deployer) filterResourceKinds(resourceKinds []string) []string {
 }
 
 func (d *Deployer) deleteResource(ctx context.Context, namespace, resourceType, resourceName string, args ...string) error {
-	finalArgs := []string{
-		"-n", namespace,
-		"delete",
-		resourceType,
-		resourceName,
-		"--ignore-not-found",
-		"--force",
-		"--grace-period=0",
-	}
-	finalArgs = append(finalArgs, args...)
-	_, err := d.runKubectl(ctx, KubectlOptions{Args: finalArgs})
-	return err
+	return d.deleteResources(ctx, namespace, []string{resourceType}, append([]string{resourceName}, args...)...)
 }
 
 func (d *Deployer) deleteResources(ctx context.Context, namespace string, resourceTypes []string, args ...string) error {
@@ -174,7 +163,7 @@ func (d *Deployer) deleteFinalizers(ctx context.Context, namespace, resourceType
 	_, err := d.runKubectl(ctx, KubectlOptions{
 		Args: []string{
 			"-n", namespace, "patch", resourceType, resourceName,
-			"-p", "{\"metadata\":{\"finalizers\":null}}",
+			"-p", `{"metadata":{"finalizers":null}}`,
 			"--type=merge",
 		},
 	})
@@ -468,7 +457,6 @@ func (d *Deployer) SetFeatureFlags(featureFlags []string) error {
 }
 
 func New(log *logger.Logger) (*Deployer, error) {
-	// Check required tools first
 	if err := checkRequiredTools(); err != nil {
 		return nil, err
 	}
@@ -609,7 +597,6 @@ func (d *Deployer) prepareCredentials() error {
 		return err
 	}
 
-	// Store the verified credentials
 	d.dockerCreds = creds
 
 	d.logger.Dimf("Docker credentials verified successfully")

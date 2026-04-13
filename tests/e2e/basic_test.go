@@ -16,13 +16,12 @@ func TestDeployBothSimple(t *testing.T) {
 	}
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	t.Log("=== Deploying both components together ===")
 	args := append([]string{roxieBinary, "deploy", "--early-readiness", "both", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)

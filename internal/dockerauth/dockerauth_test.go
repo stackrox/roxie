@@ -3,7 +3,6 @@ package dockerauth
 import (
 	"encoding/base64"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 
@@ -80,8 +79,8 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 
 func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	// Ensure no credentials are set
-	os.Unsetenv("REGISTRY_USERNAME")
-	os.Unsetenv("REGISTRY_PASSWORD")
+	t.Setenv("REGISTRY_USERNAME", "")
+	t.Setenv("REGISTRY_PASSWORD", "")
 
 	// Use a temporary home directory to simulate missing credentials.
 	t.Setenv("HOME", t.TempDir())

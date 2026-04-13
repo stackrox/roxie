@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-	"time"
 )
 
 // Note: All e2e tests run sequentially via the -parallel=1 flag in the Makefile.
@@ -71,13 +70,12 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 	}
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	// Step 1: Deploy central with OLM operator
 	t.Log("=== Step 1: Deploy central with OLM operator ===")
@@ -91,9 +89,6 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 
 	// Verify central namespace exists
 	verifyNamespaceExists(t, "acs-central")
-
-	// Brief pause
-	time.Sleep(10 * time.Second)
 
 	// Step 2: Deploy central again without OLM (should switch modes)
 	t.Log("=== Step 2: Redeploy central without OLM (triggering mode switch) ===")
@@ -123,13 +118,12 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 	}
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	// Step 1: Deploy central without OLM (non-OLM operator)
 	t.Log("=== Step 1: Deploy central with non-OLM operator ===")
@@ -143,9 +137,6 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 
 	// Verify central namespace exists
 	verifyNamespaceExists(t, "acs-central")
-
-	// Brief pause
-	time.Sleep(10 * time.Second)
 
 	// Step 2: Deploy central again with OLM (should switch modes)
 	t.Log("=== Step 2: Redeploy central with OLM (triggering mode switch) ===")
@@ -179,13 +170,12 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	// but the logic should handle version changes by tearing down and redeploying
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	// Step 1: Deploy central with OLM operator
 	t.Log("=== Step 1: Deploy central with OLM operator ===")
@@ -208,9 +198,6 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	}
 	initialImage := strings.TrimSpace(string(output))
 	t.Logf("Initial operator image: %s", initialImage)
-
-	// Brief pause
-	time.Sleep(10 * time.Second)
 
 	// Step 2: Redeploy with same version (should skip if version matches)
 	t.Log("=== Step 2: Redeploy with same version (should detect correct version) ===")
@@ -241,13 +228,12 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 	}
 
 	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp("", ".envrc.roxie-test-*")
+	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp envrc: %v", err)
 	}
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
-	defer os.Remove(envrcPath)
 
 	// Step 1: Deploy central with OLM
 	t.Log("=== Step 1: Deploy central with OLM ===")

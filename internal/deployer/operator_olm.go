@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	catalogSourceName = "stackrox-operator-index"
-	subscriptionName  = "stackrox-operator-subscription"
-	operatorGroupName = "all-namespaces-operator-group"
-	operatorChannel   = "latest"
+	catalogSourceName  = "stackrox-operator-index"
+	subscriptionName   = "stackrox-operator-subscription"
+	operatorGroupName  = "all-namespaces-operator-group"
+	operatorChannel    = "latest"
+	operatorIndexImage = "quay.io/rhacs-eng/stackrox-operator-index"
 )
 
 // OperatorDeploymentMode represents how the operator is deployed
@@ -31,7 +32,6 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying operator via OLM...")
 	d.logger.Infof("Operator tag: %s", d.operatorTag)
 
-	// Sanity check:Check if OLM is installed.
 	if err := d.checkOLMInstalled(ctx); err != nil {
 		return err
 	}
@@ -39,37 +39,30 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	indexImage := d.getOperatorIndexImage()
 	d.logger.Infof("Index image: %s", indexImage)
 
-	// Create operator namespace.
 	if err := d.createOperatorNamespace(ctx); err != nil {
 		return err
 	}
 
-	// Create CatalogSource.
 	if err := d.createCatalogSource(ctx, indexImage); err != nil {
 		return fmt.Errorf("failed to create CatalogSource: %w", err)
 	}
 
-	// Create OperatorGroup.
 	if err := d.createOperatorGroup(ctx); err != nil {
 		return fmt.Errorf("failed to create OperatorGroup: %w", err)
 	}
 
-	// Create Subscription.
 	if err := d.createSubscription(ctx); err != nil {
 		return fmt.Errorf("failed to create Subscription: %w", err)
 	}
 
-	// Wait for and approve InstallPlan.
 	if err := d.waitForAndApproveInstallPlan(ctx); err != nil {
 		return fmt.Errorf("failed to approve InstallPlan: %w", err)
 	}
 
-	// Wait for CSV to succeed.
 	if err := d.waitForCSVSuccess(ctx); err != nil {
 		return fmt.Errorf("failed waiting for CSV: %w", err)
 	}
 
-	// Wait for operator deployment.
 	if err := d.waitForOperatorReady(ctx, operatorNamespace, operatorDeploymentName, 300); err != nil {
 		return fmt.Errorf("failed waiting for operator: %w", err)
 	}
@@ -103,14 +96,14 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 
 // getOperatorIndexImage returns the operator index image reference.
 func (d *Deployer) getOperatorIndexImage() string {
-	return fmt.Sprintf("quay.io/rhacs-eng/stackrox-operator-index:v%s", d.operatorTag)
+	return fmt.Sprintf(operatorIndexImage+":v%s", d.operatorTag)
 }
 
 // createCatalogSource creates the CatalogSource for the operator.
 func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) error {
 	d.logger.Info("Creating CatalogSource...")
 
-	// Check if CatalogSource CRD supports securityContextConfig.
+	// Check if CatalogSource CRD supports securityContextConfig (OCP 4.14+).
 	hasSecurityContextConfig, err := d.catalogSourceSupportsSecurityContextConfig(ctx)
 	if err != nil {
 		d.logger.Warning("Could not check CatalogSource CRD capabilities, proceeding without securityContextConfig")
