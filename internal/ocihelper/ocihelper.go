@@ -170,7 +170,6 @@ func extractTarGzToDir(r io.Reader, destDir string) error {
 				return err
 			}
 		case tar.TypeReg:
-			// Create file using Root (automatically prevents traversal).
 			outFile, err := root.OpenFile(cleanPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
 			if err != nil {
 				return fmt.Errorf("failed to create file %s: %w", cleanPath, err)
