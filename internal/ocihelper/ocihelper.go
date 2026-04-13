@@ -157,27 +157,25 @@ func extractTarGzToDir(r io.Reader, destDir string) error {
 			return fmt.Errorf("failed to read tar header: %w", err)
 		}
 
-		// Clean the path to remove redundant separators and .. components.
-		// This optimization reduces the cost of Root operations.
-		cleanPath := filepath.Clean(header.Name)
+		entryName := header.Name
 
 		switch header.Typeflag {
 		case tar.TypeSymlink, tar.TypeLink:
 			// Skip symlinks and hardlinks for security.
 		case tar.TypeDir:
-			err := root.MkdirAll(cleanPath, 0755)
+			err := root.MkdirAll(entryName, 0755)
 			if err != nil {
 				return err
 			}
 		case tar.TypeReg:
-			outFile, err := root.OpenFile(cleanPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
+			outFile, err := root.OpenFile(entryName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
 			if err != nil {
-				return fmt.Errorf("failed to create file %s: %w", cleanPath, err)
+				return fmt.Errorf("failed to create file %s: %w", entryName, err)
 			}
 
 			if _, err := io.Copy(outFile, tr); err != nil {
 				outFile.Close()
-				return fmt.Errorf("failed to write file %s: %w", cleanPath, err)
+				return fmt.Errorf("failed to write file %s: %w", entryName, err)
 			}
 			outFile.Close()
 		}
