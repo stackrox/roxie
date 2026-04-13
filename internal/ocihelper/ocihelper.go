@@ -165,8 +165,6 @@ func extractTarGzToDir(r io.Reader, destDir string) error {
 		case tar.TypeSymlink, tar.TypeLink:
 			// Skip symlinks and hardlinks for security.
 		case tar.TypeDir:
-			// Create directory using Root (automatically prevents traversal).
-			// Root will reject absolute paths, "..", and other traversal attempts.
 			err := root.Mkdir(cleanPath, 0755)
 			if err != nil && !os.IsExist(err) {
 				return err
