@@ -106,7 +106,7 @@ func (m *Manager) Start(namespace, serviceName string, remotePort, preferredLoca
 			if err == nil {
 				syscall.Kill(-pgid, syscall.SIGTERM)
 			}
-			cmd.Wait()
+			cmd.Wait() // AFAICT this can get stuck forever if the process blocks SIGTERM...
 		}
 		return "", fmt.Errorf("port-forward did not become ready")
 	}

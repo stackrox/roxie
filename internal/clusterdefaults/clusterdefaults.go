@@ -34,6 +34,10 @@ func (ct ClusterType) String() string {
 	}
 }
 
+// Maybe I'm missing something, but this manager/detector/applicator abstraction seems massively over-engineered
+// since the is only one concrete implementation. AFAICT this could all be just a single function that the deployer
+// calls with log, kubeconfig, resources, exposure and portForward.
+
 // DeploymentDefaults holds the recommended defaults for a cluster type
 type DeploymentDefaults struct {
 	Resources          string // Resource preset (e.g., "small", "default")

@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultMainImageTag = "4.9.2"
+	defaultMainImageTag = "4.9.2" // Is the plan to keep bumping this on new ACS releases?
 )
 
 func LookupMainImageTag(log *logger.Logger) (string, error) {

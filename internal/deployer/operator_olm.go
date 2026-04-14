@@ -83,7 +83,7 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 
 	for _, crd := range requiredCRDs {
 		_, err := d.runKubectl(ctx, KubectlOptions{
-			Args: []string{"get", "crd", crd},
+			Args: []string{"get", "crd", crd}, // actually this is not the right way to check, since a CRD could be in a broken state; we should use the api-resources subcommand instead
 		})
 		if err != nil {
 			return fmt.Errorf("OLM not installed: CRD %s not found. Please install OLM first", crd)
@@ -124,7 +124,7 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 		},
 	}
 
-	// Add security context config if supported (OCP 4.14+).
+	// Add security context config if supported.
 	if hasSecurityContextConfig {
 		spec := catalogSource["spec"].(map[string]interface{})
 		spec["grpcPodConfig"] = map[string]interface{}{
@@ -158,7 +158,7 @@ func (d *Deployer) catalogSourceSupportsSecurityContextConfig(ctx context.Contex
 		return false, err
 	}
 
-	return strings.Contains(result.Stdout, "securityContextConfig"), nil
+	return strings.Contains(result.Stdout, "securityContextConfig"), nil // this is overly optimistic and would incorrectly succeed if an api version that contains this had "serving: false"
 }
 
 // createOperatorGroup creates the OperatorGroup.
@@ -251,7 +251,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	}
 
 	if time.Since(start) >= timeout {
-		return errors.New("timeout waiting for InstallPlan to be created")
+		return errors.New("timeout waiting for InstallPlan to be created") // some more info on what was wrong would be useful: a dump of the subscription or at least its name so that the user can investigate
 	}
 
 	// Sanity check:Verify currentCSV matches expected version.
@@ -321,7 +321,7 @@ func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 		time.Sleep(5 * time.Second)
 	}
 
-	return fmt.Errorf("timeout waiting for CSV to succeed")
+	return fmt.Errorf("timeout waiting for CSV to succeed") // same as above
 }
 
 // detectOperatorDeploymentMode detects how the operator is currently deployed.
@@ -344,7 +344,7 @@ func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, Oper
 		result, err := d.runKubectl(ctx, KubectlOptions{
 			Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace, "-o", "jsonpath={.metadata.labels}"},
 		})
-		if err == nil && strings.Contains(result.Stdout, "olm.owner") {
+		if err == nil && strings.Contains(result.Stdout, "olm.owner") { // This is not very robust. Better retrieve a specific label in the `get` command?
 			return true, OperatorModeOLM
 		}
 		// Deployment exists without OLM labels = non-OLM deployment.

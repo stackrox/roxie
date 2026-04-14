@@ -33,7 +33,7 @@ func New(log *logger.Logger, cacheFile string, maxEntries int) *ImageCache {
 		if err != nil {
 			home = "."
 		}
-		cacheFile = filepath.Join(home, ".roxie.image_cache")
+		cacheFile = filepath.Join(home, ".roxie.image_cache") // how about using something XDG-compliant like ~/.cache/roxie/images?
 	}
 
 	if maxEntries <= 0 {
