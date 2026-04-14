@@ -107,6 +107,8 @@ func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 			return nil
 		}
 
+		// TODO(#91): The following detection logic does not seem particularly robust. We should
+		// probably parse the YAML and check api group and kind fields.
 		name := strings.ToLower(info.Name())
 		if strings.Contains(name, "customresourcedefinition") ||
 			strings.Contains(name, "platform.stackrox.io") ||

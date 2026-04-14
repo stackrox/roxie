@@ -225,16 +225,15 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to set feature flags: %w", err)
 	}
 
-	// Resolve "auto" resources based on cluster type
-	resolvedResources := resources
+	// TODO(#91): validate the user-supplied value earlier than here
 	if resources == "auto" {
-		resolvedResources = resolveAutoResources(env.GetCurrentClusterType(), log)
+		resources = resolveAutoResources(env.GetCurrentClusterType(), log)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	if err := d.Deploy(ctx, components, resolvedResources, exposure); err != nil {
+	if err := d.Deploy(ctx, components, resources, exposure); err != nil {
 		return fmt.Errorf("deployment failed: %w", err)
 	}
 
@@ -256,6 +255,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 // resolveAutoResources determines the appropriate resource tier based on cluster type
 func resolveAutoResources(clusterType env.ClusterType, log *logger.Logger) string {
+	// TODO(#91): should probably be a first-class type, not a free-form string...
 	var resolvedResources string
 
 	switch clusterType {

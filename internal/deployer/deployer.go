@@ -32,6 +32,9 @@ var (
 
 	pauseReconcileAnnotationKey = "stackrox.io/pause-reconcile"
 
+	// TODO(#91): at some point this will get out of date. If we filter by the app.../part-of
+	// label anyway, then maybe we should just delete all resource kinds present on cluster?
+	// also we should use the fully-qualified types
 	allInstallableCentralResourceKinds = []string{
 		"applications",
 		"clusterroles",
@@ -343,6 +346,7 @@ func (d *Deployer) SetCombinedOverrideFile(overrideFile string) error {
 func setOverrideSetExpressions(overrides map[string]interface{}, prefix string, overrideSetExpressions []string) ([]string, error) {
 	remainingSetExpressions := make([]string, 0)
 	for _, expr := range overrideSetExpressions {
+		// TODO(#91): would https://pkg.go.dev/strings#Cut work instead?
 		parts := splitAtFirstEquals(expr)
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid override expression '%s': expected format 'key.path=value'", expr)
@@ -586,8 +590,8 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component, r
 	return nil
 }
 
-// prepareCredentials prepares and verifies Docker credentials early to fail fast.
-// The verified credentials are stored for later use.
+// prepareCredentials prepares and verifies Docker credentials early to allow failing fast.
+// The verified credentials are stored in the Deployer object for later use.
 func (d *Deployer) prepareCredentials() error {
 	d.logger.Dimf("Preparing and verifying Docker credentials...")
 
@@ -1251,6 +1255,8 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 	}
 }
 
+// TODO(#91): plenty of code in common with the central variant that should probably be
+// extracted
 func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	component := "Secured Cluster"
 	mainImageTag := d.mainImageTag
