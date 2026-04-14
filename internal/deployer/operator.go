@@ -26,16 +26,6 @@ const (
 	operatorBundleImageReleaseRepo = "quay.io/rhacs-eng/release-operator-bundle"
 )
 
-// deployOperatorNonOLM deploys the RHACS operator without OLM from the provided bundle directory.
-// The bundleDir should contain the extracted operator bundle with CSV and other manifests.
-func (d *Deployer) deployOperatorNonOLM(ctx context.Context, bundleDir string) error {
-	if err := d.deployOperatorFromCSV(ctx, bundleDir); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // downloadAndExtractOperatorBundle downloads and extracts the operator bundle
 func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleImage string) (string, error) {
 	bundleDir, err := os.MkdirTemp("", "stackrox-operator-bundle-")
