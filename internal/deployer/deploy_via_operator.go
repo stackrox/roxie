@@ -117,14 +117,12 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 			}
 			defer d.cleanupTempDir(bundleDir, "operator bundle directory")
 
-			// Install CRDs from the bundle
 			if err := d.ensureCRDsInstalled(ctx, bundleDir); err != nil {
 				return fmt.Errorf("failed to ensure CRDs installed: %w", err)
 			}
 
-			// Deploy operator from the same bundle
-			if err := d.deployOperatorNonOLM(ctx, bundleDir); err != nil {
-				return fmt.Errorf("failed to deploy operator: %w", err)
+			if err := d.deployOperatorFromCSV(ctx, bundleDir); err != nil {
+				return fmt.Errorf("failed to deploy operator from CSV: %w", err)
 			}
 		}
 	}
