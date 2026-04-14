@@ -82,8 +82,9 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 	}
 
 	for _, crd := range requiredCRDs {
-		// TODO(#91): actually this is not the right way to check, since a CRD could be in a
-		// broken state; we should use the api-resources subcommand instead
+		// TODO(#91): actually this is not the right way to check whether it's safe to create a resource of a given kind.
+		// A CRD can be present, but still being loaded or end up not accepted by the API server.
+		// Instead we should use the `kubectl api-resources` subcommand which exposes the status we're looking for.
 		_, err := d.runKubectl(ctx, KubectlOptions{
 			Args: []string{"get", "crd", crd},
 		})
