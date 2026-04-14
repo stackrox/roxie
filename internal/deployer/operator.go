@@ -26,43 +26,9 @@ const (
 	operatorBundleImageReleaseRepo = "quay.io/rhacs-eng/release-operator-bundle"
 )
 
-var requiredCRDs = []string{
-	"centrals.platform.stackrox.io",
-	"securedclusters.platform.stackrox.io",
-	"securitypolicies.config.stackrox.io",
-}
-
-// deployOperatorNonOLM deploys the RHACS operator without OLM
-func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
-	d.logger.Infof("Operator tag: %s", d.operatorTag)
-	if d.useKonflux {
-		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
-			return fmt.Errorf("failed to configure Konflux image rewriting: %w", err)
-		}
-	} else {
-		if err := d.removeKonfluxImageRewriting(ctx); err != nil {
-			return fmt.Errorf("failed to remove Konflux ImageContentSourcePolicy: %v", err)
-		}
-	}
-	bundleImage := d.getOperatorBundleImage()
-
-	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
-	if err != nil {
-		return fmt.Errorf("failed to download operator bundle: %w", err)
-	}
-	defer d.cleanupTempDir(bundleDir, "operator bundle directory")
-
-	d.logger.Infof("Bundle image: %s", bundleImage)
-
-	crdFiles, err := d.identifyCRDFileNames(bundleDir)
-	if err != nil {
-		return err
-	}
-
-	if err := d.applyCRDsToCluster(ctx, crdFiles); err != nil {
-		return err
-	}
-
+// deployOperatorNonOLM deploys the RHACS operator without OLM from the provided bundle directory.
+// The bundleDir should contain the extracted operator bundle with CSV and other manifests.
+func (d *Deployer) deployOperatorNonOLM(ctx context.Context, bundleDir string) error {
 	if err := d.deployOperatorFromCSV(ctx, bundleDir); err != nil {
 		return err
 	}
@@ -88,107 +54,6 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 
 	d.logger.Successf("✓ Bundle extracted to: %s", bundleDir)
 	return bundleDir, nil
-}
-
-// identifyCRDFileNames identifies CRD files in the bundle directory
-func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
-	var crdFiles []string
-
-	err := filepath.Walk(bundleDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			return nil
-		}
-
-		if !strings.HasSuffix(info.Name(), ".yaml") && !strings.HasSuffix(info.Name(), ".yml") {
-			return nil
-		}
-
-		// TODO(#91): The following detection logic does not seem particularly robust. We should
-		// probably parse the YAML and check api group and kind fields.
-		name := strings.ToLower(info.Name())
-		if strings.Contains(name, "customresourcedefinition") ||
-			strings.Contains(name, "platform.stackrox.io") ||
-			strings.Contains(name, "config.stackrox.io") {
-			if strings.Contains(name, "clusterserviceversion") {
-				return nil
-			}
-
-			content, err := os.ReadFile(path)
-			if err != nil {
-				return nil
-			}
-
-			if strings.Contains(string(content), "kind: CustomResourceDefinition") {
-				crdFiles = append(crdFiles, path)
-			}
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk bundle directory: %w", err)
-	}
-
-	return crdFiles, nil
-}
-
-// applyCRDsToCluster applies CRD files to the cluster
-func (d *Deployer) applyCRDsToCluster(ctx context.Context, crdFiles []string) error {
-	d.logger.Infof("Applying %d CRD(s) to cluster", len(crdFiles))
-
-	for _, crdFile := range crdFiles {
-		result, err := d.runKubectl(ctx, KubectlOptions{
-			Args: []string{"apply", "-f", crdFile},
-		})
-		if err != nil {
-			d.logger.Errorf("kubectl stderr: %s", result.Stderr)
-			return fmt.Errorf("failed to apply CRD %s: %w\nStderr: %s", crdFile, err, result.Stderr)
-		}
-
-		basename := filepath.Base(crdFile)
-		d.logger.Successf("✓ Successfully applied CRD %s", basename)
-	}
-
-	return nil
-}
-
-// ensureCRDsInstalled ensures required CRDs exist
-func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
-	var missing []string
-	for _, crd := range requiredCRDs {
-		_, err := d.runKubectl(ctx, KubectlOptions{
-			Args: []string{"get", "crd", crd},
-		})
-		if err != nil {
-			missing = append(missing, crd)
-		}
-	}
-
-	if len(missing) > 0 {
-		bundleImage := d.getOperatorBundleImage()
-		d.logger.Warningf("Missing CRDs detected (%s)", strings.Join(missing, ", "))
-		d.logger.Warningf("Fetching bundle %s", bundleImage)
-
-		bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
-		if err != nil {
-			return err
-		}
-		defer d.cleanupTempDir(bundleDir, "CRD bundle directory")
-
-		crdFiles, err := d.identifyCRDFileNames(bundleDir)
-		if err != nil {
-			return err
-		}
-
-		return d.applyCRDsToCluster(ctx, crdFiles)
-	}
-
-	return nil
 }
 
 func (d *Deployer) getOperatorBundleImage() string {
@@ -631,6 +496,9 @@ func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 			IgnoreErrors: true,
 		})
 	}
+
+	// Delete CRDs to ensure clean redeployment with updated CRD versions.
+	d.deleteCRDs(ctx)
 
 	if err := d.waitForNamespaceDeletion(operatorNamespace); err != nil {
 		d.logger.Warningf("Namespace %s deletion incomplete: %v", operatorNamespace, err)
