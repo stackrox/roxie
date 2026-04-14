@@ -447,8 +447,10 @@ func extractMainImageReferences(renderedYAML string) []string {
 	lines := strings.Split(renderedYAML, "\n")
 	for _, line := range lines {
 		// Look for lines like: image: "quay.io/stackrox-io/main:4.8.2"
-		// TODO: this assumes image names will always be quoted with `"` and there will be a single space between `:` and `"`, we should make this more robust
-		// It might be better to parse the yaml and walk the resulting map, returning string values of `image` keys...
+		// TODO(#91): this assumes image names will always be quoted with `"` and there will be
+		// a single space between `:` and `"`, we should make this more robust. It might be
+		// better to parse the yaml and walk the resulting map, returning string values of
+		// `image` keys...
 		if strings.Contains(line, `image: "`) {
 			parts := strings.SplitN(line, `image: "`, 2)
 			if len(parts) == 2 {

@@ -116,7 +116,7 @@ defaults
     timeout server  30s
 
 frontend http_front
-    bind *:8080 // this should probably be configurable?
+    bind *:8080  # TODO(#91): this should probably be configurable?
     default_backend https_back
 
 backend https_back
@@ -131,7 +131,8 @@ backend https_back
 	configFile.Close()
 
 	cmd := exec.Command("haproxy", "-f", configPath)
-	// What about stdin? We probably should prevent haproxy from reading from the terminal just in case...
+	// TODO(#91): What about stdin? We probably should prevent haproxy from reading from
+	// the terminal just in case...
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 

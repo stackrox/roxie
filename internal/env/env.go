@@ -328,7 +328,7 @@ func fetchAPIResources() ([]string, error) {
 }
 
 func IsInStackroxRepository() bool {
-	// This assumes that:
+	// TODO(#91): This assumes that:
 	// - origin is the name of the upstream remote (not true if someone cloned their fork)
 	// - the git transport was used
 	// How about instead looking for "# StackRox Kubernetes Security Platform" in README?

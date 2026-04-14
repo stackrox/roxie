@@ -443,7 +443,8 @@ func (d *Deployer) waitForCentralReady(ctx context.Context, timeout int) error {
 			}
 		}
 
-		// nit: using `kubectl wait` (which in turn - I hope - uses a watch) instead of polling would allow us to not waste time here
+		// TODO(#91): using `kubectl wait` (which in turn - I hope - uses a watch) instead of
+		// polling would allow us to not waste time here
 		time.Sleep(checkInterval)
 	}
 
@@ -526,8 +527,9 @@ func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
 		return fmt.Errorf("failed to decode CA cert: %w", err)
 	}
 
-	d.roxCACertFile = "/tmp/roxie-ca-cert.pem" // possible symlink race vulnerability
-	// this is a REALLY weird way to write a temporary file in go
+	// TODO(#91): possible symlink race vulnerability
+	d.roxCACertFile = "/tmp/roxie-ca-cert.pem"
+	// TODO(#91): this is a REALLY weird way to write a temporary file in go
 	writeCmd := exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("cat > %s", d.roxCACertFile))
 	writeCmd.Stdin = bytes.NewReader(caCert)
 	if err := writeCmd.Run(); err != nil {
@@ -564,7 +566,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context, exposure string
 			return fmt.Errorf("failed to get LoadBalancer endpoint: %w", err)
 		}
 		// Remove https:// prefix if present (waitForLoadBalancer returns https://ip:443)
-		// This is silly, why add these affixes there, and then strip here?!
+		// TODO(#91): This is silly, why add these affixes there, and then strip here?!
 		d.centralEndpoint = strings.TrimPrefix(endpoint, "https://")
 		d.centralEndpoint = strings.TrimSuffix(d.centralEndpoint, ":443")
 		d.centralEndpoint = d.centralEndpoint + ":443"
@@ -787,7 +789,7 @@ func (d *Deployer) waitForSecuredClusterReady(ctx context.Context, timeout int) 
 			}
 
 			// collector seems to be crashing on some local cluster types/versions.
-			// skip the check only on local clusters, then?
+			// TODO(#91): skip the check only on local clusters, then?
 		}
 
 		if allReady {

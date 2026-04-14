@@ -34,7 +34,9 @@ func setNestedValue(m map[string]interface{}, path string, value interface{}) er
 			// Check if existing value is a map
 			if existingMap, isMap := existing.(map[string]interface{}); isMap {
 				current = existingMap
-			} else { // shouldn't this be an error instead? I think it's more likely someone made a typo...
+			} else {
+				// TODO(#91): shouldn't this be an error instead? I think it's more likely someone
+				// made a typo...
 				// Existing value is not a map, we need to replace it
 				newMap := make(map[string]interface{})
 				current[key] = newMap

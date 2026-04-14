@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	defaultMainImageTag = "4.8.2" // this is a bit old...
+	// TODO(#91): this is a bit old...
+	defaultMainImageTag = "4.8.2"
 	deployTimeout       = 30 * time.Minute
 	teardownTimeout     = 10 * time.Minute
 )
@@ -67,7 +68,8 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func teardownAllDeployments() error { // maybe put the helper functions in a separate file?
+// TODO(#91): maybe put the helper functions in a separate file?
+func teardownAllDeployments() error {
 	fmt.Println("=== Tearing down all deployments before running tests ===")
 
 	ctx, cancel := context.WithTimeout(context.Background(), teardownTimeout)

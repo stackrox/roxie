@@ -26,7 +26,9 @@ type KubectlResult struct {
 }
 
 // runKubectl executes a kubectl command with automatic retries on transient errors
-func (d *Deployer) runKubectl(ctx context.Context, opts KubectlOptions) (*KubectlResult, error) { // perhaps this should not return a pointer so that the lack of nil checks elsewhere is robust?
+// TODO(#91): perhaps this should not return a pointer so that the lack of nil checks elsewhere
+// is robust?
+func (d *Deployer) runKubectl(ctx context.Context, opts KubectlOptions) (*KubectlResult, error) {
 	if opts.MaxAttempts <= 0 {
 		opts.MaxAttempts = 3
 	}

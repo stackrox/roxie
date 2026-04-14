@@ -32,8 +32,8 @@ var (
 
 	pauseReconcileAnnotationKey = "stackrox.io/pause-reconcile"
 
-	// at some point this will get out of date
-	// if we filter by the app.../part-of label anyway, then maybe we should just delete all resource kinds present on cluster?
+	// TODO(#91): at some point this will get out of date. If we filter by the app.../part-of
+	// label anyway, then maybe we should just delete all resource kinds present on cluster?
 	// also we should use the fully-qualified types
 	allInstallableCentralResourceKinds = []string{
 		"applications",
@@ -346,7 +346,8 @@ func (d *Deployer) SetCombinedOverrideFile(overrideFile string) error {
 func setOverrideSetExpressions(overrides map[string]interface{}, prefix string, overrideSetExpressions []string) ([]string, error) {
 	remainingSetExpressions := make([]string, 0)
 	for _, expr := range overrideSetExpressions {
-		parts := splitAtFirstEquals(expr) // would https://pkg.go.dev/strings#Cut work instead?
+		// TODO(#91): would https://pkg.go.dev/strings#Cut work instead?
+		parts := splitAtFirstEquals(expr)
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid override expression '%s': expected format 'key.path=value'", expr)
 		}
@@ -1254,7 +1255,8 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 	}
 }
 
-// plenty of code in common with the central variant that should probably be extracted
+// TODO(#91): plenty of code in common with the central variant that should probably be
+// extracted
 func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	component := "Secured Cluster"
 	mainImageTag := d.mainImageTag
