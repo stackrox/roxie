@@ -89,7 +89,7 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	}
 
 	if needsDeployment {
-		d.logger.Info("🚀 Deploying operator via OLM...")
+		d.logger.Info("🚀 Deploying operator...")
 		d.logger.Infof("Operator tag: %s", d.operatorTag)
 
 		if d.useOLM {
