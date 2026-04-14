@@ -47,6 +47,10 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 		return nil
 	}
 
+	if err := d.ensureCRDsInstalled(ctx); err != nil {
+		return fmt.Errorf("failed to ensure CRDs installed: %w", err)
+	}
+
 	// Detect current operator deployment mode
 	operatorExists, currentMode := d.detectOperatorDeploymentMode(ctx)
 	needsDeployment := false
@@ -89,40 +93,13 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	}
 
 	if needsDeployment {
-		d.logger.Info("🚀 Deploying operator...")
-		d.logger.Infof("Operator tag: %s", d.operatorTag)
-
 		if d.useOLM {
-			// OLM takes care of CRD installation.
 			if err := d.deployOperatorViaOLM(ctx); err != nil {
 				return fmt.Errorf("failed to deploy operator via OLM: %w", err)
 			}
 		} else {
-			if d.useKonflux {
-				if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
-					return fmt.Errorf("failed to configure Konflux image rewriting: %w", err)
-				}
-			} else {
-				if err := d.removeKonfluxImageRewriting(ctx); err != nil {
-					return fmt.Errorf("failed to remove Konflux ImageContentSourcePolicy: %v", err)
-				}
-			}
-
-			bundleImage := d.getOperatorBundleImage()
-			d.logger.Infof("Bundle image: %s", bundleImage)
-
-			bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
-			if err != nil {
-				return fmt.Errorf("failed to download operator bundle: %w", err)
-			}
-			defer d.cleanupTempDir(bundleDir, "operator bundle directory")
-
-			if err := d.ensureCRDsInstalled(ctx, bundleDir); err != nil {
-				return fmt.Errorf("failed to ensure CRDs installed: %w", err)
-			}
-
-			if err := d.deployOperatorFromCSV(ctx, bundleDir); err != nil {
-				return fmt.Errorf("failed to deploy operator from CSV: %w", err)
+			if err := d.deployOperatorNonOLM(ctx); err != nil {
+				return fmt.Errorf("failed to deploy operator: %w", err)
 			}
 		}
 	}
