@@ -182,6 +182,37 @@ var (
 			"cpu":    "2500m",
 		},
 	}
+
+	// CI resources - based on deploy/common/ci-values.yaml from stackrox repo.
+
+	centralDbResourcesCI = map[string]interface{}{
+		"requests": map[string]string{
+			"memory": "1Gi",
+			"cpu":    "1",
+		},
+		"limits": map[string]string{
+			"memory": "16Gi",
+			"cpu":    "8",
+		},
+	}
+
+	centralScannerV4DbResourcesCI = map[string]interface{}{
+		"requests": map[string]string{
+			"cpu": "500m",
+		},
+	}
+
+	centralScannerV4IndexerResourcesCI = map[string]interface{}{
+		"requests": map[string]string{
+			"cpu": "400m",
+		},
+	}
+
+	centralScannerV4MatcherResourcesCI = map[string]interface{}{
+		"requests": map[string]string{
+			"cpu": "400m",
+		},
+	}
 )
 
 func internalCentralEndpoint(namespace string) string {

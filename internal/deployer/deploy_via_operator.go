@@ -342,6 +342,35 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 				},
 			},
 		}
+	case "ci":
+		return map[string]interface{}{
+			"spec": map[string]interface{}{
+				"central": map[string]interface{}{
+					"db": map[string]interface{}{
+						"resources": centralDbResourcesCI,
+					},
+				},
+				"scanner": map[string]interface{}{
+					"scannerComponent": "Disabled",
+					"analyzer": map[string]interface{}{
+						"scaling": noScaling,
+					},
+				},
+				"scannerV4": map[string]interface{}{
+					"db": map[string]interface{}{
+						"resources": centralScannerV4DbResourcesCI,
+					},
+					"indexer": map[string]interface{}{
+						"resources": centralScannerV4IndexerResourcesCI,
+						"scaling":   noScaling,
+					},
+					"matcher": map[string]interface{}{
+						"resources": centralScannerV4MatcherResourcesCI,
+						"scaling":   noScaling,
+					},
+				},
+			},
+		}
 	default:
 		return nil
 	}
