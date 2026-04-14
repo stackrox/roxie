@@ -703,7 +703,7 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 }
 
 func (d *Deployer) teardownCentral(ctx context.Context) error {
-	d.logger.Infof("🗑️  Tearing down %s", d.centralNamespace)
+	d.logger.Infof("🗑️  Tearing down central in namespace %s", d.centralNamespace)
 
 	if !d.namespaceExists(d.centralNamespace) {
 		d.logger.Infof("Namespace %s doesn't exist, skipping", d.centralNamespace)
@@ -730,7 +730,7 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 }
 
 func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
-	d.logger.Infof("🗑️  Tearing down %s", d.sensorNamespace)
+	d.logger.Infof("🗑️  Tearing down secured cluster in namespace %s", d.sensorNamespace)
 
 	if !d.namespaceExists(d.sensorNamespace) {
 		d.logger.Infof("Namespace %s doesn't exist, skipping", d.sensorNamespace)
