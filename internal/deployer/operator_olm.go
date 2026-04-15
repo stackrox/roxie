@@ -363,6 +363,7 @@ func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, Oper
 }
 
 // teardownOperatorOLM removes the operator when installed via OLM.
+// Requires that all CRs are removed beforehand.
 func (d *Deployer) teardownOperatorOLM(ctx context.Context) error {
 	d.logger.Info("🧹 Tearing down operator deployed via OLM...")
 

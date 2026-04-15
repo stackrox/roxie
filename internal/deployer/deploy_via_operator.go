@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"gopkg.in/yaml.v3"
@@ -76,16 +77,8 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	}
 
 	if needsTeardown {
-		// Perform teardown for the current mode
-		if currentMode == OperatorModeOLM {
-			if err := d.teardownOperatorOLM(ctx); err != nil {
-				return fmt.Errorf("failed to teardown OLM operator: %w", err)
-			}
-		} else {
-			if err := d.teardownOperatorNonOLM(ctx); err != nil {
-				return fmt.Errorf("failed to teardown non-OLM operator: %w", err)
-			}
-		}
+		// It is a prerequisite that all CRs are removed before the operator is removed to avoid blocking during teardown.
+		d.Teardown(ctx, component.All)
 	}
 
 	if needsDeployment {

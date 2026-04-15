@@ -463,6 +463,7 @@ func generateClusterName() string {
 }
 
 // teardownOperatorNonOLM removes the operator when installed without OLM.
+// Requires that all CRs are removed beforehand.
 func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 	d.logger.Info("🧹 Tearing down operator deployed without OLM...")
 
@@ -499,6 +500,7 @@ func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 }
 
 // teardownOperator removes the operator if it exists, detecting the deployment mode automatically.
+// Requires that all CRs are removed beforehand.
 func (d *Deployer) teardownOperator(ctx context.Context) error {
 	operatorExists, operatorMode := d.detectOperatorDeploymentMode(ctx)
 	if !operatorExists {
@@ -507,7 +509,14 @@ func (d *Deployer) teardownOperator(ctx context.Context) error {
 	}
 
 	if operatorMode == OperatorModeOLM {
-		return d.teardownOperatorOLM(ctx)
+		if err := d.teardownOperatorOLM(ctx); err != nil {
+			return fmt.Errorf("failed to teardown OLM operator: %w", err)
+		}
+		return nil
 	}
-	return d.teardownOperatorNonOLM(ctx)
+
+	if err := d.teardownOperatorNonOLM(ctx); err != nil {
+		return fmt.Errorf("failed to teardown non-OLM operator: %w", err)
+	}
+	return nil
 }
