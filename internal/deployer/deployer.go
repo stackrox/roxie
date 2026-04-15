@@ -1075,12 +1075,12 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context, exposure string, portForw
 	endpoint := strings.TrimPrefix(d.centralEndpoint, "https://")
 
 	var content strings.Builder
-	fmt.Fprintf(&content, "export API_ENDPOINT=\"%s\"\n", endpoint)
-	fmt.Fprintf(&content, "export ROX_ENDPOINT=\"%s\"\n", endpoint)
-	fmt.Fprintf(&content, "export ROX_BASE_URL=\"https://%s\"\n", endpoint)
-	fmt.Fprintf(&content, "export ROX_USERNAME=\"%s\"\n", AdminUsername)
-	fmt.Fprintf(&content, "export ROX_ADMIN_PASSWORD=\"%s\"\n", d.centralPassword)
-	fmt.Fprintf(&content, "export ROX_CA_CERT_FILE=\"%s\"\n", d.roxCACertFile)
+	fmt.Fprintf(&content, "export API_ENDPOINT=%q\n", endpoint)
+	fmt.Fprintf(&content, "export ROX_ENDPOINT=%q\n", endpoint)
+	fmt.Fprintf(&content, "export ROX_BASE_URL='https://%s'\n", endpoint)
+	fmt.Fprintf(&content, "export ROX_USERNAME=%q\n", AdminUsername)
+	fmt.Fprintf(&content, "export ROX_ADMIN_PASSWORD=%q\n", d.centralPassword)
+	fmt.Fprintf(&content, "export ROX_CA_CERT_FILE=%q\n", d.roxCACertFile)
 
 	if err := os.WriteFile(d.envrcFile, []byte(content.String()), 0600); err != nil {
 		return fmt.Errorf("failed to write envrc file: %w", err)

@@ -32,22 +32,22 @@ func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
 	endpoint, password, caCertFile, kubeContext, exposure := d.GetDeploymentInfo()
 
 	if endpoint != "" {
-		env = append(env, fmt.Sprintf("API_ENDPOINT=%s", endpoint))
-		env = append(env, fmt.Sprintf("ROX_ENDPOINT=%s", endpoint))
-		env = append(env, fmt.Sprintf("ROX_BASE_URL=https://%s", endpoint))
+		env = append(env, fmt.Sprintf("API_ENDPOINT=%q", endpoint))
+		env = append(env, fmt.Sprintf("ROX_ENDPOINT=%q", endpoint))
+		env = append(env, fmt.Sprintf("ROX_BASE_URL='https://%s'", endpoint))
 	}
 
 	if password != "" {
-		env = append(env, fmt.Sprintf("ROX_ADMIN_PASSWORD=%s", password))
+		env = append(env, fmt.Sprintf("ROX_ADMIN_PASSWORD=%q", password))
 	}
 
 	if caCertFile != "" {
-		env = append(env, fmt.Sprintf("ROX_CA_CERT_FILE=%s", caCertFile))
+		env = append(env, fmt.Sprintf("ROX_CA_CERT_FILE=%q", caCertFile))
 	}
 
-	env = append(env, fmt.Sprintf("ROX_USERNAME=%s", deployer.AdminUsername))
+	env = append(env, fmt.Sprintf("ROX_USERNAME=%q", deployer.AdminUsername))
 	env = append(env, "ROXIE_SHELL=1")
-	env = append(env, fmt.Sprintf("name=acs@%s", kubeContext))
+	env = append(env, fmt.Sprintf("name='acs@%s'", kubeContext))
 
 	haproxyAvailable := isHAProxyAvailable()
 
@@ -61,7 +61,7 @@ func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
 		if err != nil {
 			log.Warningf("Failed to start HAProxy: %v", err)
 		} else {
-			env = append(env, fmt.Sprintf("ROXIE_HAPROXY_CFG_FILE=%s", haproxyConfigPath))
+			env = append(env, fmt.Sprintf("ROXIE_HAPROXY_CFG_FILE=%q", haproxyConfigPath))
 			haproxyStarted = true
 			defer cleanupHAProxy(haproxyCmd, haproxyConfigPath)
 		}
