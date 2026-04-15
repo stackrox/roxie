@@ -29,9 +29,6 @@ const (
 
 // deployOperatorViaOLM deploys the RHACS operator using OLM.
 func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
-	d.logger.Info("🚀 Deploying operator via OLM...")
-	d.logger.Infof("Operator tag: %s", d.operatorTag)
-
 	if err := d.checkOLMInstalled(ctx); err != nil {
 		return err
 	}
@@ -366,6 +363,7 @@ func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, Oper
 }
 
 // teardownOperatorOLM removes the operator when installed via OLM.
+// Requires that all CRs are removed beforehand.
 func (d *Deployer) teardownOperatorOLM(ctx context.Context) error {
 	d.logger.Info("🧹 Tearing down operator deployed via OLM...")
 

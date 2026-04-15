@@ -518,20 +518,3 @@ func (d *Deployer) installSecuredClusterHelmChart(ctx context.Context, chartDir,
 	d.logger.Success("✓ Helm chart installed")
 	return nil
 }
-
-// deleteCRDs deletes ACS CRDs (used before Helm deployment)
-func (d *Deployer) deleteCRDs(ctx context.Context) {
-	crds := []string{
-		"centrals.platform.stackrox.io",
-		"securedclusters.platform.stackrox.io",
-		"securitypolicies.config.stackrox.io",
-	}
-
-	d.logger.Info("Deleting CRDs...")
-
-	args := append([]string{"delete", "crd", "--ignore-not-found=true"}, crds...)
-	d.runKubectl(ctx, KubectlOptions{
-		Args:         args,
-		IgnoreErrors: true,
-	})
-}

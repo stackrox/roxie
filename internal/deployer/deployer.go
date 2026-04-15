@@ -612,11 +612,8 @@ func (d *Deployer) prepareCredentials() error {
 
 func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string) error {
 	d.logger.Infof("Deploying Central to namespace %s", d.centralNamespace)
-	if d.namespaceExists(d.centralNamespace) {
-		d.logger.Info("Existing Central deployment found, tearing down...")
-		if err := d.teardownCentral(ctx); err != nil {
-			d.logger.Warningf("Error during teardown: %v", err)
-		}
+	if err := d.Teardown(ctx, component.Both); err != nil {
+		d.logger.Warningf("Error during teardown: %v", err)
 	}
 
 	portForwardWanted := d.portForwardEnabled
@@ -645,11 +642,8 @@ func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string
 
 func (d *Deployer) deploySecuredCluster(ctx context.Context, resources string) error {
 	d.logger.Infof("Deploying SecuredCluster to namespace %s", d.sensorNamespace)
-	if d.namespaceExists(d.sensorNamespace) {
-		d.logger.Info("Existing SecuredCluster deployment found, tearing down...")
-		if err := d.teardownSecuredCluster(ctx); err != nil {
-			d.logger.Warningf("Error during teardown: %v", err)
-		}
+	if err := d.Teardown(ctx, component.SecuredCluster); err != nil {
+		d.logger.Warningf("Error during teardown: %v", err)
 	}
 
 	if d.useHelm {
