@@ -687,18 +687,16 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 			}
 		}()
 
-		// For 'all', also tear down the operator in parallel
+		wg.Wait()
+
+		// Tear down the operator strictly after Central/SecuredCluster are gone,
+		// because the operator manages finalizers on their custom resources.
 		if components == component.All {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				if err := d.teardownOperator(ctx); err != nil {
-					d.logger.Warningf("Error tearing down operator: %v", err)
-				}
-			}()
+			if err := d.teardownOperator(ctx); err != nil {
+				d.logger.Warningf("Error tearing down operator: %v", err)
+			}
 		}
 
-		wg.Wait()
 		return nil
 	default:
 		return fmt.Errorf("unknown component: %s", components)
