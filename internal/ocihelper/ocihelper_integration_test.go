@@ -1,6 +1,6 @@
 //go:build integration
 
-package skopeohelper
+package ocihelper
 
 import (
 	"context"

@@ -814,7 +814,7 @@ func (d *Deployer) waitForNamespaceDeletion(namespace string) error {
 
 // checkRequiredTools verifies that required CLI tools are available
 func checkRequiredTools() error {
-	requiredTools := []string{"kubectl", "roxctl", "skopeo"}
+	requiredTools := []string{"kubectl", "roxctl"}
 
 	var missing []string
 	for _, tool := range requiredTools {
