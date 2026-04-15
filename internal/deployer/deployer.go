@@ -32,6 +32,9 @@ var (
 
 	pauseReconcileAnnotationKey = "stackrox.io/pause-reconcile"
 
+	// AdminUsername is the default admin username for StackRox Central
+	AdminUsername = "admin"
+
 	// TODO(#91): at some point this will get out of date. If we filter by the app.../part-of
 	// label anyway, then maybe we should just delete all resource kinds present on cluster?
 	// also we should use the fully-qualified types
@@ -1071,14 +1074,15 @@ func (d *Deployer) cleanupTempDir(path string, description string) {
 func (d *Deployer) writeEnvrcFile(ctx context.Context, exposure string, portForwardWanted bool) error {
 	endpoint := strings.TrimPrefix(d.centralEndpoint, "https://")
 
-	content := fmt.Sprintf(`export API_ENDPOINT="%s"
-export ROX_ENDPOINT="%s"
-export ROX_BASE_URL="https://%s"
-export ROX_ADMIN_PASSWORD="%s"
-export ROX_CA_CERT_FILE="%s"
-`, endpoint, endpoint, endpoint, d.centralPassword, d.roxCACertFile)
+	var content strings.Builder
+	fmt.Fprintf(&content, "export API_ENDPOINT=\"%s\"\n", endpoint)
+	fmt.Fprintf(&content, "export ROX_ENDPOINT=\"%s\"\n", endpoint)
+	fmt.Fprintf(&content, "export ROX_BASE_URL=\"https://%s\"\n", endpoint)
+	fmt.Fprintf(&content, "export ROX_USERNAME=\"%s\"\n", AdminUsername)
+	fmt.Fprintf(&content, "export ROX_ADMIN_PASSWORD=\"%s\"\n", d.centralPassword)
+	fmt.Fprintf(&content, "export ROX_CA_CERT_FILE=\"%s\"\n", d.roxCACertFile)
 
-	if err := os.WriteFile(d.envrcFile, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(d.envrcFile, []byte(content.String()), 0600); err != nil {
 		return fmt.Errorf("failed to write envrc file: %w", err)
 	}
 

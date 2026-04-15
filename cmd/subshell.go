@@ -45,6 +45,7 @@ func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
 		env = append(env, fmt.Sprintf("ROX_CA_CERT_FILE=%s", caCertFile))
 	}
 
+	env = append(env, fmt.Sprintf("ROX_USERNAME=%s", deployer.AdminUsername))
 	env = append(env, "ROXIE_SHELL=1")
 	env = append(env, fmt.Sprintf("name=acs@%s", kubeContext))
 
