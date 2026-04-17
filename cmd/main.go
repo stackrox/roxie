@@ -26,6 +26,8 @@ var (
 	singleNamespace        bool
 	tag                    string
 	featureFlags           []string
+	centralWait            string
+	securedClusterWait     string
 )
 
 func main() {

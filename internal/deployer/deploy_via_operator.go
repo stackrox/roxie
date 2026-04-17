@@ -128,7 +128,7 @@ func (d *Deployer) deployCentralOperator(ctx context.Context, resources, exposur
 		return fmt.Errorf("failed to apply Central CR: %w", err)
 	}
 
-	if err := d.waitForCentralReady(ctx, 600); err != nil {
+	if err := d.waitForCentralReady(ctx, d.centralWaitTimeout); err != nil {
 		return fmt.Errorf("failed waiting for Central: %w", err)
 	}
 
@@ -441,8 +441,8 @@ func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}
 }
 
 // waitForCentralReady waits for Central to be ready
-func (d *Deployer) waitForCentralReady(ctx context.Context, timeout int) error {
-	d.logger.Info("⏳ Waiting for Central to become ready...")
+func (d *Deployer) waitForCentralReady(ctx context.Context, timeout time.Duration) error {
+	d.logger.Infof("⏳ Waiting for Central to become ready (timeout: %s)...", timeout)
 
 	// Track seen deployments and their states to avoid duplicate messages
 	seenDeployments := make(map[string]string)
@@ -451,7 +451,7 @@ func (d *Deployer) waitForCentralReady(ctx context.Context, timeout int) error {
 	start := time.Now()
 	checkInterval := 3 * time.Second
 
-	for time.Since(start) < time.Duration(timeout)*time.Second {
+	for time.Since(start) < timeout {
 		// Check for new deployments
 		d.checkDeploymentProgress(ctx, seenDeployments)
 
@@ -643,7 +643,7 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources s
 		return fmt.Errorf("failed to apply SecuredCluster CR: %w", err)
 	}
 
-	if err := d.waitForSecuredClusterReady(ctx, 600); err != nil {
+	if err := d.waitForSecuredClusterReady(ctx, d.securedClusterWaitTimeout); err != nil {
 		return fmt.Errorf("failed waiting for SecuredCluster: %w", err)
 	}
 
@@ -770,8 +770,8 @@ func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]inte
 }
 
 // waitForSecuredClusterReady waits for SecuredCluster to be ready
-func (d *Deployer) waitForSecuredClusterReady(ctx context.Context, timeout int) error {
-	d.logger.Info("⏳ Waiting for SecuredCluster to become ready...")
+func (d *Deployer) waitForSecuredClusterReady(ctx context.Context, timeout time.Duration) error {
+	d.logger.Infof("⏳ Waiting for SecuredCluster to become ready (timeout: %s)...", timeout)
 
 	// Track seen deployments and their states to avoid duplicate messages
 	seenDeployments := make(map[string]string)
@@ -780,7 +780,7 @@ func (d *Deployer) waitForSecuredClusterReady(ctx context.Context, timeout int) 
 	start := time.Now()
 	checkInterval := 3 * time.Second
 
-	for time.Since(start) < time.Duration(timeout)*time.Second {
+	for time.Since(start) < timeout {
 		d.checkDeploymentProgressInNamespace(ctx, d.sensorNamespace, seenDeployments)
 
 		if d.earlyReadiness || d.verbose {

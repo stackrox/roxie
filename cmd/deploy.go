@@ -47,6 +47,8 @@ Examples:
 	cmd.Flags().BoolVar(&singleNamespace, "single-namespace", false, "Deploy all components in a single namespace ('stackrox' by default)")
 	cmd.Flags().StringVarP(&tag, "tag", "t", "", "Main image tag to use for deployment (takes precedence over MAIN_IMAGE_TAG environment variable)")
 	cmd.Flags().StringSliceVar(&featureFlags, "features", []string{}, "Feature flag settings (e.g., +ROX_FOO,-ROX_BAR,ROX_BAZ=true)")
+	cmd.Flags().StringVar(&centralWait, "central-wait", deployer.DefaultCentralWaitTimeout.String(), "Maximum wait time for Central to become ready (e.g., 5m, 10m)")
+	cmd.Flags().StringVar(&securedClusterWait, "secured-cluster-wait", deployer.DefaultSecuredClusterWaitTimeout.String(), "Maximum wait time for SecuredCluster to become ready (e.g., 5m, 10m)")
 
 	return cmd
 }
@@ -206,6 +208,23 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	d.SetPortForwardingEnabled(portForwardEnabledFinal)
 	d.SetPauseReconciliation(pauseReconciliation)
 	d.SetSingleNamespace(singleNamespace)
+
+	// Parse and set wait timeouts only if flags were provided
+	if cmd.Flags().Changed("central-wait") {
+		centralWaitDuration, err := time.ParseDuration(centralWait)
+		if err != nil {
+			return fmt.Errorf("invalid --central-wait duration: %w", err)
+		}
+		d.SetCentralWaitTimeout(centralWaitDuration)
+	}
+
+	if cmd.Flags().Changed("secured-cluster-wait") {
+		securedClusterWaitDuration, err := time.ParseDuration(securedClusterWait)
+		if err != nil {
+			return fmt.Errorf("invalid --secured-cluster-wait duration: %w", err)
+		}
+		d.SetSecuredClusterWaitTimeout(securedClusterWaitDuration)
+	}
 
 	var mainImageTag string
 	if tag != "" {
