@@ -12,6 +12,7 @@ import (
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 var (
@@ -623,7 +624,19 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources s
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}
 
-	clusterName := generateClusterName()
+	securedClusterCR, err := d.createSecuredClusterCR(resources)
+	if err != nil {
+		return fmt.Errorf("failed to create SecuredCluster CR: %w", err)
+	}
+
+	clusterName, found, err := unstructured.NestedString(securedClusterCR, "spec", "clusterName")
+	if err != nil {
+		return fmt.Errorf("failed to get cluster name from SecuredCluster CR: %w", err)
+	}
+	if !found || clusterName == "" {
+		return fmt.Errorf("cluster name not found in SecuredCluster CR")
+	}
+	d.logger.Infof("Using cluster name: %s", clusterName)
 
 	crsContent, err := d.generateCRS(ctx, clusterName)
 	if err != nil {
@@ -632,11 +645,6 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources s
 
 	if err := d.applyCRS(ctx, crsContent); err != nil {
 		return fmt.Errorf("failed to apply CRS: %w", err)
-	}
-
-	securedClusterCR, err := d.createSecuredClusterCR(clusterName, resources)
-	if err != nil {
-		return fmt.Errorf("failed to create SecuredCluster CR: %w", err)
 	}
 
 	if err := d.applySecuredClusterCR(ctx, securedClusterCR); err != nil {
@@ -656,7 +664,7 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context, resources s
 }
 
 // createSecuredClusterCR creates the SecuredCluster custom resource.
-func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[string]interface{}, error) {
+func (d *Deployer) createSecuredClusterCR(resources string) (map[string]interface{}, error) {
 	base := map[string]interface{}{
 		"apiVersion": "platform.stackrox.io/v1alpha1",
 		"kind":       "SecuredCluster",
@@ -668,7 +676,7 @@ func (d *Deployer) createSecuredClusterCR(clusterName, resources string) (map[st
 			},
 		},
 		"spec": map[string]interface{}{
-			"clusterName":     clusterName,
+			"clusterName":     generateClusterName(), // Just a default, can be overwritten.
 			"centralEndpoint": internalCentralEndpoint(d.centralNamespace),
 			"imagePullSecrets": []map[string]string{
 				{"name": "stackrox"},

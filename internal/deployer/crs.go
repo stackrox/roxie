@@ -9,7 +9,8 @@ import (
 
 // generateCRS generates the Central Resource Secret using roxctl
 func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string, error) {
-	d.logger.Info("Generating CRS with roxctl...")
+	crsName := fmt.Sprintf("%s-crs", clusterName)
+	d.logger.Infof("Generating CRS named %q with roxctl...", crsName)
 
 	result, err := d.runRoxctl(ctx, RoxctlOptions{
 		Args: []string{
@@ -17,7 +18,7 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 			"central",
 			"crs",
 			"generate",
-			clusterName,
+			crsName,
 			"--output=-", // Output to stdout
 		},
 		UseAuthentication: true,
