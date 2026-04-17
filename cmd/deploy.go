@@ -212,6 +212,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	// Parse and set wait timeouts only if flags were provided
 	if cmd.Flags().Changed("central-wait") {
 		centralWaitDuration, err := time.ParseDuration(centralWait)
+		if err == nil && centralWaitDuration <= 0 {
+			err = errors.New("--central-wait duration must be positive")
+		}
 		if err != nil {
 			return fmt.Errorf("invalid --central-wait duration: %w", err)
 		}
@@ -220,6 +223,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if cmd.Flags().Changed("secured-cluster-wait") {
 		securedClusterWaitDuration, err := time.ParseDuration(securedClusterWait)
+		if err == nil && securedClusterWaitDuration <= 0 {
+			err = errors.New("--secured-cluster-wait duration must be positive")
+		}
 		if err != nil {
 			return fmt.Errorf("invalid --secured-cluster-wait duration: %w", err)
 		}
