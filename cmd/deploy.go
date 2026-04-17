@@ -31,8 +31,6 @@ Examples:
 		RunE:      runDeploy,
 	}
 
-	cmd.Flags().BoolVar(&helm, "helm", false, "Deploy using Helm charts instead of operator")
-	_ = cmd.Flags().MarkHidden("helm")
 	cmd.Flags().BoolVar(&olm, "olm", false, "Deploy operator via OLM (requires OLM installed)")
 	cmd.Flags().BoolVar(&konflux, "konflux", false, "Use Konflux images")
 	cmd.Flags().BoolVar(&deployOperator, "deploy-operator", true, "Deploy and check operator (set to false to skip operator deployment/checks)")
@@ -54,15 +52,6 @@ Examples:
 }
 
 func runDeploy(cmd *cobra.Command, args []string) error {
-	// Validate flag combinations early, before env initialization
-	if helm && olm {
-		return errors.New("cannot use both --helm and --olm flags together")
-	}
-
-	if helm && len(featureFlags) > 0 {
-		return errors.New("--features flag is not supported with --helm (feature flags only work with operator-based deployments)")
-	}
-
 	log := logger.New()
 	if err := env.Initialize(log); err != nil {
 		return err
@@ -77,10 +66,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	components, err := component.FromArgs(args)
 	if err != nil {
 		return err
-	}
-
-	if components.IncludesOperatorExplicitly() && helm {
-		return errors.New("cannot use --helm flag with 'operator' component")
 	}
 
 	if components.IncludesCentral() && os.Getenv("ROXIE_SHELL") != "" {
@@ -122,9 +107,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	if konflux {
-		if helm {
-			return errors.New("cannot use both --helm and --konflux flags together (Konflux requires operator-based deployment)")
-		}
 		if olm {
 			return errors.New("cannot use both --olm and --konflux flags together (not currently implemented)")
 		}
@@ -180,12 +162,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if envrc != "" {
 		d.SetEnvrcFile(envrc)
-	}
-
-	if helm {
-		if err := d.SetUseHelm(true); err != nil {
-			return err
-		}
 	}
 
 	if olm {

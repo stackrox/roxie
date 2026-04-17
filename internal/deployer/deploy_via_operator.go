@@ -579,7 +579,6 @@ func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
 }
 
 // configureCentralEndpoint configures the central endpoint based on exposure settings
-// This is shared logic between operator and Helm deployment paths
 func (d *Deployer) configureCentralEndpoint(ctx context.Context, exposure string) error {
 	if d.portForwardEnabled {
 		// Start port-forward for CLI tool access via localhost:8443
