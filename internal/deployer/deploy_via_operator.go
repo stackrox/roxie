@@ -297,6 +297,10 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 					"analyzer": map[string]interface{}{
 						"scaling": noScaling,
 					},
+					"resources": centralScannerResourcesSmall,
+					"db": map[string]interface{}{
+						"resources": centralScannerDbResourcesSmall,
+					},
 				},
 				"scannerV4": map[string]interface{}{
 					"db": map[string]interface{}{
@@ -326,6 +330,10 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 					"scannerComponent": "Disabled",
 					"analyzer": map[string]interface{}{
 						"scaling": noScaling,
+					},
+					"resources": centralScannerResourcesMedium,
+					"db": map[string]interface{}{
+						"resources": centralScannerDbResourcesMedium,
 					},
 				},
 				"scannerV4": map[string]interface{}{
