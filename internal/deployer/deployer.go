@@ -101,32 +101,32 @@ var (
 
 // Deployer is the base deployer for ACS
 type Deployer struct {
-	logger                  *logger.Logger
-	startTime               time.Time
-	dockerAuth              *dockerauth.DockerAuth
-	imageCache              *imagecache.ImageCache
-	portForward             *portforward.Manager
-	clusterDefaults         *clusterdefaults.Manager
-	kubectl                 string
-	roxctlVersion           string
-	centralNamespace        string
-	sensorNamespace         string
-	mainImageTag            string
-	operatorTag             string
-	centralEndpoint         string
-	centralPassword         string
-	roxCACertFile           string
-	kubeContext             string
-	portForwardEnabled      bool
-	pauseReconciliation     bool
-	exposure                string
-	centralOverrides        map[string]interface{}
-	securedClusterOverrides map[string]interface{}
-	featureFlagOverrides    map[string]interface{}
-	envrcFile               string
-	useHelm                 bool
-	useOLM                  bool
-	useKonflux              bool
+	logger                    *logger.Logger
+	startTime                 time.Time
+	dockerAuth                *dockerauth.DockerAuth
+	imageCache                *imagecache.ImageCache
+	portForward               *portforward.Manager
+	clusterDefaults           *clusterdefaults.Manager
+	kubectl                   string
+	roxctlVersion             string
+	centralNamespace          string
+	sensorNamespace           string
+	mainImageTag              string
+	operatorTag               string
+	centralEndpoint           string
+	centralPassword           string
+	roxCACertFile             string
+	kubeContext               string
+	portForwardEnabled        bool
+	pauseReconciliation       bool
+	exposure                  string
+	centralOverrides          map[string]interface{}
+	securedClusterOverrides   map[string]interface{}
+	featureFlagOverrides      map[string]interface{}
+	envrcFile                 string
+	useHelm                   bool
+	useOLM                    bool
+	useKonflux                bool
 	shouldDeployOperator      bool
 	verbose                   bool
 	earlyReadiness            bool
