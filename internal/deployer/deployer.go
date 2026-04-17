@@ -51,7 +51,8 @@ type Deployer struct {
 	config Config
 
 	// State
-	centralEndpoint        string
+	centralEndpoint             string
+	userProvidedCentralEndpoint string
 	centralPassword        string
 	roxCACertFile          string
 	tempDir                string
@@ -653,6 +654,32 @@ func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceT
 	return nil
 }
 
+func (d *Deployer) SetCentralEndpoint(endpoint string) {
+	endpoint = strings.TrimPrefix(endpoint, "https://")
+	endpoint = strings.TrimPrefix(endpoint, "http://")
+	d.centralEndpoint = endpoint
+	d.userProvidedCentralEndpoint = endpoint
+}
+
+func (d *Deployer) SetCentralPassword(password string) {
+	d.centralPassword = password
+}
+
+func (d *Deployer) SetCACertFile(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("CA cert file not found: %w", err)
+	}
+	d.roxCACertFile = path
+	return nil
+}
+
+func (d *Deployer) getCentralEndpointForSensor() string {
+	if d.userProvidedCentralEndpoint != "" {
+		return d.userProvidedCentralEndpoint
+	}
+	return internalCentralEndpoint(d.config.Central.Namespace)
+}
+
 // WaitForCentral waits for Central to be ready and responding on its endpoint
 // Returns true if Central is ready, false if timeout occurs
 func (d *Deployer) WaitForCentral(timeout time.Duration) bool {
@@ -993,6 +1020,10 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 
 	if olm {
 		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes"))
+	}
+
+	if d.userProvidedCentralEndpoint != "" {
+		log.Info(cyan.Sprint("│") + createRow("Central Endpoint", d.userProvidedCentralEndpoint))
 	}
 
 	log.Info(cyan.Sprint("└" + strings.Repeat("─", boxWidth) + "┘"))

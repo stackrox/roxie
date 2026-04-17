@@ -240,6 +240,11 @@ Examples:
 		return pflag.NormalizedName(name)
 	})
 
+	cmd.Flags().StringVar(&centralEndpointFlag, "central-endpoint", "", "Central endpoint for multi-cluster SecuredCluster deployments (e.g., central.example.com:443)")
+	cmd.Flags().StringVar(&centralPasswordFlag, "central-password", "", "Central admin password (takes precedence over ROX_ADMIN_PASSWORD)")
+	cmd.Flags().StringVar(&caCertFileFlag, "ca-cert-file", "", "Path to Central CA certificate file (takes precedence over ROX_CA_CERT_FILE)")
+
+
 	return cmd
 }
 
@@ -299,6 +304,20 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	hasMultiClusterFlags := centralEndpointFlag != "" || centralPasswordFlag != "" || caCertFileFlag != ""
+	if hasMultiClusterFlags && components != component.SecuredCluster {
+		return errors.New("--central-endpoint, --central-password, and --ca-cert-file flags can only be used with 'secured-cluster' component")
+	}
+
+	if centralEndpointFlag != "" {
+		if centralPasswordFlag == "" && os.Getenv("ROX_ADMIN_PASSWORD") == "" {
+			return errors.New("--central-endpoint requires a Central admin password (set --central-password or ROX_ADMIN_PASSWORD)")
+		}
+		if caCertFileFlag == "" && os.Getenv("ROX_CA_CERT_FILE") == "" {
+			return errors.New("--central-endpoint requires a Central CA certificate (set --ca-cert-file or ROX_CA_CERT_FILE)")
+		}
+	}
+
 	d, err := deployer.New(log)
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
@@ -318,6 +337,18 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
+
+	if centralEndpointFlag != "" {
+		d.SetCentralEndpoint(centralEndpointFlag)
+	}
+	if centralPasswordFlag != "" {
+		d.SetCentralPassword(centralPasswordFlag)
+	}
+	if caCertFileFlag != "" {
+		if err := d.SetCACertFile(caCertFileFlag); err != nil {
+			return err
+		}
+	}
 
 	if components.IncludesCentral() {
 		d.PrintCentralDeploymentSummary()
