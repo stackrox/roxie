@@ -82,7 +82,7 @@ func (d *Deployer) deployCentralHelm(ctx context.Context, resources, exposure st
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
-	if err := d.waitForCentralReady(ctx, 600); err != nil {
+	if err := d.waitForCentralReady(ctx, d.centralWaitTimeout); err != nil {
 		return fmt.Errorf("failed waiting for Central: %w", err)
 	}
 
@@ -168,7 +168,7 @@ func (d *Deployer) deploySecuredClusterHelm(ctx context.Context, resources strin
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
-	if err := d.waitForSecuredClusterReady(ctx, 600); err != nil {
+	if err := d.waitForSecuredClusterReady(ctx, d.securedClusterWaitTimeout); err != nil {
 		return fmt.Errorf("failed waiting for SecuredCluster: %w", err)
 	}
 

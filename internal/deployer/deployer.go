@@ -30,6 +30,9 @@ var (
 	sensorNamespace  = "acs-sensor"
 	defaultExposure  = "loadbalancer"
 
+	DefaultCentralWaitTimeout        = 10 * time.Minute
+	DefaultSecuredClusterWaitTimeout = 10 * time.Minute
+
 	pauseReconcileAnnotationKey = "stackrox.io/pause-reconcile"
 
 	// AdminUsername is the default admin username for StackRox Central
@@ -98,37 +101,39 @@ var (
 
 // Deployer is the base deployer for ACS
 type Deployer struct {
-	logger                  *logger.Logger
-	startTime               time.Time
-	dockerAuth              *dockerauth.DockerAuth
-	imageCache              *imagecache.ImageCache
-	portForward             *portforward.Manager
-	clusterDefaults         *clusterdefaults.Manager
-	kubectl                 string
-	roxctlVersion           string
-	centralNamespace        string
-	sensorNamespace         string
-	mainImageTag            string
-	operatorTag             string
-	centralEndpoint         string
-	centralPassword         string
-	roxCACertFile           string
-	kubeContext             string
-	portForwardEnabled      bool
-	pauseReconciliation     bool
-	exposure                string
-	centralOverrides        map[string]interface{}
-	securedClusterOverrides map[string]interface{}
-	featureFlagOverrides    map[string]interface{}
-	envrcFile               string
-	useHelm                 bool
-	useOLM                  bool
-	useKonflux              bool
-	shouldDeployOperator    bool
-	verbose                 bool
-	earlyReadiness          bool
-	dockerCreds             *dockerauth.Credentials
-	clusterResourceKinds    map[string]struct{}
+	logger                    *logger.Logger
+	startTime                 time.Time
+	dockerAuth                *dockerauth.DockerAuth
+	imageCache                *imagecache.ImageCache
+	portForward               *portforward.Manager
+	clusterDefaults           *clusterdefaults.Manager
+	kubectl                   string
+	roxctlVersion             string
+	centralNamespace          string
+	sensorNamespace           string
+	mainImageTag              string
+	operatorTag               string
+	centralEndpoint           string
+	centralPassword           string
+	roxCACertFile             string
+	kubeContext               string
+	portForwardEnabled        bool
+	pauseReconciliation       bool
+	exposure                  string
+	centralOverrides          map[string]interface{}
+	securedClusterOverrides   map[string]interface{}
+	featureFlagOverrides      map[string]interface{}
+	envrcFile                 string
+	useHelm                   bool
+	useOLM                    bool
+	useKonflux                bool
+	shouldDeployOperator      bool
+	verbose                   bool
+	earlyReadiness            bool
+	centralWaitTimeout        time.Duration
+	securedClusterWaitTimeout time.Duration
+	dockerCreds               *dockerauth.Credentials
+	clusterResourceKinds      map[string]struct{}
 }
 
 type ResourceKindWithName struct {
@@ -476,14 +481,16 @@ func New(log *logger.Logger) (*Deployer, error) {
 	kubectl := getKubectl()
 
 	d := &Deployer{
-		logger:               log,
-		startTime:            time.Now(),
-		kubectl:              kubectl,
-		roxctlVersion:        roxctlVersion,
-		centralNamespace:     centralNamespace,
-		sensorNamespace:      sensorNamespace,
-		exposure:             defaultExposure,
-		shouldDeployOperator: true,
+		logger:                    log,
+		startTime:                 time.Now(),
+		kubectl:                   kubectl,
+		roxctlVersion:             roxctlVersion,
+		centralNamespace:          centralNamespace,
+		sensorNamespace:           sensorNamespace,
+		exposure:                  defaultExposure,
+		shouldDeployOperator:      true,
+		centralWaitTimeout:        DefaultCentralWaitTimeout,
+		securedClusterWaitTimeout: DefaultSecuredClusterWaitTimeout,
 	}
 
 	d.dockerAuth = dockerauth.New(log)
@@ -921,6 +928,14 @@ func (d *Deployer) SetVerbose(verbose bool) {
 
 func (d *Deployer) SetEarlyReadiness(enabled bool) {
 	d.earlyReadiness = enabled
+}
+
+func (d *Deployer) SetCentralWaitTimeout(timeout time.Duration) {
+	d.centralWaitTimeout = timeout
+}
+
+func (d *Deployer) SetSecuredClusterWaitTimeout(timeout time.Duration) {
+	d.securedClusterWaitTimeout = timeout
 }
 
 func (d *Deployer) SetPauseReconciliation(enabled bool) {
