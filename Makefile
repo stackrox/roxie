@@ -17,8 +17,6 @@ PKG_LIST := $(shell $(GOCMD) list ./... | grep -v /vendor/)
 BUILD_DIR := .
 BINARY := $(BUILD_DIR)/$(BINARY_NAME)
 
-# Version information
-GIT_COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 # Convention is that the git tags are of the form
 #      v<major>.<minor>.<patch>-<build-number>-<commit-hash>[-dirty]
 #   or v<major>.<minor>.<patch>
@@ -31,15 +29,11 @@ GIT_COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 # This will also become the tag of the docker images.
 ROXIE_VERSION ?= $(shell git describe --tags --always --dirty | sed -E 's/^v([0-9]+\.[0-9]+\.[0-9]+-[0-9]+-[a-z0-9]+(-dirty)?$$)/\1/')
 BUILD_DATE ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
-LDFLAGS := -X main.version=$(ROXIE_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildDate=$(BUILD_DATE)
+LDFLAGS := -X main.version=$(ROXIE_VERSION) -X main.buildDate=$(BUILD_DATE)
 
 .PHONY: get-build-date
 get-build-date:
 	@echo $(BUILD_DATE)
-
-.PHONY: get-commit-hash
-get-commit-hash:
-	@echo $(GIT_COMMIT)
 
 .PHONY: version
 version:
@@ -210,7 +204,6 @@ docker-build: ## Build roxie Docker image for current platform
 	fi
 	$(CONTAINER_RUNTIME) build \
 		--build-arg ROXIE_VERSION=$(ROXIE_VERSION) \
-		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
 		-t $(IMAGE_LATEST_TAG) \
 		-t $(IMAGE_VERSION_TAG) \
@@ -230,7 +223,6 @@ docker-build-arm64: ## Build roxie Docker image for arm64
 	$(CONTAINER_RUNTIME) build \
 		--platform linux/arm64 \
 		--build-arg ROXIE_VERSION=$(ROXIE_VERSION) \
-		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
 		-t $(IMAGE_LATEST_TAG)-arm64 \
 		-t $(IMAGE_VERSION_TAG)-arm64 \
@@ -249,7 +241,6 @@ docker-build-amd64: ## Build roxie Docker image for amd64
 	$(CONTAINER_RUNTIME) build \
 		--platform linux/amd64 \
 		--build-arg ROXIE_VERSION=$(ROXIE_VERSION) \
-		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \
 		-t $(IMAGE_LATEST_TAG)-amd64 \
 		-t $(IMAGE_VERSION_TAG)-amd64 \

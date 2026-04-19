@@ -23,13 +23,11 @@ COPY . .
 # Build roxie binary with version info and cross-compilation support
 ARG ROXIE_VERSION
 ARG BUILD_DATE
-ARG GIT_COMMIT
 RUN CGO_ENABLED=0 \
     GOOS=${TARGETOS} \
     GOARCH=${TARGETARCH} \
     ROXIE_VERSION=${ROXIE_VERSION} \
     BUILD_DATE=${BUILD_DATE} \
-    GIT_COMMIT=${GIT_COMMIT} \
     make build
 
 # Download gcloud SDK in builder stage to avoid UBI filesystem restrictions
