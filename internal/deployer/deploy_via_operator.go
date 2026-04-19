@@ -290,6 +290,11 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 					"resources": centralResourcesSmall,
 					"db": map[string]interface{}{
 						"resources": centralDbResourcesSmall,
+						"persistence": map[string]interface{}{
+							"persistentVolumeClaim": map[string]interface{}{
+								"size": centralDbPVCSizeSmall,
+							},
+						},
 					},
 				},
 				"scanner": map[string]interface{}{
