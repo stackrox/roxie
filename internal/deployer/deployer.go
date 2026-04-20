@@ -227,7 +227,13 @@ func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error 
 			// Avoid deletion if the resource does not have the expected owner.
 			// (e.g. in case central and secured cluster are deployed into the same namespace).
 			obj, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.centralNamespace, resource.Kind, resource.Name)
-			if err == nil && k8s.ResourceNotOwnedByName(obj, resource.OwnerName) {
+			if err != nil {
+				if !k8s.IsResourceNotFound(err) {
+					d.logger.Warningf("Failed to retrieve %s/%s for owner checking: %v. Skipping deletion. Deployment might be affected.", resource.Kind, resource.Name, err)
+				}
+				continue
+			}
+			if k8s.ResourceNotOwnedByName(obj, resource.OwnerName) {
 				d.logger.Dimf("Skipping deletion of %s/%s: not owned by %s", resource.Kind, resource.Name, resource.OwnerName)
 				continue
 			}
@@ -313,7 +319,13 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context, wait bool)
 			// Avoid deletion if the resource does not have the expected owner.
 			// (e.g. in case central and secured cluster are deployed into the same namespace).
 			obj, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.sensorNamespace, resource.Kind, resource.Name)
-			if err == nil && k8s.ResourceNotOwnedByName(obj, resource.OwnerName) {
+			if err != nil {
+				if !k8s.IsResourceNotFound(err) {
+					d.logger.Warningf("Failed to retrieve %s/%s for owner checking: %v. Skipping deletion. Deployment might be affected.", resource.Kind, resource.Name, err)
+				}
+				continue
+			}
+			if k8s.ResourceNotOwnedByName(obj, resource.OwnerName) {
 				d.logger.Dimf("Skipping deletion of %s/%s: not owned by %s", resource.Kind, resource.Name, resource.OwnerName)
 				continue
 			}
