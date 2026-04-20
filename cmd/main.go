@@ -11,7 +11,6 @@ var (
 	// Global flags
 	verbose                bool
 	earlyReadiness         bool
-	helm                   bool
 	olm                    bool
 	konflux                bool
 	deployOperator         bool
@@ -48,7 +47,7 @@ Red Hat Advanced Cluster Security (ACS) on any Kubernetes/OpenShift cluster.`,
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output (show CRs and Helm values)")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output (show CRs)")
 	rootCmd.PersistentFlags().BoolVar(&earlyReadiness, "early-readiness", true, "Only wait for essential workloads (central/sensor) to be ready")
 	rootCmd.AddCommand(newDeployCmd())
 	rootCmd.AddCommand(newTeardownCmd())

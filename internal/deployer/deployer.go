@@ -124,7 +124,6 @@ type Deployer struct {
 	securedClusterOverrides   map[string]interface{}
 	featureFlagOverrides      map[string]interface{}
 	envrcFile                 string
-	useHelm                   bool
 	useOLM                    bool
 	useKonflux                bool
 	shouldDeployOperator      bool
@@ -579,12 +578,9 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component, r
 		return d.deployOperatorOnly(ctx)
 	}
 
-	// Deploy operator first if needed (unless using Helm)
-	// Operator is required for central/sensor deployments when not using Helm
-	if !d.useHelm {
-		if err := d.ensureOperatorDeployed(ctx); err != nil {
-			return fmt.Errorf("failed to deploy operator: %w", err)
-		}
+	// Deploy operator first if needed
+	if err := d.ensureOperatorDeployed(ctx); err != nil {
+		return fmt.Errorf("failed to deploy operator: %w", err)
 	}
 
 	if components.IncludesCentral() {
@@ -628,14 +624,7 @@ func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string
 
 	portForwardWanted := d.portForwardEnabled
 
-	var err error
-	if d.useHelm {
-		err = d.deployCentralHelm(ctx, resources, exposure)
-	} else {
-		err = d.deployCentralOperator(ctx, resources, exposure)
-	}
-
-	if err != nil {
+	if err := d.deployCentralOperator(ctx, resources, exposure); err != nil {
 		return err
 	}
 
@@ -659,9 +648,6 @@ func (d *Deployer) deploySecuredCluster(ctx context.Context, resources string) e
 		}
 	}
 
-	if d.useHelm {
-		return d.deploySecuredClusterHelm(ctx, resources)
-	}
 	return d.deploySecuredClusterOperator(ctx, resources)
 }
 
@@ -902,16 +888,6 @@ func (d *Deployer) SetPortForwardingEnabled(enabled bool) {
 	d.portForwardEnabled = enabled
 }
 
-func (d *Deployer) SetUseHelm(useHelm bool) error {
-	if useHelm {
-		if _, err := exec.LookPath("helm"); err != nil {
-			return errors.New("helm not found in PATH; please install helm and ensure it's available in your PATH when using --helm flag")
-		}
-	}
-	d.useHelm = useHelm
-	return nil
-}
-
 func (d *Deployer) SetUseOLM(useOLM bool) error {
 	d.useOLM = useOLM
 	return nil
@@ -1106,7 +1082,6 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context, exposure string, portForw
 func (d *Deployer) PrintCentralDeploymentSummary() {
 	component := "Central"
 	mainImageTag := d.mainImageTag
-	helm := d.useHelm
 	olm := d.useOLM
 	exposure := d.exposure
 	portForwarding := d.portForwardEnabled
@@ -1163,7 +1138,6 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()))
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
-	log.Info(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]))
 
 	if olm {
 		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes"))
@@ -1277,7 +1251,6 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	component := "Secured Cluster"
 	mainImageTag := d.mainImageTag
-	helm := d.useHelm
 	olm := d.useOLM
 	log := d.logger
 	kubeContext := d.kubeContext
@@ -1332,7 +1305,6 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()))
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
-	log.Info(cyan.Sprint("│") + createRow("Deployment Method", map[bool]string{true: "Helm", false: "Operator"}[helm]))
 
 	if olm {
 		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes"))

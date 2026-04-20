@@ -61,7 +61,6 @@
 
               # Essential Kubernetes tools (lightweight)
               kubectl
-              kubernetes-helm
 
               # Optional: Kubernetes utilities (lightweight)
               k9s
@@ -74,7 +73,6 @@
               echo "Available tools:"
               echo "  - roxie ($(roxie version))"
               echo "  - kubectl ($(kubectl version --client --short 2>/dev/null || echo 'not configured'))"
-              echo "  - helm ($(helm version --short 2>/dev/null || echo 'unknown'))"
               echo "  - Go $(go version | cut -d' ' -f3)"
               echo ""
               echo "💡 For full set of pre-installed tooling use:"
@@ -98,7 +96,6 @@
 
               # Kubernetes tools
               kubectl
-              kubernetes-helm
               k9s
               stern
 
@@ -115,7 +112,6 @@
               echo "Available tools:"
               echo "  - roxie ($(roxie version))"
               echo "  - kubectl ($(kubectl version --client --short 2>/dev/null || echo 'not configured'))"
-              echo "  - helm ($(helm version --short 2>/dev/null || echo 'unknown'))"
               echo "  - podman ($(podman --version | head -n1))"
               echo "  - haproxy ($(haproxy -v | head -n1))"
               echo ""

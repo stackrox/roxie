@@ -27,6 +27,36 @@ func TestDefaultDetector_Detect(t *testing.T) {
 			kubeContext: "KIND-test",
 			want:        ClusterTypeKind,
 		},
+		{
+			name:        "crc cluster with admin context",
+			kubeContext: "crc-admin",
+			want:        ClusterTypeCRC,
+		},
+		{
+			name:        "crc cluster with api prefix",
+			kubeContext: "api-crc-testing:6443",
+			want:        ClusterTypeCRC,
+		},
+		{
+			name:        "crc cluster with uppercase",
+			kubeContext: "CRC-admin",
+			want:        ClusterTypeCRC,
+		},
+		{
+			name:        "crc cluster bare name",
+			kubeContext: "crc",
+			want:        ClusterTypeCRC,
+		},
+		{
+			name:        "not crc - incidental substring",
+			kubeContext: "acrc-cluster",
+			want:        ClusterTypeUnknown,
+		},
+		{
+			name:        "not crc - encrypted in name",
+			kubeContext: "my-encrypted-cluster",
+			want:        ClusterTypeUnknown,
+		},
 	}
 
 	detector := &defaultDetector{}
@@ -108,6 +138,17 @@ func TestDefaultApplicator_Apply(t *testing.T) {
 			wantPortForward:    true,
 			wantChanged:        true,
 		},
+		{
+			name:               "crc cluster",
+			clusterType:        ClusterTypeCRC,
+			resources:          "default",
+			exposure:           "loadbalancer",
+			portForwardEnabled: false,
+			wantResources:      "small",
+			wantExposure:       "none",
+			wantPortForward:    true,
+			wantChanged:        true,
+		},
 	}
 
 	applicator := &defaultApplicator{}
@@ -151,6 +192,16 @@ func TestManager_ApplyConvenienceDefaults(t *testing.T) {
 		{
 			name:               "kind cluster detection and defaults",
 			kubeContext:        "kind-local",
+			resources:          "default",
+			exposure:           "loadbalancer",
+			portForwardEnabled: false,
+			wantResources:      "small",
+			wantExposure:       "none",
+			wantPortForward:    true,
+		},
+		{
+			name:               "crc cluster detection and defaults",
+			kubeContext:        "crc-admin",
 			resources:          "default",
 			exposure:           "loadbalancer",
 			portForwardEnabled: false,
@@ -203,6 +254,7 @@ func TestClusterType_String(t *testing.T) {
 		{ClusterTypeKind, "kind"},
 		{ClusterTypeMinikube, "minikube"},
 		{ClusterTypeK3s, "k3s"},
+		{ClusterTypeCRC, "crc"},
 		{ClusterTypeUnknown, "unknown"},
 	}
 
