@@ -3,6 +3,9 @@ package deployer
 import "fmt"
 
 var (
+	centralCrName        = "stackrox-central-services"
+	securedClusterCrName = "stackrox-secured-cluster-services"
+
 	centralDbPVCSizeSmall = "30Gi"
 
 	centralResourcesSmall = map[string]interface{}{
