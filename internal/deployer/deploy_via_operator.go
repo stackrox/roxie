@@ -297,6 +297,10 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 					"analyzer": map[string]interface{}{
 						"scaling": noScaling,
 					},
+					"resources": centralScannerResourcesSmall,
+					"db": map[string]interface{}{
+						"resources": centralScannerDbResourcesSmall,
+					},
 				},
 				"scannerV4": map[string]interface{}{
 					"db": map[string]interface{}{
@@ -325,6 +329,10 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 				"scanner": map[string]interface{}{
 					"analyzer": map[string]interface{}{
 						"scaling": noScaling,
+					},
+					"resources": centralScannerResourcesMedium,
+					"db": map[string]interface{}{
+						"resources": centralScannerDbResourcesMedium,
 					},
 				},
 				"scannerV4": map[string]interface{}{
@@ -569,7 +577,6 @@ func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
 }
 
 // configureCentralEndpoint configures the central endpoint based on exposure settings
-// This is shared logic between operator and Helm deployment paths
 func (d *Deployer) configureCentralEndpoint(ctx context.Context, exposure string) error {
 	if d.portForwardEnabled {
 		// Start port-forward for CLI tool access via localhost:8443

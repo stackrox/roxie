@@ -409,39 +409,6 @@ func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
 	verifySecuredClusterNotInstalled(t, "stackrox")
 }
 
-func TestDeployCentralAndSecuredClusterViaHelm(t *testing.T) {
-	// Create temporary envrc file
-	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp envrc: %v", err)
-	}
-	envrcPath := envrcFile.Name()
-	envrcFile.Close()
-
-	t.Log("=== Deploying central via Helm ===")
-	args := append([]string{roxieBinary, "deploy", "--early-readiness", "central", "--helm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
-	runCommand(t, deployTimeout*2, nil, args...)
-
-	// Load environment from envrc file for secured-cluster deployment
-	envrcEnv, err := loadEnvrcFile(envrcPath)
-	if err != nil {
-		t.Fatalf("Failed to load envrc file: %v", err)
-	}
-	t.Log("Loaded environment from envrc file for secured-cluster")
-
-	t.Log("=== Deploying secured-cluster via Helm ===")
-	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster", "--helm"}, commonDeployArgsNoPortForward...)
-	runCommand(t, deployTimeout*2, envrcEnv, args...)
-
-	t.Log("Verifying namespace: acs-central")
-	verifyNamespaceExists(t, "acs-central")
-	verifyNamespaceHasLabel(t, "acs-central", "app.kubernetes.io/managed-by", "roxie")
-
-	t.Log("Verifying namespace: acs-sensor")
-	verifyNamespaceExists(t, "acs-sensor")
-	verifyNamespaceHasLabel(t, "acs-sensor", "app.kubernetes.io/managed-by", "roxie")
-}
-
 func verifyAnnotation(t *testing.T, resourceType, resourceName, namespace, annotationKey, expectedValue string) {
 	t.Helper()
 
