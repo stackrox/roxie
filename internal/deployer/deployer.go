@@ -135,9 +135,10 @@ type Deployer struct {
 	clusterResourceKinds      map[string]struct{}
 }
 
-type ResourceKindWithName struct {
-	Kind string
-	Name string
+type ResourceToDelete struct {
+	Kind      string
+	Name      string
+	OwnerName string
 }
 
 func (d *Deployer) filterResourceKinds(resourceKinds []string) []string {
@@ -215,13 +216,24 @@ func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error 
 		return err
 	}
 
-	for _, resource := range []ResourceKindWithName{
-		{Name: "central-db", Kind: "pvc"},
-		{Name: "central-db-backup", Kind: "pvc"},
+	for _, resource := range []ResourceToDelete{
+		{Name: "central-db", Kind: "pvc", OwnerName: centralCrName},
+		{Name: "central-db-backup", Kind: "pvc", OwnerName: centralCrName},
 		{Name: "admin-password", Kind: "secret"},
+		{Name: "scanner-db-password", Kind: "secret", OwnerName: centralCrName},
 	} {
-		err := d.deleteResource(ctx, d.centralNamespace, resource.Kind, resource.Name)
-		if err != nil {
+		d.logger.Dimf("Attempting to delete %s/%s", resource.Kind, resource.Name)
+		if resource.OwnerName != "" {
+			// Avoid deletion if the resource does not have the expected owner.
+			// (e.g. in case central and secured cluster are deployed into the same namespace).
+			obj, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.centralNamespace, resource.Kind, resource.Name)
+			if err == nil && k8s.ResourceNotOwnedByName(obj, resource.OwnerName) {
+				d.logger.Dimf("Skipping deletion of %s/%s: not owned by %s", resource.Kind, resource.Name, resource.OwnerName)
+				continue
+			}
+		}
+
+		if err := d.deleteResource(ctx, d.centralNamespace, resource.Kind, resource.Name); err != nil {
 			return fmt.Errorf("failed to delete %s/%s: %w", resource.Kind, resource.Name, err)
 		}
 	}
@@ -290,12 +302,23 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context, wait bool)
 		return err
 	}
 
-	for _, resource := range []ResourceKindWithName{
+	for _, resource := range []ResourceToDelete{
 		{Name: "cluster-registration-secret", Kind: "secret"},
-		{Name: "scanner-db-password", Kind: "secret"},
+		// We need to make sure that don't accidentally delete a scanner-db-password belonging to the central CR,
+		// when both are deployed into the same namespace.
+		{Name: "scanner-db-password", Kind: "secret", OwnerName: securedClusterCrName},
 	} {
-		err := d.deleteResource(ctx, d.sensorNamespace, resource.Kind, resource.Name)
-		if err != nil {
+		d.logger.Dimf("Attempting to delete %s/%s", resource.Kind, resource.Name)
+		if resource.OwnerName != "" {
+			// Avoid deletion if the resource does not have the expected owner.
+			// (e.g. in case central and secured cluster are deployed into the same namespace).
+			obj, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.sensorNamespace, resource.Kind, resource.Name)
+			if err == nil && k8s.ResourceNotOwnedByName(obj, resource.OwnerName) {
+				d.logger.Dimf("Skipping deletion of %s/%s: not owned by %s", resource.Kind, resource.Name, resource.OwnerName)
+				continue
+			}
+		}
+		if err := d.deleteResource(ctx, d.sensorNamespace, resource.Kind, resource.Name); err != nil {
 			return fmt.Errorf("failed to delete %s/%s: %w", resource.Kind, resource.Name, err)
 		}
 	}
