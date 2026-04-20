@@ -18,6 +18,8 @@ const (
 	ClusterTypeMinikube
 	// ClusterTypeK3s represents a K3s cluster
 	ClusterTypeK3s
+	// ClusterTypeCRC represents a CRC (CodeReady Containers) cluster
+	ClusterTypeCRC
 )
 
 // String returns the string representation of a ClusterType
@@ -29,6 +31,8 @@ func (ct ClusterType) String() string {
 		return "minikube"
 	case ClusterTypeK3s:
 		return "k3s"
+	case ClusterTypeCRC:
+		return "crc"
 	default:
 		return "unknown"
 	}
@@ -139,6 +143,11 @@ func (d *defaultDetector) Detect(kubeContext string) ClusterType {
 		return ClusterTypeK3s
 	}
 
+	// CRC (CodeReady Containers) contexts start with "crc" or contain "-crc-"/"_crc_" as a segment
+	if strings.HasPrefix(contextLower, "crc") || strings.Contains(contextLower, "-crc-") || strings.Contains(contextLower, "-crc:") {
+		return ClusterTypeCRC
+	}
+
 	return ClusterTypeUnknown
 }
 
@@ -192,6 +201,13 @@ func getDefaultsForClusterType(clusterType ClusterType) (DeploymentDefaults, boo
 
 	case ClusterTypeK3s:
 		// K3s can vary (local or cloud), apply conservative defaults
+		return DeploymentDefaults{
+			Resources:          "small",
+			Exposure:           "none",
+			PortForwardEnabled: true,
+		}, true
+
+	case ClusterTypeCRC:
 		return DeploymentDefaults{
 			Resources:          "small",
 			Exposure:           "none",
