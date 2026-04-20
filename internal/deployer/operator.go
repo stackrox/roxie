@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
 )
 
@@ -142,7 +143,7 @@ func (d *Deployer) applyCRDsToCluster(ctx context.Context, crdFiles []string) er
 	d.logger.Infof("Applying %d CRD(s) to cluster", len(crdFiles))
 
 	for _, crdFile := range crdFiles {
-		result, err := d.runKubectl(ctx, KubectlOptions{
+		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"apply", "-f", crdFile},
 		})
 		if err != nil {
@@ -161,7 +162,7 @@ func (d *Deployer) applyCRDsToCluster(ctx context.Context, crdFiles []string) er
 func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	var missing []string
 	for _, crd := range requiredCRDs {
-		_, err := d.runKubectl(ctx, KubectlOptions{
+		_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "crd", crd},
 		})
 		if err != nil {
@@ -273,7 +274,7 @@ func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
 	}
 
 	d.logger.Dim("Applying ImageContentSourcePolicy...")
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -294,7 +295,7 @@ func (d *Deployer) removeKonfluxImageRewriting(ctx context.Context) error {
 	}
 
 	d.logger.Dim("Removing Konflux ImageContentSourcePolicy if present...")
-	_, err := d.runKubectl(ctx, KubectlOptions{
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"delete", "imagecontentsourcepolicy", "acs-konflux-builds", "--ignore-not-found=true"},
 	})
 	if err != nil {
@@ -403,7 +404,7 @@ metadata:
     app.kubernetes.io/managed-by: roxie
 `, operatorNamespace, operatorNamespace)
 
-	_, err := d.runKubectl(ctx, KubectlOptions{
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: strings.NewReader(nsYAML),
 	})
@@ -427,7 +428,7 @@ func (d *Deployer) createServiceAccount(ctx context.Context, namespace, name str
 		return fmt.Errorf("failed to marshal ServiceAccount '%s/%s': %w", namespace, name, err)
 	}
 
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -463,7 +464,7 @@ func (d *Deployer) createClusterRoleFromCSV(ctx context.Context, deploymentSpec 
 		return fmt.Errorf("failed to marshal ClusterRole 'rhacs-operator-manager-role': %w", err)
 	}
 
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -501,7 +502,7 @@ func (d *Deployer) createClusterRoleBinding(ctx context.Context, namespace, serv
 		return fmt.Errorf("failed to marshal ClusterRoleBinding 'rhacs-operator-manager-rolebinding' for ServiceAccount '%s/%s': %w", namespace, serviceAccountName, err)
 	}
 
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -549,7 +550,7 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 		return fmt.Errorf("failed to marshal Deployment '%s/%s': %w", namespace, deploymentName, err)
 	}
 
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -562,7 +563,7 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 func (d *Deployer) applyBundleServiceResources(ctx context.Context, bundleDir, namespace string) error {
 	serviceFile := filepath.Join(bundleDir, "rhacs-operator-controller-manager-metrics-service_v1_service.yaml")
 	if _, err := os.Stat(serviceFile); err == nil {
-		d.runKubectl(ctx, KubectlOptions{
+		d.runKubectl(ctx, k8s.KubectlOptions{
 			Args:         []string{"apply", "-n", namespace, "-f", serviceFile},
 			IgnoreErrors: true,
 		})
@@ -570,7 +571,7 @@ func (d *Deployer) applyBundleServiceResources(ctx context.Context, bundleDir, n
 
 	clusterRoleFile := filepath.Join(bundleDir, "rhacs-operator-metrics-reader_rbac.authorization.k8s.io_v1_clusterrole.yaml")
 	if _, err := os.Stat(clusterRoleFile); err == nil {
-		d.runKubectl(ctx, KubectlOptions{
+		d.runKubectl(ctx, k8s.KubectlOptions{
 			Args:         []string{"apply", "-f", clusterRoleFile},
 			IgnoreErrors: true,
 		})
@@ -585,7 +586,7 @@ func (d *Deployer) waitForOperatorReady(ctx context.Context, namespace, deployme
 
 	start := time.Now()
 	for time.Since(start) < time.Duration(timeout)*time.Second {
-		result, err := d.runKubectl(ctx, KubectlOptions{
+		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "deployment", deploymentName, "-n", namespace, "-o", "jsonpath={.status.readyReplicas}"},
 		})
 		if err == nil && result.Stdout != "" {
@@ -612,7 +613,7 @@ func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 	d.logger.Info("🧹 Tearing down operator deployed without OLM...")
 
 	// Delete operator namespace.
-	d.runKubectl(ctx, KubectlOptions{
+	d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "namespace", operatorNamespace, "--wait=false"},
 		IgnoreErrors: true,
 	})
@@ -626,7 +627,7 @@ func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 		{name: "rhacs-operator-manager-role", kind: "clusterrole"},
 	}
 	for _, resource := range clusterResources {
-		d.runKubectl(ctx, KubectlOptions{
+		d.runKubectl(ctx, k8s.KubectlOptions{
 			Args:         []string{"delete", resource.kind, resource.name, "--ignore-not-found=true"},
 			IgnoreErrors: true,
 		})
