@@ -11,6 +11,7 @@ import (
 
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/k8s"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -167,7 +168,7 @@ func (d *Deployer) isOperatorVersionCorrect(ctx context.Context) bool {
 
 // getDeployedOperatorImage gets the image of the currently deployed operator
 func (d *Deployer) getDeployedOperatorImage(ctx context.Context) (string, error) {
-	result, err := d.runKubectl(ctx, KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace,
 			"-o", "jsonpath={.spec.template.spec.containers[0].image}"},
 	})
@@ -200,7 +201,7 @@ func (d *Deployer) ensurePullSecretExists(ctx context.Context, namespace string)
 	// Assemble pull secret YAML from pre-verified credentials
 	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(d.dockerCreds, namespace)
 
-	_, err := d.runKubectl(ctx, KubectlOptions{
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: strings.NewReader(pullSecretYAML),
 	})
@@ -231,7 +232,7 @@ func (d *Deployer) createAdminPasswordSecret(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal secret: %w", err)
 	}
 
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -438,7 +439,7 @@ func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}
 		}
 	}
 
-	result, err := d.runKubectl(ctx, KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -473,7 +474,7 @@ func (d *Deployer) waitForCentralReady(ctx context.Context, timeout time.Duratio
 		}
 
 		// Check if central deployment is ready
-		result, err := d.runKubectl(ctx, KubectlOptions{
+		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "deployment", "central", "-n", d.centralNamespace, "-o", "jsonpath={.status.readyReplicas}"},
 		})
 		if err == nil && result.Stdout != "" {
@@ -508,7 +509,7 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 
 	start := time.Now()
 	for time.Since(start) < time.Duration(timeout)*time.Second {
-		result, err := d.runKubectl(ctx, KubectlOptions{
+		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "svc", serviceName, "-n", namespace, "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}"},
 		})
 		if err == nil && result.Stdout != "" {
@@ -524,7 +525,7 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 		}
 
 		// Also check for hostname (some cloud providers use hostname instead of IP)
-		result, err = d.runKubectl(ctx, KubectlOptions{
+		result, err = d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "svc", serviceName, "-n", namespace, "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"},
 		})
 		if err == nil && result.Stdout != "" {
@@ -549,7 +550,7 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
 	d.logger.Info("Fetching Central CA certificate...")
 
-	result, err := d.runKubectl(ctx, KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "secret", "central-tls", "-n", d.centralNamespace, "-o", "jsonpath={.data.ca\\.pem}"},
 	})
 	if err != nil {
@@ -771,7 +772,7 @@ func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]inte
 		}
 	}
 
-	result, err := d.runKubectl(ctx, KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-n", d.sensorNamespace, "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -805,7 +806,7 @@ func (d *Deployer) waitForSecuredClusterReady(ctx context.Context, timeout time.
 		allReady := true
 
 		// Check sensor deployment
-		result, err := d.runKubectl(ctx, KubectlOptions{
+		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "deployment", "sensor", "-n", d.sensorNamespace, "-o", "jsonpath={.status.readyReplicas}"},
 		})
 		if err != nil || result.Stdout == "" {
@@ -820,7 +821,7 @@ func (d *Deployer) waitForSecuredClusterReady(ctx context.Context, timeout time.
 		// Only check additional workloads if early-readiness is not enabled
 		if !d.earlyReadiness {
 			// Check admission-control deployment
-			result, err = d.runKubectl(ctx, KubectlOptions{
+			result, err = d.runKubectl(ctx, k8s.KubectlOptions{
 				Args: []string{"get", "deployment", "admission-control", "-n", d.sensorNamespace, "-o", "jsonpath={.status.readyReplicas}"},
 			})
 			if err != nil || result.Stdout == "" {

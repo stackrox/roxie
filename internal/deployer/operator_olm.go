@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stackrox/roxie/internal/k8s"
 	"gopkg.in/yaml.v3"
 )
 
@@ -85,7 +86,7 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 		// TODO(#91): actually this is not the right way to check whether it's safe to create a resource of a given kind.
 		// A CRD can be present, but still being loaded or end up not accepted by the API server.
 		// Instead we should use the `kubectl api-resources` subcommand which exposes the status we're looking for.
-		_, err := d.runKubectl(ctx, KubectlOptions{
+		_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "crd", crd},
 		})
 		if err != nil {
@@ -140,7 +141,7 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 		return fmt.Errorf("failed to marshal CatalogSource: %w", err)
 	}
 
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -154,7 +155,7 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 
 // catalogSourceSupportsSecurityContextConfig checks if the CatalogSource CRD supports securityContextConfig.
 func (d *Deployer) catalogSourceSupportsSecurityContextConfig(ctx context.Context) (bool, error) {
-	result, err := d.runKubectl(ctx, KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "crd", "catalogsources.operators.coreos.com", "-o", "yaml"},
 	})
 	if err != nil {
@@ -184,7 +185,7 @@ func (d *Deployer) createOperatorGroup(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal OperatorGroup: %w", err)
 	}
 
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -224,7 +225,7 @@ func (d *Deployer) createSubscription(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal Subscription: %w", err)
 	}
 
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -245,7 +246,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	timeout := 5 * time.Minute
 
 	for time.Since(start) < timeout {
-		result, err := d.runKubectl(ctx, KubectlOptions{
+		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.conditions[?(@.type=='InstallPlanPending')].status}"},
 		})
 		if err == nil && strings.TrimSpace(result.Stdout) == "True" {
@@ -263,7 +264,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 
 	// Sanity check:Verify currentCSV matches expected version.
 	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
-	result, err := d.runKubectl(ctx, KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.currentCSV}"},
 	})
 	if err != nil {
@@ -276,7 +277,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	}
 
 	// Get InstallPlan name.
-	result, err = d.runKubectl(ctx, KubectlOptions{
+	result, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.installPlanRef.name}"},
 	})
 	if err != nil {
@@ -291,7 +292,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	d.logger.Infof("Approving InstallPlan: %s", installPlanName)
 
 	// Approve the InstallPlan.
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"patch", "installplan", installPlanName, "-n", operatorNamespace, "--type", "merge", "-p", `{"spec":{"approved":true}}`},
 	})
 	if err != nil {
@@ -311,7 +312,7 @@ func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 	timeout := 10 * time.Minute
 
 	for time.Since(start) < timeout {
-		result, err := d.runKubectl(ctx, KubectlOptions{
+		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "csv", csvName, "-n", operatorNamespace, "-o", "jsonpath={.status.phase}"},
 		})
 		if err == nil {
@@ -336,7 +337,7 @@ func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 // Returns (operatorExists bool, isOLM OperatorDeploymentMode)
 func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, OperatorDeploymentMode) {
 	// First, check if a Subscription exists (OLM-specific resource)
-	_, err := d.runKubectl(ctx, KubectlOptions{
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace},
 	})
 	if err == nil {
@@ -344,12 +345,12 @@ func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, Oper
 	}
 
 	// If no subscription, check if operator deployment exists.
-	_, err = d.runKubectl(ctx, KubectlOptions{
+	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace},
 	})
 	if err == nil {
 		// Deployment exists - check if it has OLM owner labels.
-		result, err := d.runKubectl(ctx, KubectlOptions{
+		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace, "-o", "jsonpath={.metadata.labels}"},
 		})
 		// TODO(#91): This is not very robust. Better retrieve a specific label in the `get`
@@ -370,20 +371,20 @@ func (d *Deployer) teardownOperatorOLM(ctx context.Context) error {
 	d.logger.Info("🧹 Tearing down operator deployed via OLM...")
 
 	// Delete Subscription (this typically cascades CSV and operands depending on OLM behavior).
-	d.runKubectl(ctx, KubectlOptions{
+	d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "subscription", subscriptionName, "-n", operatorNamespace, "--ignore-not-found=true"},
 		IgnoreErrors: true,
 	})
 
 	// Find the CSV name (may match operatorTag, but query to be safe).
-	result, err := d.runKubectl(ctx, KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "csv", "-n", operatorNamespace, "-o", "jsonpath={.items[*].metadata.name}"},
 	})
 	if err == nil {
 		// Best-effort delete all matching CSVs for rhacs-operator.
 		for _, name := range strings.Fields(strings.TrimSpace(result.Stdout)) {
 			if strings.HasPrefix(name, "rhacs-operator.v") {
-				d.runKubectl(ctx, KubectlOptions{
+				d.runKubectl(ctx, k8s.KubectlOptions{
 					Args:         []string{"delete", "csv", name, "-n", operatorNamespace, "--ignore-not-found=true"},
 					IgnoreErrors: true,
 				})
@@ -392,17 +393,17 @@ func (d *Deployer) teardownOperatorOLM(ctx context.Context) error {
 	}
 
 	// Delete CatalogSource and OperatorGroup.
-	d.runKubectl(ctx, KubectlOptions{
+	d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "catalogsource", catalogSourceName, "-n", operatorNamespace, "--ignore-not-found=true"},
 		IgnoreErrors: true,
 	})
-	d.runKubectl(ctx, KubectlOptions{
+	d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "operatorgroup", operatorGroupName, "-n", operatorNamespace, "--ignore-not-found=true"},
 		IgnoreErrors: true,
 	})
 
 	// Delete operator deployment namespace (contains deployment, SA, etc.).
-	d.runKubectl(ctx, KubectlOptions{
+	d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "namespace", operatorNamespace, "--ignore-not-found=true", "--wait=false"},
 		IgnoreErrors: true,
 	})

@@ -20,6 +20,7 @@ import (
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagecache"
+	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/portforward"
 )
@@ -107,7 +108,6 @@ type Deployer struct {
 	imageCache                *imagecache.ImageCache
 	portForward               *portforward.Manager
 	clusterDefaults           *clusterdefaults.Manager
-	kubectl                   string
 	roxctlVersion             string
 	centralNamespace          string
 	sensorNamespace           string
@@ -165,12 +165,12 @@ func (d *Deployer) deleteResources(ctx context.Context, namespace string, resour
 		"--grace-period=0",
 	}
 	finalArgs = append(finalArgs, args...)
-	_, err := d.runKubectl(ctx, KubectlOptions{Args: finalArgs})
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{Args: finalArgs})
 	return err
 }
 
 func (d *Deployer) deleteFinalizers(ctx context.Context, namespace, resourceType, resourceName string) error {
-	_, err := d.runKubectl(ctx, KubectlOptions{
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
 			"-n", namespace, "patch", resourceType, resourceName,
 			"-p", `{"metadata":{"finalizers":null}}`,
@@ -249,7 +249,7 @@ func (d *Deployer) preventCABundleInjection(ctx context.Context) error {
 	}
 
 	d.logger.Info("Removing CNO label from injected-cabundle ConfigMap to prevent CNO from injecting the CA bundle during cleanup")
-	_, err := d.runKubectl(ctx, KubectlOptions{
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
 			"label", "configmap", configMapName, "-n", d.centralNamespace,
 			"config.openshift.io/inject-trusted-cabundle-",
@@ -477,12 +477,9 @@ func New(log *logger.Logger) (*Deployer, error) {
 		return nil, err
 	}
 
-	kubectl := getKubectl()
-
 	d := &Deployer{
 		logger:                    log,
 		startTime:                 time.Now(),
-		kubectl:                   kubectl,
 		roxctlVersion:             roxctlVersion,
 		centralNamespace:          centralNamespace,
 		sensorNamespace:           sensorNamespace,
@@ -494,7 +491,7 @@ func New(log *logger.Logger) (*Deployer, error) {
 
 	d.dockerAuth = dockerauth.New(log)
 	d.imageCache = imagecache.New(log, "", 20)
-	d.portForward = portforward.New(kubectl, log)
+	d.portForward = portforward.New(k8s.GetKubectl(), log)
 	d.clusterDefaults = clusterdefaults.NewManager(log)
 
 	if password := os.Getenv("ROX_ADMIN_PASSWORD"); password != "" {
@@ -511,11 +508,7 @@ func New(log *logger.Logger) (*Deployer, error) {
 		d.roxCACertFile = caCert
 	}
 
-	ctx, err := getCurrentContext(kubectl)
-	if err != nil {
-		return nil, err
-	}
-	d.kubeContext = ctx
+	d.kubeContext = env.GetCurrentContext()
 
 	clusterResourceKinds, err := d.getClusterResourceKinds()
 	if err != nil {
@@ -530,7 +523,7 @@ func New(log *logger.Logger) (*Deployer, error) {
 }
 
 func (d *Deployer) getClusterResourceKinds() (map[string]struct{}, error) {
-	result, err := d.runKubectl(context.Background(), KubectlOptions{
+	result, err := d.runKubectl(context.Background(), k8s.KubectlOptions{
 		Args: []string{"api-resources", "-o", "name"},
 	})
 	if err != nil {
@@ -754,7 +747,7 @@ func (d *Deployer) ensureNamespaceExists(namespace string) error {
 	}
 
 	d.logger.Infof("Creating namespace %s", namespace)
-	_, err := d.runKubectl(context.Background(), KubectlOptions{
+	_, err := d.runKubectl(context.Background(), k8s.KubectlOptions{
 		Args: []string{"create", "namespace", namespace},
 	})
 	if err != nil {
@@ -762,7 +755,7 @@ func (d *Deployer) ensureNamespaceExists(namespace string) error {
 	}
 
 	// Label namespace as managed by roxie since we just created it
-	_, err = d.runKubectl(context.Background(), KubectlOptions{
+	_, err = d.runKubectl(context.Background(), k8s.KubectlOptions{
 		Args: []string{"label", "namespace", namespace,
 			"app.kubernetes.io/managed-by=roxie", "--overwrite"},
 	})
@@ -774,7 +767,7 @@ func (d *Deployer) ensureNamespaceExists(namespace string) error {
 }
 
 func (d *Deployer) namespaceExists(namespace string) bool {
-	_, err := d.runKubectl(context.Background(), KubectlOptions{
+	_, err := d.runKubectl(context.Background(), k8s.KubectlOptions{
 		Args: []string{"get", "namespace", namespace},
 	})
 	return err == nil
@@ -824,13 +817,6 @@ func checkRequiredTools() error {
 	return nil
 }
 
-func getKubectl() string {
-	if kubectl := os.Getenv("ORCH_CMD"); kubectl != "" {
-		return kubectl
-	}
-	return "kubectl"
-}
-
 func getRoxctlVersion() (string, error) {
 	cmd := exec.Command("roxctl", "version")
 	output, err := cmd.Output()
@@ -850,16 +836,6 @@ func getRoxctlVersion() (string, error) {
 	}
 
 	return version, nil
-}
-
-func getCurrentContext(kubectl string) (string, error) {
-	cmd := exec.Command(kubectl, "config", "current-context")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to get current context: %w", err)
-	}
-
-	return strings.TrimSpace(string(output)), nil
 }
 
 func generatePassword() string {
@@ -948,7 +924,7 @@ func (d *Deployer) maybeAddPauseReconcileAnnotation(ctx context.Context, resourc
 }
 
 func (d *Deployer) doesResourceExist(ctx context.Context, resourceType, resourceName, namespace string) bool {
-	_, err := d.runKubectl(ctx, KubectlOptions{
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
 			"get", resourceType, resourceName,
 			"-n", namespace,
@@ -958,7 +934,7 @@ func (d *Deployer) doesResourceExist(ctx context.Context, resourceType, resource
 }
 
 func (d *Deployer) addPauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
-	_, err := d.runKubectl(ctx, KubectlOptions{
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
 			"annotate", resourceType, resourceName,
 			"-n", namespace,
@@ -1155,7 +1131,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 
 // checkDeploymentProgressInNamespace checks for deployment state changes in a specific namespace and reports them
 func (d *Deployer) checkDeploymentProgressInNamespace(ctx context.Context, namespace string, seenDeployments map[string]string) {
-	result, err := d.runKubectl(ctx, KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "deployments", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{'|'}{.status.replicas}{'|'}{.status.readyReplicas}{'|'}{.status.availableReplicas}{'\\n'}{end}"},
 	})
 	if err != nil {
@@ -1200,7 +1176,7 @@ func (d *Deployer) checkDeploymentProgressInNamespace(ctx context.Context, names
 
 // checkPodProgressInNamespace checks for pod state changes in a specific namespace and reports them
 func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace string, seenPods map[string]string) {
-	result, err := d.runKubectl(ctx, KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "pods", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{'|'}{.status.phase}{'|'}{.status.containerStatuses[0].ready}{'\\n'}{end}"},
 	})
 	if err != nil {
