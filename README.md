@@ -101,6 +101,12 @@ MAIN_IMAGE_TAG=4.9.2 ./roxie deploy central
   --ca-cert-file=/tmp/roxie-ca-cert.pem
 ```
 
+> **Note:** The Central endpoint is printed during deployment. If you are in the roxie subshell,
+> `API_ENDPOINT`, `ROX_ADMIN_PASSWORD`, and `ROX_CA_CERT_FILE` are already set, so you can run:
+> ```bash
+> ./roxie deploy secured-cluster --central-endpoint=$API_ENDPOINT
+> ```
+
 ## Development
 
 Enter the dev shell:
