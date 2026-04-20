@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/stackrox/roxie/internal/k8s"
 )
 
 // generateCRS generates the Central Resource Secret using roxctl
@@ -43,7 +45,7 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 func (d *Deployer) applyCRS(ctx context.Context, crsContent string) error {
 	d.logger.Info("Applying CRS to sensor namespace")
 
-	result, err := d.runKubectl(ctx, KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-n", d.sensorNamespace, "-f", "-"},
 		Stdin: strings.NewReader(crsContent),
 	})
