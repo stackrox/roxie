@@ -3,6 +3,8 @@ package deployer
 import "fmt"
 
 var (
+	centralDbPVCSizeSmall = "30Gi"
+
 	centralResourcesSmall = map[string]interface{}{
 		"requests": map[string]string{
 			"memory": "1Gi",
