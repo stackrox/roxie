@@ -46,7 +46,6 @@ jobs:
         id: build-meta
         run: |
           echo "version=$(make version)" >> $GITHUB_OUTPUT
-          echo "git_commit=$(make get-commit-hash)" >> $GITHUB_OUTPUT
           echo "build_date=$(make get-build-date)" >> $GITHUB_OUTPUT
 
       - name: Extract metadata (tags, labels) for Docker
@@ -71,7 +70,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             ROXIE_VERSION=${{ steps.build-meta.outputs.version }}
-            GIT_COMMIT=${{ steps.build-meta.outputs.git_commit }}
             BUILD_DATE=${{ steps.build-meta.outputs.build_date }}
           cache-from: |
             type=gha
