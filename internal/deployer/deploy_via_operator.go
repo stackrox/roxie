@@ -323,7 +323,6 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 					},
 				},
 				"scanner": map[string]interface{}{
-					"scannerComponent": "Disabled",
 					"analyzer": map[string]interface{}{
 						"scaling": noScaling,
 					},
@@ -352,7 +351,6 @@ func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]
 					},
 				},
 				"scanner": map[string]interface{}{
-					"scannerComponent": "Disabled",
 					"analyzer": map[string]interface{}{
 						"scaling": noScaling,
 					},
@@ -711,7 +709,6 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 					},
 				},
 				"scannerV4": map[string]interface{}{
-					"scannerComponent": "Disabled",
 					"indexer": map[string]interface{}{
 						"scaling": noScaling,
 					},
@@ -725,7 +722,6 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 					"replicas": 1,
 				},
 				"scanner": map[string]interface{}{
-					"scannerComponent": "Disabled",
 					"analyzer": map[string]interface{}{
 						"scaling": smallScale,
 					},
@@ -734,7 +730,6 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 					"resources": securedClusterSensorResourcesMedium,
 				},
 				"scannerV4": map[string]interface{}{
-					"scannerComponent": "Disabled",
 					"indexer": map[string]interface{}{
 						"scaling": noScaling,
 					},
