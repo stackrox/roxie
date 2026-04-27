@@ -388,22 +388,20 @@ func (d *Deployer) SetCombinedOverrideFile(overrideFile string) error {
 func setOverrideSetExpressions(overrides map[string]interface{}, prefix string, overrideSetExpressions []string) ([]string, error) {
 	remainingSetExpressions := make([]string, 0)
 	for _, expr := range overrideSetExpressions {
-		// TODO(#91): would https://pkg.go.dev/strings#Cut work instead?
-		parts := splitAtFirstEquals(expr)
-		if len(parts) != 2 {
+		key, yamlValue, found := strings.Cut(expr, "=")
+		if !found {
 			return nil, fmt.Errorf("invalid override expression '%s': expected format 'key.path=value'", expr)
 		}
-		key := parts[0]
 		if prefix != "" {
-			if !strings.HasPrefix(parts[0], prefix) {
+			if !strings.HasPrefix(key, prefix) {
 				remainingSetExpressions = append(remainingSetExpressions, expr)
 				continue
 			}
 			key = strings.TrimPrefix(key, prefix+".")
 		}
 		var val interface{}
-		if err := yaml.Unmarshal([]byte(parts[1]), &val); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal value '%s' for key '%s': %w", parts[1], key, err)
+		if err := yaml.Unmarshal([]byte(yamlValue), &val); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal value '%s' for key '%s': %w", yamlValue, key, err)
 		}
 		if err := setNestedValue(overrides, key, val); err != nil {
 			return nil, fmt.Errorf("failed to set value for key '%s': %w", key, err)
