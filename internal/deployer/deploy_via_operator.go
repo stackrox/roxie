@@ -578,9 +578,12 @@ func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
 
 	d.roxCACertFile = caCertFile.Name()
 	if _, err := caCertFile.Write(caCert); err != nil {
-		caCertFile.Close()
-		os.Remove(d.roxCACertFile)
+		_ = caCertFile.Close()
+		_ = os.Remove(d.roxCACertFile)
 		return fmt.Errorf("failed to write CA cert: %w", err)
+	}
+	if err := caCertFile.Close(); err != nil {
+		return fmt.Errorf("failed to close CA cert file: %w", err)
 	}
 
 	d.logger.Successf("✓ CA certificate saved to: %s", d.roxCACertFile)
