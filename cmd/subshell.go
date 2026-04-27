@@ -11,6 +11,7 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/logger"
+	"github.com/stackrox/roxie/internal/types"
 )
 
 func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
@@ -29,45 +30,44 @@ func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
 
 	env := os.Environ()
 
-	endpoint, password, caCertFile, kubeContext, exposure := d.GetDeploymentInfo()
+	centralDeploymentInfo := d.GetCentralDeploymentInfo()
 
-	if endpoint != "" {
-		env = append(env, fmt.Sprintf("API_ENDPOINT=%s", endpoint))
-		env = append(env, fmt.Sprintf("ROX_ENDPOINT=%s", endpoint))
-		env = append(env, fmt.Sprintf("ROX_BASE_URL=https://%s", endpoint))
+	if centralDeploymentInfo.Endpoint != "" {
+		env = append(env, fmt.Sprintf("API_ENDPOINT=%s", centralDeploymentInfo.Endpoint))
+		env = append(env, fmt.Sprintf("ROX_ENDPOINT=%s", centralDeploymentInfo.Endpoint))
+		env = append(env, fmt.Sprintf("ROX_BASE_URL=https://%s", centralDeploymentInfo.Endpoint))
 	}
 
-	if password != "" {
-		env = append(env, fmt.Sprintf("ROX_ADMIN_PASSWORD=%s", password))
+	if centralDeploymentInfo.Password != "" {
+		env = append(env, fmt.Sprintf("ROX_ADMIN_PASSWORD=%s", centralDeploymentInfo.Password))
 	}
 
-	if caCertFile != "" {
-		env = append(env, fmt.Sprintf("ROX_CA_CERT_FILE=%s", caCertFile))
+	if centralDeploymentInfo.CACertFile != "" {
+		env = append(env, fmt.Sprintf("ROX_CA_CERT_FILE=%s", centralDeploymentInfo.CACertFile))
 	}
 
 	env = append(env, fmt.Sprintf("ROX_USERNAME=%s", deployer.AdminUsername))
 	env = append(env, "ROXIE_SHELL=1")
-	env = append(env, fmt.Sprintf("name=acs@%s", kubeContext))
+	env = append(env, fmt.Sprintf("name=acs@%s", centralDeploymentInfo.KubeContext))
 
 	haproxyAvailable := isHAProxyAvailable()
 
 	var haproxyCmd *exec.Cmd
 	var haproxyConfigPath string
-	var haproxyStarted bool
 
-	if haproxyAvailable && endpoint != "" && caCertFile != "" {
+	if haproxyAvailable && centralDeploymentInfo.Endpoint != "" && centralDeploymentInfo.CACertFile != "" {
 		var err error
-		haproxyCmd, haproxyConfigPath, err = startHAProxy(endpoint, caCertFile, log)
+		haproxyCmd, haproxyConfigPath, err = startHAProxy(centralDeploymentInfo.Endpoint, centralDeploymentInfo.CACertFile, log)
 		if err != nil {
 			log.Warningf("Failed to start HAProxy: %v", err)
 		} else {
 			env = append(env, fmt.Sprintf("ROXIE_HAPROXY_CFG_FILE=%s", haproxyConfigPath))
-			haproxyStarted = true
+			centralDeploymentInfo.HAProxyStarted = true
 			defer cleanupHAProxy(haproxyCmd, haproxyConfigPath)
 		}
 	}
 
-	printBanner(endpoint, exposure, haproxyAvailable, haproxyStarted)
+	printBanner(centralDeploymentInfo)
 
 	shellCmd := exec.Command(shellPath, "-i")
 	shellCmd.Env = env
@@ -171,7 +171,7 @@ func isHAProxyAvailable() bool {
 	return err == nil
 }
 
-func printBanner(endpoint, exposure string, haproxyAvailable, haproxyStarted bool) {
+func printBanner(centralDeploymentInfo deployer.CentralDeploymentInfo) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	cyan.Println("\n[roxie] Entering a subshell with ACS environment variables set.")
 	cyan.Println("[roxie]")
@@ -181,10 +181,10 @@ func printBanner(endpoint, exposure string, haproxyAvailable, haproxyStarted boo
 	cyan.Println("[roxie]   * roxcurl /v1/clusters")
 	cyan.Println("[roxie]")
 
-	if haproxyStarted {
+	if centralDeploymentInfo.HAProxyStarted {
 		cyan.Println("[roxie] Central UI: http://localhost:8080 (username: admin, password: see $ROX_ADMIN_PASSWORD)")
-	} else if exposure != "none" && exposure != "" {
-		cyan.Printf("[roxie] Central UI: https://%s", endpoint)
+	} else if centralDeploymentInfo.Exposure != types.ExposureNone {
+		cyan.Printf("[roxie] Central UI: https://%s", centralDeploymentInfo.Endpoint)
 	} else if !env.RunningInRoxieContainer {
 		cyan.Println("[roxie] Note: Installing haproxy enables automatic HTTP access to Central at http://localhost:8080")
 	}

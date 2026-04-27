@@ -3,6 +3,8 @@ package deployer
 import (
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseFeatureFlags(t *testing.T) {
@@ -123,7 +125,7 @@ func TestParseFeatureFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseFeatureFlags(tt.input)
+			result, err := ParseFeatureFlags(tt.input)
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("expected error but got nil")
@@ -356,7 +358,8 @@ func TestMergeWithEnvVarSupport(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mergeWithEnvVarSupport(tt.base, tt.overlay)
+			result, err := mergeWithEnvVarSupport(tt.base, tt.overlay)
+			require.NoError(t, err)
 
 			spec, ok := result["spec"].(map[string]interface{})
 			if !ok {
@@ -450,12 +453,7 @@ func TestFeatureFlagsConversion(t *testing.T) {
 				t.Fatal("result should not be nil")
 			}
 
-			spec, ok := result["spec"].(map[string]interface{})
-			if !ok {
-				t.Fatal("spec should be a map")
-			}
-
-			customize, ok := spec["customize"].(map[string]interface{})
+			customize, ok := result["customize"].(map[string]interface{})
 			if !ok {
 				t.Fatal("customize should be a map")
 			}
