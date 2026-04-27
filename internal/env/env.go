@@ -14,6 +14,7 @@ import (
 
 	"github.com/stackrox/roxie/internal/containerutil"
 	"github.com/stackrox/roxie/internal/logger"
+	"github.com/stackrox/roxie/internal/types"
 	"golang.org/x/term"
 )
 
@@ -23,24 +24,10 @@ var (
 	initializationMutex     sync.Mutex
 )
 
-// ClusterType represents different types of Kubernetes clusters
-type ClusterType int
-
-const (
-	// ClusterTypeUnknown represents an unidentified cluster type
-	ClusterTypeUnknown ClusterType = iota
-	// InfraGKE represents a GKE (Google Kubernetes Engine) cluster
-	InfraGKE
-	// InfraOpenShift4 represents an OpenShift 4 cluster
-	InfraOpenShift4
-	// LocalKind represents a Kind (Kubernetes in Docker) cluster
-	LocalKind
-)
-
 var (
 	// currentClusterType holds the detected cluster type for the current kubectl context
 	// This is lazily populated on first access via GetCurrentClusterType()
-	currentClusterType ClusterType
+	currentClusterType types.ClusterType
 
 	// currentContext holds the name of the current kubectl context
 	// This is lazily populated on first access via GetCurrentContext()
@@ -85,42 +72,20 @@ func ensureInitialized(log *logger.Logger) error {
 		if err != nil {
 			return err
 		}
-		currentClusterType = detectClusterType(kubeConfig, apiResources)
+		currentClusterType = DetectClusterType(kubeConfig, apiResources)
 		initialized = true
 	}
 	return nil
 }
 
 // GetCurrentClusterType returns the current cluster type, initializing if needed
-func GetCurrentClusterType() ClusterType {
-	panicIfNotInitialized()
+func GetCurrentClusterType() types.ClusterType {
 	return currentClusterType
 }
 
 // GetCurrentContext returns the current kubectl context, initializing if needed
 func GetCurrentContext() string {
-	panicIfNotInitialized()
 	return currentContext
-}
-
-func panicIfNotInitialized() {
-	if !initialized {
-		panic("environment information not initialized")
-	}
-}
-
-// String returns the string representation of a ClusterType
-func (ct ClusterType) String() string {
-	switch ct {
-	case InfraGKE:
-		return "GKE"
-	case InfraOpenShift4:
-		return "OpenShift4"
-	case LocalKind:
-		return "Kind"
-	default:
-		return "Unknown"
-	}
 }
 
 // KubeConfig represents a simplified kubectl configuration
@@ -168,41 +133,55 @@ func Initialize(log *logger.Logger) error {
 	return fmt.Errorf("failed to initialize environment after %d attempts: %w", maxRetries, lastErr)
 }
 
-// detectClusterType implements the cluster type detection logic
+// DetectClusterType implements the cluster type detection logic
 // This function is pure and testable - it doesn't invoke kubectl itself
-func detectClusterType(config KubeConfig, apiResources []string) ClusterType {
+func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterType {
 	if config.CurrentContext == "" {
-		return ClusterTypeUnknown
+		return types.ClusterTypeUnknown
 	}
 
 	contextLower := strings.ToLower(config.CurrentContext)
 
-	// Check for GKE clusters
-	// GKE contexts have format: gke_PROJECT_ZONE_CLUSTER
+	// GKE contexts have format: gke_PROJECT_ZONE_CLUSTER.
 	if strings.HasPrefix(config.CurrentContext, "gke_acs-team-temp-dev") {
-		return InfraGKE
+		return types.ClusterTypeInfraGKE
 	}
 
-	// Check for OpenShift 4 clusters by examining the server hostname
+	// Minikube clusters typically have context name "minikube".
+	if contextLower == "minikube" || strings.HasPrefix(contextLower, "minikube-") {
+		return types.ClusterTypeMinikube
+	}
+
+	// Check for OpenShift 4 clusters by examining the server hostname.
 	if serverURL := getServerURL(config); serverURL != "" {
 		if parsedURL, err := url.Parse(serverURL); err == nil {
 			hostname := parsedURL.Hostname()
 			if strings.HasSuffix(hostname, ".ocp.infra.rox.systems") {
 				// Further verify it's OpenShift 4 by checking the API resources
 				if isOpenShift4(apiResources) {
-					return InfraOpenShift4
+					return types.ClusterTypeInfraOpenShift4
 				}
 			}
 		}
 	}
 
+	// K3s clusters often have "k3s" in the context name
+	if strings.Contains(contextLower, "k3s") {
+		return types.ClusterTypeK3s
+	}
+
 	// Check for Kind clusters
 	// Kind clusters typically have context names starting with "kind-" or just "kind"
 	if strings.HasPrefix(contextLower, "kind") {
-		return LocalKind
+		return types.ClusterTypeKind
 	}
 
-	return ClusterTypeUnknown
+	// CRC (CodeReady Containers) contexts start with "crc" or contain "-crc-"/"_crc_" as a segment
+	if strings.HasPrefix(contextLower, "crc") || strings.Contains(contextLower, "-crc-") || strings.Contains(contextLower, "-crc:") {
+		return types.ClusterTypeCRC
+	}
+
+	return types.ClusterTypeUnknown
 }
 
 // getServerURL retrieves the server URL from the KubeConfig
