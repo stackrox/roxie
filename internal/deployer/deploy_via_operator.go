@@ -570,7 +570,6 @@ func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
 		return fmt.Errorf("failed to decode CA cert: %w", err)
 	}
 
-	// TODO(#91): possible symlink race vulnerability
 	caCertFile, err := os.CreateTemp(d.tempDir, "roxie-central-ca-*.pem")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file for CA cert: %w", err)
