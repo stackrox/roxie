@@ -5,16 +5,6 @@ import (
 	"strings"
 )
 
-// splitAtFirstEquals splits a string at the first '=' character
-// Returns [key, value] or just [expr] if no '=' found
-func splitAtFirstEquals(expr string) []string {
-	idx := strings.Index(expr, "=")
-	if idx == -1 {
-		return []string{expr}
-	}
-	return []string{expr[:idx], expr[idx+1:]}
-}
-
 // setNestedValue sets a value at a nested path in a map
 // The path is a dot-separated string like "foo.bar.baz"
 // Creates intermediate maps as needed

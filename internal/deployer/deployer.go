@@ -133,6 +133,7 @@ type Deployer struct {
 	securedClusterWaitTimeout time.Duration
 	dockerCreds               *dockerauth.Credentials
 	clusterResourceKinds      map[string]struct{}
+	tempDir                   string
 }
 
 type ResourceToDelete struct {
@@ -388,22 +389,20 @@ func (d *Deployer) SetCombinedOverrideFile(overrideFile string) error {
 func setOverrideSetExpressions(overrides map[string]interface{}, prefix string, overrideSetExpressions []string) ([]string, error) {
 	remainingSetExpressions := make([]string, 0)
 	for _, expr := range overrideSetExpressions {
-		// TODO(#91): would https://pkg.go.dev/strings#Cut work instead?
-		parts := splitAtFirstEquals(expr)
-		if len(parts) != 2 {
+		key, yamlValue, found := strings.Cut(expr, "=")
+		if !found {
 			return nil, fmt.Errorf("invalid override expression '%s': expected format 'key.path=value'", expr)
 		}
-		key := parts[0]
 		if prefix != "" {
-			if !strings.HasPrefix(parts[0], prefix) {
+			if !strings.HasPrefix(key, prefix) {
 				remainingSetExpressions = append(remainingSetExpressions, expr)
 				continue
 			}
 			key = strings.TrimPrefix(key, prefix+".")
 		}
 		var val interface{}
-		if err := yaml.Unmarshal([]byte(parts[1]), &val); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal value '%s' for key '%s': %w", parts[1], key, err)
+		if err := yaml.Unmarshal([]byte(yamlValue), &val); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal value '%s' for key '%s': %w", yamlValue, key, err)
 		}
 		if err := setNestedValue(overrides, key, val); err != nil {
 			return nil, fmt.Errorf("failed to set value for key '%s': %w", key, err)
@@ -502,6 +501,10 @@ func (d *Deployer) SetFeatureFlags(featureFlags []string) error {
 	return nil
 }
 
+// New creates a new Deployer instance.
+// It verifies that the current environment contains necessary tools.
+// It creates a temporary directory for the deployer to use during deployment,
+// and it is the caller's responsibility to clean it up using the Cleanup() method when not used anymore.
 func New(log *logger.Logger) (*Deployer, error) {
 	if err := checkRequiredTools(); err != nil {
 		return nil, err
@@ -510,6 +513,11 @@ func New(log *logger.Logger) (*Deployer, error) {
 	roxctlVersion, err := getRoxctlVersion()
 	if err != nil {
 		return nil, err
+	}
+
+	tempDir, err := os.MkdirTemp("", "roxie-deployer-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
 	d := &Deployer{
@@ -522,6 +530,7 @@ func New(log *logger.Logger) (*Deployer, error) {
 		shouldDeployOperator:      true,
 		centralWaitTimeout:        DefaultCentralWaitTimeout,
 		securedClusterWaitTimeout: DefaultSecuredClusterWaitTimeout,
+		tempDir:                   tempDir,
 	}
 
 	d.dockerAuth = dockerauth.New(log)
@@ -578,6 +587,18 @@ func (d *Deployer) getClusterResourceKinds() (map[string]struct{}, error) {
 	return kinds, nil
 }
 
+// Cleanup cleans up any temporary resources created by the deployer, such as temporary files.
+func (d *Deployer) Cleanup() {
+	if d.tempDir != "" && d.envrcFile == "" {
+		// In the case of envrc file usage, we need to keep temporary files around after deployment.
+		// (It contains CA certificates, for example.)
+		if err := os.RemoveAll(d.tempDir); err != nil {
+			d.logger.Warningf("Deployer Cleanup failed to remove %q: %v", d.tempDir, err)
+		}
+	}
+}
+
+// Deploy deploys the specified components to the cluster.
 func (d *Deployer) Deploy(ctx context.Context, components component.Component, resources, exposure string) error {
 	adjustedResources, adjustedExposure, adjustedPortForward := d.clusterDefaults.ApplyConvenienceDefaults(
 		d.kubeContext,

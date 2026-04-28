@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -569,13 +570,19 @@ func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
 		return fmt.Errorf("failed to decode CA cert: %w", err)
 	}
 
-	// TODO(#91): possible symlink race vulnerability
-	d.roxCACertFile = "/tmp/roxie-ca-cert.pem"
-	// TODO(#91): this is a REALLY weird way to write a temporary file in go
-	writeCmd := exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("cat > %s", d.roxCACertFile))
-	writeCmd.Stdin = bytes.NewReader(caCert)
-	if err := writeCmd.Run(); err != nil {
+	caCertFile, err := os.CreateTemp(d.tempDir, "roxie-central-ca-*.pem")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file for CA cert: %w", err)
+	}
+
+	d.roxCACertFile = caCertFile.Name()
+	if _, err := caCertFile.Write(caCert); err != nil {
+		_ = caCertFile.Close()
+		_ = os.Remove(d.roxCACertFile)
 		return fmt.Errorf("failed to write CA cert: %w", err)
+	}
+	if err := caCertFile.Close(); err != nil {
+		return fmt.Errorf("failed to close CA cert file: %w", err)
 	}
 
 	d.logger.Successf("✓ CA certificate saved to: %s", d.roxCACertFile)
