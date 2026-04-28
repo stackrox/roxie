@@ -44,11 +44,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
 	}
-	defer func() {
-		if err := d.Cleanup(); err != nil {
-			log.Warningf("Failed to invoke deployer cleanup: %v", err)
-		}
-	}()
+	defer d.Cleanup()
 
 	d.SetSingleNamespace(singleNamespace)
 

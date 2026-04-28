@@ -590,21 +590,17 @@ func (d *Deployer) getClusterResourceKinds() (map[string]struct{}, error) {
 }
 
 // Cleanup cleans up any temporary resources created by the deployer, such as temporary files.
-func (d *Deployer) Cleanup() error {
+func (d *Deployer) Cleanup() {
 	if d.tempDir != "" && d.envrcFile == "" {
 		// In the case of envrc file usage, we need to keep temporary files around after deployment.
 		// (It contains CA certificates, for example.)
 		if err := os.RemoveAll(d.tempDir); err != nil {
-			return fmt.Errorf("failed to clean up temporary directory: %w", err)
+			d.logger.Warningf("Deployer Cleanup failed to remove %q: %v", d.tempDir, err)
 		}
 	}
-	return nil
 }
 
 // Deploy deploys the specified components to the cluster.
-//
-// It might create temporary files in the deployer's tempDir, but it is the caller's responsibility to clean them up
-// when not used anymore.
 func (d *Deployer) Deploy(ctx context.Context, components component.Component, resources, exposure string) error {
 	adjustedResources, adjustedExposure, adjustedPortForward := d.clusterDefaults.ApplyConvenienceDefaults(
 		d.kubeContext,
