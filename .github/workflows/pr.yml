@@ -1,0 +1,191 @@
+name: PR
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CLUSTER_NAME: infra-roxie-pr-${{ github.event.pull_request.number }}
+  REGISTRY: quay.io
+  IMAGE_NAME: rhacs-eng/roxie
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        run: make test
+
+  create-dev-cluster:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: stackrox/actions/infra/create-cluster@v1
+        with:
+          flavor: gke-default
+          name: "$CLUSTER_NAME"
+          args: machine-type=e2-standard-4,nodes=3,gcp-image-type=ubuntu_containerd
+          lifespan: "2h"
+          wait: true
+          token: ${{ secrets.INFRA_CI_TOKEN }}
+
+  build-roxie-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Get build metadata
+        id: build-meta
+        run: |
+          echo "version=$(make version)" >> $GITHUB_OUTPUT
+          echo "build_date=$(make get-build-date)" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.build-meta.outputs.version }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            ROXIE_VERSION=${{ steps.build-meta.outputs.version }}
+            BUILD_DATE=${{ steps.build-meta.outputs.build_date }}
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=gha,mode=max
+
+  e2e-tests:
+    needs:
+      - create-dev-cluster
+      - build-roxie-image
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/stackrox-io/apollo-ci:stackrox-test-0.5.11
+    env:
+      KUBECONFIG: /github/home/artifacts/kubeconfig
+      INFRA_TOKEN: ${{ secrets.INFRA_CI_TOKEN }}
+      INFRACTL: bin/infractl -k -e localhost:8443
+      USE_GKE_GCLOUD_AUTH_PLUGIN: "True"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fix repository ownership
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Log in to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Extract roxie binary from image
+        run: |
+          docker create --name roxie-extract "${{ needs.build-roxie-image.outputs.image }}"
+          docker cp roxie-extract:/usr/local/bin/roxie "$GITHUB_WORKSPACE/roxie"
+          docker rm roxie-extract
+
+      - name: Install roxie binary
+        run: |
+          cp "${GITHUB_WORKSPACE}/roxie" /usr/local/bin/roxie
+          chmod +x /usr/local/bin/roxie
+          roxie version
+
+      - name: Install roxctl
+        env:
+          ROXCTL_VERSION: "4.10.0"
+          ROXCTL_SHA256: "5db647b14569465866c0162522e83393ebf02f671f4556b1b3ed551b9f8433bc"
+        run: |
+          curl -fsSLo /usr/local/bin/roxctl \
+            "https://mirror.openshift.com/pub/rhacs/assets/${ROXCTL_VERSION}/bin/Linux/roxctl"
+          echo "${ROXCTL_SHA256}  /usr/local/bin/roxctl" | sha256sum -c -
+          chmod +x /usr/local/bin/roxctl
+          roxctl version
+
+      - name: Authenticate to GCloud
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.ROXIE_CI_AUTOMATION_GCP_SA }}
+
+      - name: Set up Cloud SDK
+        uses: "google-github-actions/setup-gcloud@v3"
+        with:
+          install_components: "gke-gcloud-auth-plugin"
+
+      - name: Download production infractl
+        uses: stackrox/actions/infra/install-infractl@v1
+
+      - name: Download artifacts
+        run: |
+          /github/home/.local/bin/infractl artifacts "$CLUSTER_NAME" -d /github/home/artifacts >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Testing cluster connection
+        run: |
+          kubectl get namespaces
+
+      - name: Run e2e tests
+        env:
+          REGISTRY_USERNAME: ${{ secrets.QUAY_RHACS_ENG_RO_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.QUAY_RHACS_ENG_RO_PASSWORD }}
+          SKIP_OLM_TESTS: "true"
+        run: |
+          make run-test-e2e
+
+      - name: Run integration tests
+        env:
+          REGISTRY_USERNAME: ${{ secrets.QUAY_RHACS_ENG_RO_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.QUAY_RHACS_ENG_RO_PASSWORD }}
+        run: |
+          make test-integration
