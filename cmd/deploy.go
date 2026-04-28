@@ -19,6 +19,7 @@ import (
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 
+	"github.com/stackrox/roxie/internal/stackroxversions"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
@@ -473,6 +474,16 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if deploySettings.Operator.SkipDeployment && deploySettings.Operator.DeployViaOlm {
 		return errors.New("skipping operator deployment while also requesting deploying via OLM at the same time does not make sense")
+	}
+
+	if !deploySettings.Central.EarlyReadiness || !deploySettings.SecuredCluster.EarlyReadiness {
+		hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(deploySettings.Operator.Version)
+		if err != nil {
+			return fmt.Errorf("checking version constraint on main image tag %s", deploySettings.Roxie.Version)
+		}
+		if !hasSupport {
+			return fmt.Errorf("--early-readiness=false can only by used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
+		}
 	}
 
 	d, err := deployer.New(log)
