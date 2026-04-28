@@ -20,6 +20,7 @@ import (
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 
+	"github.com/stackrox/roxie/internal/stackroxversions"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
@@ -277,6 +278,25 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if err := deployValidate(components, &deploySettings); err != nil {
 		return err
+	}
+
+	if !deploySettings.Central.EarlyReadiness || !deploySettings.SecuredCluster.EarlyReadiness {
+		// Explanation on the versions involved here:
+		// Deploying StackRox begins with picking a "main image tag" -- this is a version identifier, which cannot be reliably parsed as a semver.
+		// But there is a derived version from that -- the operator version -- which can be parsed as a semver.
+		//
+		// The invocation of deploySettings.Operator.Configure() above in this function prepares the operator deployment config in the sense
+		// that top-level roxie configuration options are propagated to the concrete operator deployment configuration. This includes also
+		// storing of the derived operator version within the operator configuration.
+		//
+		// This is why we use the operator version here when checking version constraints.
+		hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(deploySettings.Operator.Version)
+		if err != nil {
+			return fmt.Errorf("checking version constraint on main image tag %s", deploySettings.Roxie.Version)
+		}
+		if !hasSupport {
+			return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
+		}
 	}
 
 	d, err := deployer.New(log)
