@@ -73,7 +73,7 @@ func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 
 // downloadAndExtractOperatorBundle downloads and extracts the operator bundle
 func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleImage string) (string, error) {
-	bundleDir, err := os.MkdirTemp("", "stackrox-operator-bundle-")
+	bundleDir, err := os.MkdirTemp(d.tempDir, "stackrox-operator-bundle-")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
