@@ -137,7 +137,7 @@ run-test-e2e: ## Run end-to-end tests (requires roxie to be available in PATH, k
 	echo "using cluster context $$CLUSTER_CONTEXT"
 
 	@echo ""; \
-	echo "Executing end-to-end test suite..."
+	echo "Invoking go test..."
 	$(GOTEST) -v -tags=e2e -timeout=120m -parallel=1 ./tests/e2e/...
 
 .PHONY: test-e2e
@@ -156,7 +156,7 @@ test-integration: ## Run integration tests (requires kubectl context and cluster
 	echo "using cluster context $$CLUSTER_CONTEXT"
 
 	@echo ""; \
-	echo "Executing integration test suite..."
+	echo "Invoking go test..."
 	$(GOTEST) -v -tags=integration -run=_Integration$$ -timeout=120m -parallel=1 ./...
 
 .PHONY: test-all
