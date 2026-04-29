@@ -24,8 +24,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Download dependencies
-        run: go mod download
+      - name: Check go.mod tidiness
+        run: |
+          go mod tidy
+          if ! git diff --exit-code go.mod go.sum; then
+            echo "::error::go.mod or go.sum are not tidy. Please run 'go mod tidy' and commit the changes."
+            exit 1
+          fi
 
       - name: Run unit tests
         run: make test
