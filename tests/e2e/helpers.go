@@ -32,7 +32,6 @@ var (
 	roxieBinary = "roxie"
 )
 
-// TODO(#91): maybe put the helper functions in a separate file?
 func teardownAllDeployments() error {
 	fmt.Println("=== Tearing down all deployments before running tests ===")
 
