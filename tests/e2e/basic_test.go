@@ -11,10 +11,6 @@ import (
 
 // TestDeployBothSimple tests deploying both components together (simplest scenario)
 func TestDeployBothSimple(t *testing.T) {
-	if os.Getenv("SKIP_OPERATOR_TESTS") != "" {
-		t.Skip("SKIP_OPERATOR_TESTS is set")
-	}
-
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {

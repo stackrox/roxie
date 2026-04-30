@@ -113,22 +113,50 @@ test-coverage: test ## Run tests with coverage report
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "✅ Coverage report: coverage.html"
 
-.PHONY: test-e2e
-test-e2e: build ## Run end-to-end tests (requires kubectl context and cluster access)
+.PHONY: run-test-e2e
+run-test-e2e: ## Run end-to-end tests (requires roxie to be available in PATH, kubectl context and cluster access)
 	@echo "🧪 Running E2E tests..."
-	@if [ -z "$(shell kubectl config current-context 2>/dev/null)" ]; then \
+
+	@echo ""; \
+	echo "Checking roxie binary is available..."; \
+	ROXIE=$$(command -v roxie); \
+	if [ -z "$$ROXIE" ]; then \
+		echo "❌ roxie not found in PATH."; \
+		exit 1; \
+	fi; \
+	echo "roxie found at $$ROXIE"; \
+	roxie version
+
+	@echo ""; \
+	echo "Checking a kubectl cluster context is set..."; \
+	CLUSTER_CONTEXT=$$(kubectl config current-context); \
+	if [ -z "$$CLUSTER_CONTEXT" ]; then \
 		echo "❌ No kubectl context found. Please configure kubectl first."; \
 		exit 1; \
-	fi
+	fi; \
+	echo "using cluster context $$CLUSTER_CONTEXT"
+
+	@echo ""; \
+	echo "Invoking go test..."
 	$(GOTEST) -v -tags=e2e -timeout=120m -parallel=1 ./tests/e2e/...
 
+.PHONY: test-e2e
+test-e2e: build ## Run end-to-end tests (requires kubectl context and cluster access)
+	PATH="$$PWD:$$PATH" make run-test-e2e
+
 .PHONY: test-integration
-test-integration: build ## Run integration tests (requires kubectl context and cluster access)
-	@echo "🧪 Running integration tests..."
-	@if [ -z "$(shell kubectl config current-context 2>/dev/null)" ]; then \
+test-integration: ## Run integration tests (requires kubectl context and cluster access)
+	@echo ""; \
+	echo "Checking a kubectl cluster context is set..."; \
+	CLUSTER_CONTEXT=$$(kubectl config current-context); \
+	if [ -z "$$CLUSTER_CONTEXT" ]; then \
 		echo "❌ No kubectl context found. Please configure kubectl first."; \
 		exit 1; \
-	fi
+	fi; \
+	echo "using cluster context $$CLUSTER_CONTEXT"
+
+	@echo ""; \
+	echo "Invoking go test..."
 	$(GOTEST) -v -tags=integration -run=_Integration$$ -timeout=120m -parallel=1 ./...
 
 .PHONY: test-all

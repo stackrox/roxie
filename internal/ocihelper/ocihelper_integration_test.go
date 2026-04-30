@@ -82,34 +82,34 @@ func TestExtractManifestsFromImage_Integration(t *testing.T) {
 	t.Logf("✓ CSV file verified (%d bytes)", len(csvContent))
 }
 
-func TestInspectImage_Integration(t *testing.T) {
+func TestVerifyImageExistence_Integration(t *testing.T) {
 	bundleImage := "quay.io/rhacs-eng/stackrox-operator-bundle:v4.10.0"
 
 	log := logger.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	t.Logf("Inspecting image %s", bundleImage)
-	err := InspectImage(ctx, log, bundleImage)
+	t.Logf("Verifying image %s exists", bundleImage)
+	err := VerifyImageExistence(ctx, log, bundleImage)
 	if err != nil {
-		t.Fatalf("InspectImage failed: %v", err)
+		t.Fatalf("VerifyImageExistence failed: %v", err)
 	}
 
-	t.Log("✓ Image inspection successful")
+	t.Log("✓ VerifyImageExistence succeeded for existing image")
 }
 
-func TestInspectImage_NonExistent_Integration(t *testing.T) {
+func TestVerifyImageExistence_NonExistent_Integration(t *testing.T) {
 	nonExistentImage := "quay.io/rhacs-eng/this-image-does-not-exist:v999.999.999"
 
 	log := logger.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	t.Logf("Inspecting non-existent image %s", nonExistentImage)
-	err := InspectImage(ctx, log, nonExistentImage)
+	t.Logf("Verifying image %s does not exist", nonExistentImage)
+	err := VerifyImageExistence(ctx, log, nonExistentImage)
 	if err == nil {
-		t.Fatal("Expected InspectImage to fail for non-existent image, but it succeeded")
+		t.Fatal("Expected VerifyImageExistence to fail for non-existent image, but it succeeded")
 	}
 
-	t.Logf("✓ InspectImage correctly failed for non-existent image: %v", err)
+	t.Log("✓ VerifyImageExistence correctly failed for non-existent image")
 }
