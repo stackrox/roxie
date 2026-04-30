@@ -38,7 +38,7 @@ func (ct ClusterType) String() string {
 	}
 }
 
-// TODO(#91): Maybe I'm missing something, but this manager/detector/applicator abstraction
+// TODO(ROX-34499): Maybe I'm missing something, but this manager/detector/applicator abstraction
 // seems massively over-engineered since the is only one concrete implementation. AFAICT this
 // could all be just a single function that the deployer calls with log, kubeconfig, resources,
 // exposure and portForward.

@@ -83,7 +83,7 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 	}
 
 	for _, crd := range requiredCRDs {
-		// TODO(#91): actually this is not the right way to check whether it's safe to create a resource of a given kind.
+		// TODO(ROX-34499): actually this is not the right way to check whether it's safe to create a resource of a given kind.
 		// A CRD can be present, but still being loaded or end up not accepted by the API server.
 		// Instead we should use the `kubectl api-resources` subcommand which exposes the status we're looking for.
 		_, err := d.runKubectl(ctx, k8s.KubectlOptions{
@@ -128,7 +128,7 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 		},
 	}
 
-	// TODO(#91): Add security context config if supported.
+	// TODO(ROX-34499): Add security context config if supported.
 	if hasSecurityContextConfig {
 		spec := catalogSource["spec"].(map[string]interface{})
 		spec["grpcPodConfig"] = map[string]interface{}{
@@ -162,7 +162,7 @@ func (d *Deployer) catalogSourceSupportsSecurityContextConfig(ctx context.Contex
 		return false, err
 	}
 
-	// TODO(#91): this is overly optimistic and would incorrectly succeed if an api version
+	// TODO(ROX-34499): this is overly optimistic and would incorrectly succeed if an api version
 	// that contains this had "serving: false"
 	return strings.Contains(result.Stdout, "securityContextConfig"), nil
 }
@@ -257,7 +257,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	}
 
 	if time.Since(start) >= timeout {
-		// TODO(#91): some more info on what was wrong would be useful: a dump of the
+		// TODO(ROX-34499): some more info on what was wrong would be useful: a dump of the
 		// subscription or at least its name so that the user can investigate
 		return errors.New("timeout waiting for InstallPlan to be created")
 	}
@@ -329,7 +329,7 @@ func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 		time.Sleep(5 * time.Second)
 	}
 
-	// TODO(#91): same as above
+	// TODO(ROX-34499): same as above
 	return fmt.Errorf("timeout waiting for CSV to succeed")
 }
 
@@ -353,7 +353,7 @@ func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, Oper
 		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace, "-o", "jsonpath={.metadata.labels}"},
 		})
-		// TODO(#91): This is not very robust. Better retrieve a specific label in the `get`
+		// TODO(ROX-34499): This is not very robust. Better retrieve a specific label in the `get`
 		// command?
 		if err == nil && strings.Contains(result.Stdout, "olm.owner") {
 			return true, OperatorModeOLM
