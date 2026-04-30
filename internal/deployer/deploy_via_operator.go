@@ -504,7 +504,8 @@ func (d *Deployer) checkPodProgress(ctx context.Context, seenPods map[string]str
 	d.checkPodProgressInNamespace(ctx, d.centralNamespace, seenPods)
 }
 
-// waitForLoadBalancer waits for a LoadBalancer service to get an external IP
+// waitForLoadBalancer waits for a LoadBalancer service to get an external IP.
+// Returns the endpoint as "host:port", with no https:// prefix.
 func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceName string, timeout int) (string, error) {
 	d.logger.Infof("⏳ Waiting for LoadBalancer %s to get external IP...", serviceName)
 
@@ -521,7 +522,7 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 				} else {
 					d.logger.Success("✓ LoadBalancer IP")
 				}
-				return fmt.Sprintf("https://%s:443", ip), nil
+				return fmt.Sprintf("%s:443", ip), nil
 			}
 		}
 
@@ -537,7 +538,7 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 				} else {
 					d.logger.Success("✓ LoadBalancer hostname")
 				}
-				return fmt.Sprintf("https://%s:443", hostname), nil
+				return fmt.Sprintf("%s:443", hostname), nil
 			}
 		}
 
@@ -613,11 +614,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context, exposure string
 		if err != nil {
 			return fmt.Errorf("failed to get LoadBalancer endpoint: %w", err)
 		}
-		// Remove https:// prefix if present (waitForLoadBalancer returns https://ip:443)
-		// TODO(ROX-34499): This is silly, why add these affixes there, and then strip here?!
-		d.centralEndpoint = strings.TrimPrefix(endpoint, "https://")
-		d.centralEndpoint = strings.TrimSuffix(d.centralEndpoint, ":443")
-		d.centralEndpoint = d.centralEndpoint + ":443"
+		d.centralEndpoint = endpoint
 	} else {
 		d.centralEndpoint = "central." + centralNamespace + ".svc:443"
 	}
