@@ -756,6 +756,14 @@ func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[
 				},
 			},
 		}
+	case "ci":
+		return map[string]interface{}{
+			"spec": map[string]interface{}{
+				"sensor": map[string]interface{}{
+					"resources": securedClusterSensorResourcesCI,
+				},
+			},
+		}
 	default:
 		return nil
 	}
