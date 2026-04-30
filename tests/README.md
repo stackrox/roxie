@@ -47,7 +47,6 @@ go test -v -tags=e2e -timeout=30m -parallel=1 ./tests/e2e/...
 ### Environment Variables for E2E Tests
 
 - `MAIN_IMAGE_TAG` - ACS image tag to use (default: "4.8.2")
-- `SKIP_OPERATOR_TESTS` - Skip operator-based tests if set
 - `SKIP_OLM_TESTS` - Skip OLM-specific tests if set (useful when OLM is not available)
 - `SKIP_IMAGE_VERIFICATION` - Skip image verification if set to "true"
 
@@ -139,26 +138,12 @@ import (
 // to prevent conflicts when modifying shared cluster resources.
 
 func TestDeployment(t *testing.T) {
-    if os.Getenv("SKIP_OPERATOR_TESTS") != "" {
-        t.Skip("Operator tests disabled")
-    }
-
     runCommand(t, 30*time.Minute, nil,
         roxieBinary, "deploy", "central")
 
     verifyNamespaceExists(t, "acs-central")
 }
 ```
-
-## Test Helpers
-
-The `testhelpers` package provides utilities:
-
-- `CreateTestLogger(t)` - Logger with captured output
-- `AssertContains(t, haystack, needle)` - String contains assertion
-- `AssertEqual(t, expected, actual)` - Equality assertion
-- `AssertNoError(t, err)` - Error nil assertion
-- `AssertError(t, err)` - Error not nil assertion
 
 ## CI Integration
 
@@ -169,7 +154,7 @@ The Makefile provides targets suitable for CI:
 make check
 
 # Run all tests
-make test test-e2e
+make test test-e2e test-integration
 
 # Full CI workflow
 make all
