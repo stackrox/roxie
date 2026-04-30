@@ -18,4 +18,4 @@ jobs:
 
       - name: Delete cluster
         run: |
-          /github/home/.local/bin/infractl delete "${{ inputs.cluster-name }}"
+          "$HOME/.local/bin/infractl" delete "${{ inputs.cluster-name }}"
