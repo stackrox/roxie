@@ -28,7 +28,7 @@ type KubectlResult struct {
 }
 
 // RunKubectl executes a kubectl command with automatic retries on transient errors
-func RunKubectl(ctx context.Context, log *logger.Logger, opts KubectlOptions) (*KubectlResult, error) {
+func RunKubectl(ctx context.Context, log *logger.Logger, opts KubectlOptions) (KubectlResult, error) {
 	if opts.MaxAttempts <= 0 {
 		opts.MaxAttempts = 3
 	}
@@ -88,14 +88,14 @@ func RunKubectl(ctx context.Context, log *logger.Logger, opts KubectlOptions) (*
 		lastErr = err
 
 		if err == nil {
-			return &KubectlResult{
+			return KubectlResult{
 				Stdout: stdout.String(),
 				Stderr: lastStderr,
 			}, nil
 		}
 
 		if opts.IgnoreErrors {
-			return &KubectlResult{
+			return KubectlResult{
 				Stdout: stdout.String(),
 				Stderr: lastStderr,
 			}, nil
@@ -111,7 +111,7 @@ func RunKubectl(ctx context.Context, log *logger.Logger, opts KubectlOptions) (*
 		}
 
 		if !isRetryable || attempt == opts.MaxAttempts {
-			return &KubectlResult{
+			return KubectlResult{
 				Stdout: stdout.String(),
 				Stderr: lastStderr,
 			}, fmt.Errorf("kubectl command failed: %w", err)
@@ -122,7 +122,7 @@ func RunKubectl(ctx context.Context, log *logger.Logger, opts KubectlOptions) (*
 		}
 	}
 
-	return &KubectlResult{
+	return KubectlResult{
 		Stdout: "",
 		Stderr: lastStderr,
 	}, fmt.Errorf("kubectl command failed after %d attempts: %w", opts.MaxAttempts, lastErr)
