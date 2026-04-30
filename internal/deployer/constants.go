@@ -218,6 +218,13 @@ var (
 			"cpu": "400m",
 		},
 	}
+
+	securedClusterSensorResourcesCI = map[string]interface{}{
+		"requests": map[string]string{
+			"memory": "500Mi",
+			"cpu":    "500m",
+		},
+	}
 )
 
 func internalCentralEndpoint(namespace string) string {
