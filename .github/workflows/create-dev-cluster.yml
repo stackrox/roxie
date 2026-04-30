@@ -1,0 +1,27 @@
+name: Create Dev Cluster
+
+on:
+  workflow_call:
+    inputs:
+      cluster-name:
+        required: true
+        type: string
+    outputs:
+      cluster-name:
+        description: "Name of the created cluster"
+        value: ${{ jobs.create-dev-cluster.outputs.cluster-name }}
+
+jobs:
+  create-dev-cluster:
+    runs-on: ubuntu-latest
+    outputs:
+      cluster-name: ${{ inputs.cluster-name }}
+    steps:
+      - uses: stackrox/actions/infra/create-cluster@v1
+        with:
+          flavor: gke-default
+          name: ${{ inputs.cluster-name }}
+          args: machine-type=e2-standard-4,nodes=3,gcp-image-type=ubuntu_containerd
+          lifespan: "2h"
+          wait: true
+          token: ${{ secrets.INFRA_CI_TOKEN }}
