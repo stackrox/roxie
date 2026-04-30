@@ -1,7 +1,7 @@
-name: PR
+name: Main
 
 on:
-  pull_request:
+  push:
     branches: [ main ]
 
 concurrency:
@@ -15,7 +15,7 @@ jobs:
   create-dev-cluster:
     uses: ./.github/workflows/create-dev-cluster.yml
     with:
-      cluster-name: infra-roxie-pr-${{ github.event.pull_request.number }}
+      cluster-name: infra-roxie-main-${{ github.run_number }}
     secrets: inherit
 
   build-roxie-image:

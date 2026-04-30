@@ -1,0 +1,72 @@
+name: Build Roxie Image
+
+on:
+  workflow_call:
+    outputs:
+      image:
+        description: "Built image with tag"
+        value: ${{ jobs.build-roxie-image.outputs.image }}
+
+env:
+  REGISTRY: quay.io
+  IMAGE_NAME: rhacs-eng/roxie
+
+jobs:
+  build-roxie-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Get build metadata
+        id: build-meta
+        run: |
+          echo "version=$(make version)" >> $GITHUB_OUTPUT
+          echo "build_date=$(make get-build-date)" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: type=raw,value=${{ steps.build-meta.outputs.version }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            ROXIE_VERSION=${{ steps.build-meta.outputs.version }}
+            BUILD_DATE=${{ steps.build-meta.outputs.build_date }}
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=gha,mode=max
