@@ -898,16 +898,18 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 	log.Info("")
 }
 
-// checkDeploymentProgressInNamespace checks for deployment state changes in a specific namespace and reports them
-func (d *Deployer) checkDeploymentProgressInNamespace(ctx context.Context, namespace string, seenDeployments map[string]string) {
+// checkDeploymentProgressInNamespace checks for deployment state changes in a specific namespace and reports them.
+// Returns true, if relevant state changes have been observed, false otherwise.
+func (d *Deployer) checkDeploymentProgressInNamespace(ctx context.Context, namespace string, seenDeployments map[string]string) (bool, error) {
 	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "deployments", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{'|'}{.status.replicas}{'|'}{.status.readyReplicas}{'|'}{.status.availableReplicas}{'\\n'}{end}"},
 	})
 	if err != nil {
-		return
+		return false, fmt.Errorf("retrieving deployment information: %w", err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
+	updated := false
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -931,6 +933,7 @@ func (d *Deployer) checkDeploymentProgressInNamespace(ctx context.Context, names
 			// New deployment detected
 			d.logger.Dimf("  → Deployment '%s' created (%s/%s replicas ready)", name, ready, replicas)
 			seenDeployments[name] = stateKey
+			updated = true
 		} else if prevState != stateKey {
 			// State changed
 			if available != "" && available != "0" && available == replicas {
@@ -939,20 +942,25 @@ func (d *Deployer) checkDeploymentProgressInNamespace(ctx context.Context, names
 				d.logger.Dimf("  ⋯ Deployment '%s' progressing (%s/%s replicas ready)", name, ready, replicas)
 			}
 			seenDeployments[name] = stateKey
+			updated = true
 		}
 	}
+
+	return updated, nil
 }
 
-// checkPodProgressInNamespace checks for pod state changes in a specific namespace and reports them
-func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace string, seenPods map[string]string) {
+// checkPodProgressInNamespace checks for pod state changes in a specific namespace and reports them.
+// Returns true, if relevant state changes have been observed, false otherwise.
+func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace string, seenPods map[string]string) (bool, error) {
 	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "pods", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{'|'}{.status.phase}{'|'}{.status.containerStatuses[0].ready}{'\\n'}{end}"},
 	})
 	if err != nil {
-		return
+		return false, fmt.Errorf("retrieving pod information: %w", err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
+	updated := false
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -980,6 +988,7 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 				d.logger.Dim(fmt.Sprintf("    • Pod '%s' running", name))
 			}
 			seenPods[name] = stateKey
+			updated = true
 		} else if prevState != stateKey {
 			if phase == "Running" && ready == "true" {
 				d.logger.Dim(fmt.Sprintf("    • Pod '%s' is ready", name))
@@ -987,8 +996,11 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 				d.logger.Dim(fmt.Sprintf("    • Pod '%s' running (not ready yet)", name))
 			}
 			seenPods[name] = stateKey
+			updated = true
 		}
 	}
+
+	return updated, nil
 }
 
 // TODO(#91): plenty of code in common with the central variant that should probably be
