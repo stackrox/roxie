@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/k8s"
@@ -444,6 +445,154 @@ func (d *Deployer) checkDeploymentProgress(ctx context.Context, seenDeployments 
 // checkPodProgress checks for pod state changes and reports them
 func (d *Deployer) checkPodProgress(ctx context.Context, seenPods map[string]string) {
 	d.checkPodProgressInNamespace(ctx, d.config.Central.Namespace, seenPods)
+}
+
+// waitForAvailableCondition waits for the specified namespace/resource
+func (d *Deployer) waitForAvailableCondition(ctx context.Context, resource, namespace string) error {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return errors.New("waitForAvailableCondition requires a deadline be set on the provided context")
+	}
+
+	// We need this extra step, because a "kubectl wait" fails immediately, when waiting for readiness of a deployment
+	// which does not exist (yet).
+	if err := d.waitForResourceToExist(ctx, resource, namespace); err != nil {
+		return fmt.Errorf("error waiting for resource %s in namespace %s to exist: %v", resource, namespace, err)
+	}
+
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		Args: []string{
+			"wait",
+			"--for=condition=Available",
+			resource,
+			"-n", namespace,
+			"--timeout=" + time.Until(deadline).String(),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("error waiting for resource %s in namespace %s to become Available: %v", resource, namespace, err)
+	}
+	d.logger.Successf("✓ Resource %s in namespace %s is ready", resource, namespace)
+	return nil
+}
+
+// waitForResourceToExist polls until the given resource exists in the namespace.
+func (d *Deployer) waitForResourceToExist(ctx context.Context, resource, namespace string) error {
+	d.logger.Infof("Waiting for resource %s to exist in namespace %s...", resource, namespace)
+	for {
+		_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+			Args: []string{"get", resource, "-n", namespace},
+		})
+		if err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
+type componentWaitConfig struct {
+	namespace      string
+	earlyReadiness bool
+	waitFor        string
+	timeout        time.Duration
+}
+
+// Only supports component.Central or component.SecuredCluster to be provided.
+func (d *Deployer) constructComponentWaitConfig(comp component.Component) componentWaitConfig {
+	// Without earlyReadiness we wait for the component's CR's Available condition to be True. This indicates all deployments are ready.
+	// With earlyReadiness we just wait for the core workload's Available condition of that component to be True.
+	switch comp {
+	case component.Central:
+		waitFor := "central/" + centralCrName
+		if d.config.Central.EarlyReadiness {
+			waitFor = "deployment/central"
+		}
+		return componentWaitConfig{
+			namespace:      d.config.Central.Namespace,
+			earlyReadiness: d.config.Central.EarlyReadiness,
+			waitFor:        waitFor,
+			timeout:        d.config.Central.DeployTimeout,
+		}
+	case component.SecuredCluster:
+		waitFor := "securedcluster/" + securedClusterCrName
+		if d.config.SecuredCluster.EarlyReadiness {
+			waitFor = "deployment/sensor"
+		}
+		return componentWaitConfig{
+			namespace:      d.config.SecuredCluster.Namespace,
+			earlyReadiness: d.config.SecuredCluster.EarlyReadiness,
+			waitFor:        waitFor,
+			timeout:        d.config.SecuredCluster.DeployTimeout,
+		}
+	default:
+		return componentWaitConfig{}
+	}
+}
+
+// waitForComponentReady waits for a component to be ready.
+func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Component) error {
+	if comp != component.Central && comp != component.SecuredCluster {
+		return errors.New("waitForComponentReady only supports Central or SecuredCluster components")
+	}
+	waitCfg := d.constructComponentWaitConfig(comp)
+	d.logger.Infof("⏳ Waiting for %s to become ready (timeout: %s)...", comp, waitCfg.timeout)
+
+	waitCtx, cancel := context.WithTimeout(ctx, waitCfg.timeout)
+	defer cancel()
+
+	// Spawn a goroutine, which waits until some success condition, sending the result (nil or error) through a dedicated channel.
+	waitChannel := make(chan error, 1)
+
+	go func() {
+		err := d.waitForAvailableCondition(waitCtx, waitCfg.waitFor, waitCfg.namespace)
+		if err != nil {
+			waitChannel <- fmt.Errorf("error waiting for %s deployment to become Available: %v", comp, err)
+			return
+		}
+		d.logger.Infof("Resource %s is now ready.", waitCfg.waitFor)
+		waitChannel <- nil
+	}()
+
+	// Show progress while waiting for the wait-goroutine above to terminate.
+	seenDeployments := make(map[string]string)
+	seenPods := make(map[string]string)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	// We will log a generic message when we haven't seen pod/deployment progress
+	// for longer than this duration.
+	progressUpdatePeriod := 1 * time.Minute
+	lastUpdate := time.Now()
+
+	for {
+		select {
+		case err := <-waitChannel:
+			return err
+		case <-waitCtx.Done():
+			return fmt.Errorf("timeout reached")
+		case <-ticker.C:
+			// Track seen deployments and their states to avoid duplicate messages.
+			deploymentsProgressed, err := d.checkDeploymentProgressInNamespace(ctx, waitCfg.namespace, seenDeployments)
+			if err != nil {
+				d.logger.Warningf("failed to check for deployment progress in namespace %s: %v", waitCfg.namespace, err)
+			}
+			podsProgressed, err := d.checkPodProgressInNamespace(ctx, waitCfg.namespace, seenPods)
+			if err != nil {
+				d.logger.Warningf("failed to check for pod progress in namespace %s: %v", waitCfg.namespace, err)
+			}
+			if deploymentsProgressed || podsProgressed {
+				lastUpdate = time.Now()
+			} else {
+				if time.Since(lastUpdate) > progressUpdatePeriod {
+					d.logger.Dimf("Still waiting for component %s in namespace %s", comp, waitCfg.namespace)
+					lastUpdate = time.Now()
+				}
+			}
+		}
+	}
 }
 
 // waitForLoadBalancer waits for a LoadBalancer service to get an external IP.
