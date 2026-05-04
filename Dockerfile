@@ -85,7 +85,7 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     tar -xz -C /tmp -f "/tmp/${filename}"
 
 # Stage 2: Runtime image based on Red Hat UBI Minimal
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:83006d535923fcf1345067873524a3980316f51794f01d8655be55d6e9387183
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:8d0a8fb39ec907e8ca62cdd24b62a63ca49a30fe465798a360741fde58437a23
 
 # Architecture detection for multi-arch builds
 ARG TARGETARCH
