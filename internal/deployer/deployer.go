@@ -31,8 +31,8 @@ var (
 	sensorNamespace  = "acs-sensor"
 	defaultExposure  = "loadbalancer"
 
-	DefaultCentralWaitTimeout        = 10 * time.Minute
-	DefaultSecuredClusterWaitTimeout = 10 * time.Minute
+	DefaultCentralWaitTimeout        = 20 * time.Minute
+	DefaultSecuredClusterWaitTimeout = 20 * time.Minute
 
 	pauseReconcileAnnotationKey = "stackrox.io/pause-reconcile"
 
