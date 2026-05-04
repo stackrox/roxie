@@ -28,7 +28,7 @@ func (ct ClusterType) String() string {
 	case ClusterTypeInfraOpenShift4:
 		return "OpenShift4"
 	case ClusterTypeKind:
-		return "Kind"
+		return "kind"
 	case ClusterTypeMinikube:
 		return "minikube"
 	case ClusterTypeK3s:
@@ -36,7 +36,7 @@ func (ct ClusterType) String() string {
 	case ClusterTypeCRC:
 		return "crc"
 	default:
-		return "Unknown"
+		return "unknown"
 	}
 }
 
@@ -47,6 +47,5 @@ func AllClusterTypes() []ClusterType {
 		ClusterTypeMinikube,
 		ClusterTypeK3s,
 		ClusterTypeCRC,
-		ClusterTypeInfraOpenShift4,
 	}
 }
