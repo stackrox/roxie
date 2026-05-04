@@ -137,7 +137,7 @@ func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 		return fmt.Errorf("failed to apply Central CR: %w", err)
 	}
 
-	if err := d.waitForCentralReady(ctx); err != nil {
+	if err := d.waitForComponentReady(ctx, component.Central); err != nil {
 		return fmt.Errorf("failed waiting for Central: %w", err)
 	}
 
@@ -687,7 +687,7 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 		return fmt.Errorf("failed to apply SecuredCluster CR: %w", err)
 	}
 
-	if err := d.waitForSecuredClusterReady(ctx); err != nil {
+	if err := d.waitForComponentReady(ctx, component.SecuredCluster); err != nil {
 		return fmt.Errorf("failed waiting for SecuredCluster: %w", err)
 	}
 
