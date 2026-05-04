@@ -64,7 +64,7 @@ func RetrieveResourceFromCluster(ctx context.Context, log *logger.Logger, namesp
 
 // IsResourceNotFound checks if an error is a resource not found error.
 func IsResourceNotFound(err error) bool {
-	return err == ErrResourceNotFound
+	return errors.Is(err, ErrResourceNotFound)
 }
 
 // ResourceNotOwnedByName checks if the given unstructured object does not have an owner reference with the specified owner name.
@@ -79,4 +79,34 @@ func ResourceNotOwnedByName(obj *unstructured.Unstructured, ownerName string) bo
 		}
 	}
 	return true
+}
+
+// RetrieveClusterResourceLabel retrieves the specified label from a Kubernetes resource from the cluster.
+//
+// Parameters: Same as for RetrieveResourceFromCluster, plus
+//   - label: The label to retrieve.
+//
+// Returns:
+//   - string: the label value -- if the label is not found, an empty string is returned without error.
+//   - error: nil if successful, error otherwise (including ErrResourceNotFound for not found resources)
+func RetrieveClusterResourceLabel(ctx context.Context, log *logger.Logger, namespace, resourceType, resourceName, label string) (string, error) {
+	u, err := RetrieveResourceFromCluster(ctx, log, namespace, resourceType, resourceName)
+	if err != nil {
+		return "", fmt.Errorf("retrieving resource %s/%s from namespace %s: %w", resourceType, resourceName, namespace, err)
+	}
+
+	val, found, err := unstructured.NestedFieldCopy(u.Object, "metadata", "labels", label)
+	if err != nil {
+		return "", fmt.Errorf("extracting label value: %w", err)
+	}
+	if !found {
+		return "", nil
+	}
+
+	valStr, ok := val.(string)
+	if !ok {
+		return "", fmt.Errorf("unexpected type for label %q (%T)", label, val)
+	}
+
+	return valStr, nil
 }
