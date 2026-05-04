@@ -6,6 +6,13 @@ on:
       cluster-name:
         required: true
         type: string
+      flavor:
+        required: true
+        type: string
+      args:
+        required: false
+        type: string
+        default: ''
     outputs:
       cluster-name:
         description: "Name of the created cluster"
@@ -19,9 +26,9 @@ jobs:
     steps:
       - uses: stackrox/actions/infra/create-cluster@v1
         with:
-          flavor: gke-default
+          flavor: ${{ inputs.flavor }}
           name: ${{ inputs.cluster-name }}
-          args: machine-type=e2-standard-4,nodes=3,gcp-image-type=ubuntu_containerd
+          args: ${{ inputs.args }}
           lifespan: "2h"
           wait: true
           token: ${{ secrets.INFRA_CI_TOKEN }}

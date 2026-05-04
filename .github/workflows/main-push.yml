@@ -15,7 +15,9 @@ jobs:
   create-dev-cluster:
     uses: ./.github/workflows/create-dev-cluster.yml
     with:
-      cluster-name: infra-roxie-main-${{ github.run_number }}
+      cluster-name: infra-roxie-main-${{ github.run_number }}-gke
+      flavor: gke-default
+      args: machine-type=e2-standard-4,nodes=3,gcp-image-type=ubuntu_containerd
     secrets: inherit
 
   build-roxie-image:
