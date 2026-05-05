@@ -292,7 +292,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		// This is why we use the operator version here when checking version constraints.
 		hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(deploySettings.Operator.Version)
 		if err != nil {
-			return fmt.Errorf("checking version constraint on main image tag %s", deploySettings.Roxie.Version)
+			return fmt.Errorf("checking version constraint on main image tag %s: %w", deploySettings.Roxie.Version, err)
 		}
 		if !hasSupport {
 			return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
