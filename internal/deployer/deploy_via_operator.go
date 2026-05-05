@@ -524,11 +524,11 @@ func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Com
 			return fmt.Errorf("timeout reached")
 		case <-ticker.C:
 			// Track seen deployments and their states to avoid duplicate messages.
-			deploymentsProgressed, err := d.checkDeploymentProgressInNamespace(ctx, waitCfg.namespace, seenDeployments)
+			deploymentsProgressed, err := d.checkDeploymentProgressInNamespace(waitCtx, waitCfg.namespace, seenDeployments)
 			if err != nil {
 				d.logger.Warningf("failed to check for deployment progress in namespace %s: %v", waitCfg.namespace, err)
 			}
-			podsProgressed, err := d.checkPodProgressInNamespace(ctx, waitCfg.namespace, seenPods)
+			podsProgressed, err := d.checkPodProgressInNamespace(waitCtx, waitCfg.namespace, seenPods)
 			if err != nil {
 				d.logger.Warningf("failed to check for pod progress in namespace %s: %v", waitCfg.namespace, err)
 			}
