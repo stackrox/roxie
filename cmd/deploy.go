@@ -186,7 +186,7 @@ Examples:
 				if err := yaml.Unmarshal([]byte(val), &exposure); err != nil {
 					return err
 				}
-				settings.Central.Exposure = exposure
+				settings.Central.Exposure = ptr.To(exposure)
 				return nil
 			},
 		), "exposure", "Central exposure backend (loadbalancer, none)")
@@ -432,11 +432,11 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return errors.New("cannot use --envrc with central port-forwarding enabled. The --envrc flag is for non-interactive mode with remote cluster access")
 	}
 
-	if envrc != "" && deploySettings.Central.Exposure == types.ExposureNone {
-		return errors.New("cannot use --envrc with --exposure=none. The --envrc flag requires a remotely accessible endpoint (e.g., --exposure=loadbalancer)")
+	if envrc != "" && !deploySettings.Central.ExposureEnabled() {
+		return errors.New("cannot use --envrc without central exposure. The --envrc flag requires a remotely accessible endpoint (e.g., --exposure=loadbalancer)")
 	}
 
-	if !deploySettings.Central.PortForwardingSet() && deploySettings.Central.Exposure == types.ExposureNone {
+	if !deploySettings.Central.PortForwardingSet() && !deploySettings.Central.ExposureEnabled() {
 		log.Info("Enabling port-forwarding due to no exposure")
 		deploySettings.Central.PortForwarding = ptr.To(true)
 	}
@@ -446,7 +446,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		if deploySettings.Central.PortForwardingEnabled() {
 			return errors.New("containerized mode does not support port-forwarding")
 		}
-		if deploySettings.Central.Exposure == types.ExposureNone {
+		if !deploySettings.Central.ExposureEnabled() {
 			return errors.New("containerized mode requires Central exposure")
 		}
 

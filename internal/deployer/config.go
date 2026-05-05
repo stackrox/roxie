@@ -158,7 +158,7 @@ type CentralConfig struct {
 	Namespace           string                 `yaml:"namespace"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile"`
 	PauseReconciliation bool                   `yaml:"pauseReconciliation"`
-	Exposure            types.Exposure         `yaml:"exposure"`
+	Exposure            *types.Exposure        `yaml:"exposure"`
 	DeployTimeout       time.Duration          `yaml:"deployTimeout"`
 	PortForwarding      *bool                  `yaml:"portForwarding"`
 	EarlyReadiness      bool                   `yaml:"earlyReadiness"`
@@ -171,6 +171,21 @@ func (c *CentralConfig) PortForwardingSet() bool {
 
 func (c *CentralConfig) PortForwardingEnabled() bool {
 	return c.PortForwarding != nil && *c.PortForwarding
+}
+
+func (c *CentralConfig) ExposureSet() bool {
+	return c.Exposure != nil
+}
+
+func (c *CentralConfig) ExposureEnabled() bool {
+	return c.Exposure != nil && *c.Exposure != types.ExposureNone
+}
+
+func (c *CentralConfig) GetExposure() types.Exposure {
+	if c.Exposure == nil {
+		return types.ExposureNone
+	}
+	return *c.Exposure
 }
 
 type SecuredClusterConfig struct {
@@ -200,7 +215,6 @@ func DefaultCentralConfig() CentralConfig {
 	return CentralConfig{
 		DeployTimeout: DefaultCentralWaitTimeout,
 		Namespace:     "acs-central",
-		Exposure:      types.ExposureLoadBalancer,
 		Spec: map[string]interface{}{
 			"central": map[string]interface{}{
 				"telemetry": map[string]interface{}{

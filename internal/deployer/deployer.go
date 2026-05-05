@@ -828,7 +828,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 	component := "Central"
 	mainImageTag := d.config.Roxie.Version
 	olm := d.config.Operator.DeployViaOlm
-	exposure := d.config.Central.Exposure
+	exposure := d.config.Central.GetExposure()
 	portForwarding := d.config.Central.PortForwardingEnabled()
 	log := d.logger
 	kubeContext := d.kubeContext
@@ -1073,7 +1073,7 @@ func (d *Deployer) GetCentralDeploymentInfo() CentralDeploymentInfo {
 		Endpoint:    d.centralEndpoint,
 		Password:    d.centralPassword,
 		KubeContext: d.kubeContext,
-		Exposure:    d.config.Central.Exposure,
+		Exposure:    d.config.Central.GetExposure(),
 		CACertFile:  d.roxCACertFile,
 	}
 }

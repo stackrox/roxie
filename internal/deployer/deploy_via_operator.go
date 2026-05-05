@@ -528,7 +528,7 @@ func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
 
 // configureCentralEndpoint configures the central endpoint in the Deployer based on exposure settings.
 func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
-	exposure := d.config.Central.Exposure
+	exposure := d.config.Central.GetExposure()
 	if d.config.Central.PortForwardingEnabled() {
 		// Start port-forward for CLI tool access via localhost:8443
 		serviceName := "central"
