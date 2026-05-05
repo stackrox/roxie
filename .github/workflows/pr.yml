@@ -43,7 +43,7 @@ jobs:
     with:
       cluster-name: infra-roxie-pr-${{ github.event.pull_request.number }}-openshift
       flavor: ocp-4
-      args: master-node-type=e2-standard-4,worker-node-type=e2-standard-4,master-node-count=3,worker-node-count=3
+      args: master-node-type=e2-standard-4,worker-node-type=e2-standard-8,master-node-count=3,worker-node-count=3
     secrets: inherit
 
   build-roxie-image:
