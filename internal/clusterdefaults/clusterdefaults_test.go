@@ -61,6 +61,20 @@ func TestClusterDefaults(t *testing.T) {
 			wantExposure:        ptr.To(types.ExposureNone),
 			wantPortForwarding:  ptr.To(true),
 		},
+		{
+			name:                "gke cluster",
+			clusterType:         types.ClusterTypeInfraGKE,
+			wantResourceProfile: types.ResourceProfileMedium,
+			wantExposure:        ptr.To(types.ExposureLoadBalancer),
+			wantPortForwarding:  ptr.To(false),
+		},
+		{
+			name:                "openshift cluster",
+			clusterType:         types.ClusterTypeInfraGKE,
+			wantResourceProfile: types.ResourceProfileMedium,
+			wantExposure:        ptr.To(types.ExposureLoadBalancer),
+			wantPortForwarding:  ptr.To(false),
+		},
 	}
 
 	for _, tt := range tests {
