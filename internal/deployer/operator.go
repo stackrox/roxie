@@ -111,6 +111,7 @@ func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 
 		content, err := os.ReadFile(path)
 		if err != nil {
+			d.logger.Warningf("Failed to read file %q from extracted bundle: %v", path, err)
 			return nil
 		}
 
@@ -118,6 +119,7 @@ func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 			Kind string `yaml:"kind"`
 		}
 		if err := yaml.Unmarshal(content, &meta); err != nil {
+			d.logger.Warningf("Failed to unmarshal file %q from extracted bundle: %v", path, err)
 			return nil
 		}
 
