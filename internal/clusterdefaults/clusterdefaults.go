@@ -73,6 +73,22 @@ func getDefaultsForClusterType(clusterType types.ClusterType) map[string]interfa
 			},
 		}
 
+	case types.ClusterTypeInfraGKE:
+		return map[string]interface{}{
+			"central": map[string]interface{}{
+				"exposure":       types.ExposureLoadBalancer.String(),
+				"portForwarding": false,
+			},
+		}
+
+	case types.ClusterTypeInfraOpenShift4:
+		return map[string]interface{}{
+			"central": map[string]interface{}{
+				"exposure":       types.ExposureLoadBalancer.String(),
+				"portForwarding": false,
+			},
+		}
+
 	default:
 		return nil
 	}
