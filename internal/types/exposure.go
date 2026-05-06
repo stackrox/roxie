@@ -54,8 +54,11 @@ func (e *Exposure) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 // ToUnstructuredConfig returns the exposure configuration.
-func (e Exposure) ToUnstructuredConfig() map[string]interface{} {
-	switch e {
+func (e *Exposure) ToUnstructuredConfig() map[string]interface{} {
+	if e == nil {
+		return nil
+	}
+	switch *e {
 	case ExposureLoadBalancer:
 		return map[string]interface{}{
 			"loadBalancer": map[string]interface{}{
