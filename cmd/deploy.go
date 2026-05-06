@@ -368,24 +368,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		log.Dim("Running without a controlling terminal.")
 	}
 
-	clusterType := env.GetCurrentClusterType()
-	log.Dimf("Detected cluster type: %v", clusterType)
-	err := clusterdefaults.ApplyClusterDefaults(log, clusterType, &deploySettings)
-	if err != nil {
-		return fmt.Errorf("applying defaults for cluster type %v: %w", clusterType, err)
-	}
-
-	// Deal with the "auto" resourceProfile.
-	if deploySettings.Central.ResourceProfile == types.ResourceProfileAuto {
-		profile := clusterdefaults.ResolveAutoResourceProfile(clusterType)
-		log.Dimf("Selecting resource profile %v for Central", profile)
-		deploySettings.Central.ResourceProfile = profile
-	}
-	if deploySettings.SecuredCluster.ResourceProfile == types.ResourceProfileAuto {
-		profile := clusterdefaults.ResolveAutoResourceProfile(clusterType)
-		deploySettings.SecuredCluster.ResourceProfile = profile
-	}
-
 	components, err := component.FromArgs(args)
 	if err != nil {
 		return err
@@ -401,15 +383,86 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		deploySettings.Roxie.Version = mainImageTag
 	}
 
-	if !deploySettings.Operator.SkipDeployment {
-		if err := deploySettings.Operator.Configure(&deploySettings.Roxie); err != nil {
-			return fmt.Errorf("configuring operator configuration: %w", err)
+	if err := configureConfig(log, components, &deploySettings); err != nil {
+		return err
+	}
+
+	if err := deployValidate(components, &deploySettings); err != nil {
+		return err
+	}
+
+	d, err := deployer.New(log)
+	if err != nil {
+		return fmt.Errorf("failed to create deployer: %w", err)
+	}
+	defer d.Cleanup()
+
+	if envrc != "" {
+		d.SetEnvrcFile(envrc)
+	}
+	d.SetVerbose(verbose)
+	d.SetConfig(deploySettings)
+
+	if dryRun {
+		log.Info("Exiting because of enabled dry run mode.")
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	if components.IncludesCentral() {
+		d.PrintCentralDeploymentSummary()
+	}
+	if components.IncludesSensor() {
+		d.PrintSecuredClusterDeploymentSummary()
+	}
+
+	if err := d.Deploy(ctx, components); err != nil {
+		return fmt.Errorf("deployment failed: %w", err)
+	}
+
+	log.Success("🎉 Deployment complete!")
+
+	// If Central was deployed, wait for it to be ready before entering subshell
+	if components.IncludesCentral() {
+		d.WaitForCentral(5 * time.Minute)
+	}
+
+	if components.IncludesCentral() && envrc == "" {
+		if err := spawnSubshell(d, log); err != nil {
+			return fmt.Errorf("failed to spawn subshell: %w", err)
 		}
 	}
 
+	return nil
+}
+
+func configureConfig(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
+	clusterType := env.GetCurrentClusterType()
+	log.Dimf("Detected cluster type: %v", clusterType)
+	defaults, err := clusterdefaults.ApplyClusterDefaults(clusterType, deploySettings)
+	if err != nil {
+		return fmt.Errorf("applying defaults for cluster type %v: %w", clusterType, err)
+	}
 	if verbose {
-		log.Dim("Deployment configuration:")
-		helpers.LogMultilineYaml(log, deploySettings)
+		log.Dimf("Applying the following defaults based on detected cluster type %v:", clusterType)
+		helpers.LogMultilineYaml(log, defaults)
+	}
+
+	// Deal with the "auto" resourceProfile.
+	if deploySettings.Central.ResourceProfile == types.ResourceProfileAuto {
+		profile := clusterdefaults.ResolveAutoResourceProfile(clusterType)
+		log.Dimf("Selecting resource profile %v for Central", profile)
+		deploySettings.Central.ResourceProfile = profile
+	}
+	if deploySettings.SecuredCluster.ResourceProfile == types.ResourceProfileAuto {
+		profile := clusterdefaults.ResolveAutoResourceProfile(clusterType)
+		deploySettings.SecuredCluster.ResourceProfile = profile
+	}
+
+	if err := deploySettings.Operator.Configure(&deploySettings.Roxie); err != nil {
+		return fmt.Errorf("configuring operator configuration: %w", err)
 	}
 
 	if components.IncludesCentral() {
@@ -422,7 +475,20 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("configuring SecuredCluster spec: %w", err)
 		}
 	}
+	if verbose {
+		log.Dim("Deployment configuration:")
+		helpers.LogMultilineYaml(log, deploySettings)
+	}
 
+	if !deploySettings.Central.PortForwardingSet() && !deploySettings.Central.ExposureEnabled() {
+		log.Info("Enabling port-forwarding due to no exposure")
+		deploySettings.Central.PortForwarding = ptr.To(true)
+	}
+
+	return nil
+}
+
+func deployValidate(components component.Component, deploySettings *deployer.Config) error {
 	if components.IncludesCentral() && os.Getenv("ROXIE_SHELL") != "" {
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
 	}
@@ -437,11 +503,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if envrc != "" && !deploySettings.Central.ExposureEnabled() {
 		return errors.New("cannot use --envrc without central exposure. The --envrc flag requires a remotely accessible endpoint (e.g., --exposure=loadbalancer)")
-	}
-
-	if !deploySettings.Central.PortForwardingSet() && !deploySettings.Central.ExposureEnabled() {
-		log.Info("Enabling port-forwarding due to no exposure")
-		deploySettings.Central.PortForwarding = ptr.To(true)
 	}
 
 	if env.RunningInRoxieContainer {
@@ -464,6 +525,10 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if deploySettings.Operator.SkipDeployment && deploySettings.Operator.DeployViaOlm {
+		return errors.New("skipping operator deployment while also requesting deploying via OLM at the same time does not make sense")
+	}
+
 	if deploySettings.Roxie.KonfluxImages {
 		if deploySettings.Operator.DeployViaOlm {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
@@ -471,55 +536,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		clusterType := env.GetCurrentClusterType()
 		if clusterType != types.ClusterTypeInfraOpenShift4 {
 			return fmt.Errorf("--konflux flag is only supported on OpenShift 4 clusters (current cluster type: %s)", clusterType.String())
-		}
-	}
-
-	if deploySettings.Operator.SkipDeployment && deploySettings.Operator.DeployViaOlm {
-		return errors.New("skipping operator deployment while also requesting deploying via OLM at the same time does not make sense")
-	}
-
-	d, err := deployer.New(log)
-	if err != nil {
-		return fmt.Errorf("failed to create deployer: %w", err)
-	}
-	defer d.Cleanup()
-
-	if envrc != "" {
-		d.SetEnvrcFile(envrc)
-	}
-
-	d.SetVerbose(verbose)
-
-	if dryRun {
-		log.Info("Exiting because of enabled dry run mode.")
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
-
-	d.SetConfig(deploySettings)
-	if components.IncludesCentral() {
-		d.PrintCentralDeploymentSummary()
-	}
-	if components.IncludesSensor() {
-		d.PrintSecuredClusterDeploymentSummary()
-	}
-
-	if err := d.Deploy(ctx, components); err != nil {
-		return fmt.Errorf("deployment failed: %w", err)
-	}
-
-	log.Success("🎉 Deployment complete!")
-
-	// If Central was deployed, wait for it to be ready before entering subshell
-	if components.IncludesCentral() {
-		d.WaitForCentral(5 * time.Minute)
-	}
-
-	if components.IncludesCentral() && envrc == "" {
-		if err := spawnSubshell(d, log); err != nil {
-			return fmt.Errorf("failed to spawn subshell: %w", err)
 		}
 	}
 

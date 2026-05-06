@@ -3,38 +3,44 @@ package clusterdefaults
 import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/helpers"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// ApplyClusterDefaults detects the cluster type and applies appropriate defaults.
+// ApplyClusterDefaults detects the cluster type and applies appropriate defaults to the
+// provided deployer.Config.
+// Returns *just* the assembled defaults for the given cluster type for logging purposes.
 func ApplyClusterDefaults(
-	log *logger.Logger,
 	clusterType types.ClusterType,
 	config *deployer.Config,
-) error {
+) (map[string]interface{}, error) {
 	if config == nil {
 		panic("applying cluster defaults to nil config")
 	}
-	configWithDefaults := getDefaultsForClusterType(clusterType)
-	if configWithDefaults == nil {
-		return nil
-	}
-	log.Dimf("Applying the following defaults based on detected cluster type %v:", clusterType)
-	helpers.LogMultilineYaml(log, configWithDefaults)
-	configMap, err := helpers.StructToMap(config)
-	if err != nil {
-		return err
-	}
-	err = helpers.DeepMerge(configWithDefaults, configMap)
-	if err != nil {
-		return err
+	defaults := getDefaultsForClusterType(clusterType)
+	if defaults == nil {
+		return nil, nil
 	}
 
-	if err := helpers.MapToStruct(configWithDefaults, config); err != nil {
-		return err
+	// Make a copy.
+	defaultsCopy := runtime.DeepCopyJSON(defaults)
+
+	configMap, err := helpers.StructToMap(config)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	mergeResult := make(map[string]interface{})
+	if err = helpers.DeepMerge(mergeResult, defaults); err != nil {
+		return nil, err
+	}
+	if err := helpers.DeepMerge(mergeResult, configMap); err != nil {
+		return nil, err
+	}
+
+	if err := helpers.MapToStruct(mergeResult, config); err != nil {
+		return nil, err
+	}
+	return defaultsCopy, nil
 }
 
 // getDefaultsForClusterType returns the recommended defaults for a given cluster type.

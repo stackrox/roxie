@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stackrox/roxie/internal/deployer"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,7 +79,7 @@ func TestClusterDefaults(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := deployer.NewConfig()
-			err := ApplyClusterDefaults(logger.New(), tt.clusterType, &config)
+			_, err := ApplyClusterDefaults(tt.clusterType, &config)
 			require.NoError(t, err)
 
 			gotResourceProfile := ResolveAutoResourceProfile(tt.clusterType)
