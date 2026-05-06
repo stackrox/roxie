@@ -65,6 +65,8 @@ func verifyOperatorDeploymentExists(t *testing.T) {
 
 // TestOLMToNonOLMSwitch tests switching from OLM operator to non-OLM operator
 func TestOLMToNonOLMSwitch(t *testing.T) {
+	dumpClusterOnFailure(t)
+
 	if os.Getenv("SKIP_OLM_TESTS") != "" {
 		t.Skip("SKIP_OLM_TESTS is set")
 	}
@@ -113,6 +115,8 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 
 // TestNonOLMToOLMSwitch tests switching from non-OLM operator to OLM operator
 func TestNonOLMToOLMSwitch(t *testing.T) {
+	dumpClusterOnFailure(t)
+
 	if os.Getenv("SKIP_OLM_TESTS") != "" {
 		t.Skip("SKIP_OLM_TESTS is set")
 	}
@@ -161,6 +165,8 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 
 // TestOLMOperatorVersionUpgrade tests that OLM operator version mismatches trigger teardown and redeploy
 func TestOLMOperatorVersionUpgrade(t *testing.T) {
+	dumpClusterOnFailure(t)
+
 	if os.Getenv("SKIP_OLM_TESTS") != "" {
 		t.Skip("SKIP_OLM_TESTS is set")
 	}
@@ -223,6 +229,8 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 
 // TestSecuredClusterWithOLMSwitch tests that secured-cluster deployment also respects OLM mode switches
 func TestSecuredClusterWithOLMSwitch(t *testing.T) {
+	dumpClusterOnFailure(t)
+
 	if os.Getenv("SKIP_OLM_TESTS") != "" {
 		t.Skip("SKIP_OLM_TESTS is set")
 	}
