@@ -36,7 +36,7 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 		},
 	}
 	if c.ResourceProfile == types.ResourceProfileAuto {
-		return nil, fmt.Errorf("resource profile 'auto' must have been resolved before building the CR")
+		return nil, fmt.Errorf("resource profile 'auto' should have been resolved before building the CR")
 	}
 	if c.ResourceProfile != types.ResourceProfileAcsDefaults {
 		if err := helpers.DeepMerge(cr, getCentralResourcesOperator(c.ResourceProfile)); err != nil {
