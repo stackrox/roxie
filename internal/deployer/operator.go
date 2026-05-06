@@ -92,7 +92,8 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 	return bundleDir, nil
 }
 
-// identifyCRDFileNames identifies CRD files in the bundle directory
+// identifyCRDFileNames identifies CRD files in the bundle directory.
+// Returns list of CRD files found in the bundle.
 func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 	var crdFiles []string
 
@@ -109,24 +110,22 @@ func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 			return nil
 		}
 
-		// TODO(ROX-34499): The following detection logic does not seem particularly robust. We should
-		// probably parse the YAML and check api group and kind fields.
-		name := strings.ToLower(info.Name())
-		if strings.Contains(name, "customresourcedefinition") ||
-			strings.Contains(name, "platform.stackrox.io") ||
-			strings.Contains(name, "config.stackrox.io") {
-			if strings.Contains(name, "clusterserviceversion") {
-				return nil
-			}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			d.logger.Warningf("Failed to read file %q from extracted bundle: %v", path, err)
+			return nil
+		}
 
-			content, err := os.ReadFile(path)
-			if err != nil {
-				return nil
-			}
+		var meta struct {
+			Kind string `yaml:"kind"`
+		}
+		if err := yaml.Unmarshal(content, &meta); err != nil {
+			d.logger.Warningf("Failed to unmarshal file %q from extracted bundle: %v", path, err)
+			return nil
+		}
 
-			if strings.Contains(string(content), "kind: CustomResourceDefinition") {
-				crdFiles = append(crdFiles, path)
-			}
+		if meta.Kind == "CustomResourceDefinition" {
+			crdFiles = append(crdFiles, path)
 		}
 
 		return nil
