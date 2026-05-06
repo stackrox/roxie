@@ -70,7 +70,7 @@ func TestClusterDefaults(t *testing.T) {
 		},
 		{
 			name:                "openshift cluster",
-			clusterType:         types.ClusterTypeInfraGKE,
+			clusterType:         types.ClusterTypeInfraOpenShift4,
 			wantResourceProfile: types.ResourceProfileMedium,
 			wantExposure:        ptr.To(types.ExposureLoadBalancer),
 			wantPortForwarding:  ptr.To(false),
