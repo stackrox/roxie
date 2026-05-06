@@ -28,7 +28,10 @@ var (
 	sharedNamespace = "stackrox"
 )
 
-// For extended short-cut parameters.
+// configShortCut implements pflag.Value so that CLI flags can directly mutate
+// the deployment configuration. Each flag carries its own apply function, which
+// may modify one or more fields in deployer.Config, or merge in an arbitrary
+// YAML overlay.
 type configShortCut struct {
 	settings *deployer.Config
 	flagType string
