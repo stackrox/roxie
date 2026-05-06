@@ -107,12 +107,12 @@ func (c *CentralConfig) ConfigureSpec(roxieConfig *RoxieConfig) error {
 	return nil
 }
 
-func (c *SecuredClusterConfig) ConfigureSpec(roxieConfig *RoxieConfig, centralConfig *CentralConfig) error {
-	if err := helpers.DeepMerge(c.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags)); err != nil {
+func (s *SecuredClusterConfig) ConfigureSpec(roxieConfig *RoxieConfig, centralConfig *CentralConfig) error {
+	if err := helpers.DeepMerge(s.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags)); err != nil {
 		return err
 	}
 
-	if err := helpers.DeepMerge(c.Spec, map[string]interface{}{
+	if err := helpers.DeepMerge(s.Spec, map[string]interface{}{
 		"centralEndpoint": internalCentralEndpoint(centralConfig.Namespace),
 	}); err != nil {
 		return err
