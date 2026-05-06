@@ -39,6 +39,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
+	dumpClusterOnFailure(t)
+
 	// Create temporary envrc file.
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
