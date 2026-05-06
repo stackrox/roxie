@@ -201,7 +201,7 @@ func (d *Deployer) getOperatorBundleImage() string {
 
 // ensureKonfluxImageRewriting configures image rewriting for Konflux images
 func (d *Deployer) ensureKonfluxImageRewriting(ctx context.Context) error {
-	if env.GetCurrentClusterType() != env.InfraOpenShift4 {
+	if !env.GetCurrentClusterType().IsOpenShift() {
 		return errors.New("image rewriting for Konflux is only supported on OpenShift4 clusters")
 	}
 
@@ -289,7 +289,7 @@ func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
 
 // removeKonfluxImageRewriting removes the ImageContentSourcePolicy for Konflux images if it exists
 func (d *Deployer) removeKonfluxImageRewriting(ctx context.Context) error {
-	if env.GetCurrentClusterType() != env.InfraOpenShift4 {
+	if !env.GetCurrentClusterType().IsOpenShift() {
 		return nil
 	}
 
