@@ -100,6 +100,10 @@ var (
 	}
 )
 
+const (
+	injectedCABundleConfigMap = "injected-cabundle-stackrox-central-services"
+)
+
 // Deployer is the base deployer for ACS
 type Deployer struct {
 	logger                    *logger.Logger
@@ -222,6 +226,9 @@ func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error 
 		{Name: "central-db-backup", Kind: "pvc", OwnerName: centralCrName},
 		{Name: "admin-password", Kind: "secret"},
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: centralCrName},
+		// In case the Cluster Network Operator has succeeded in re-creating the injectedCABundleConfigMap
+		// after our operator has already deleted it.
+		{Name: injectedCABundleConfigMap, Kind: "configmap"},
 	} {
 		d.logger.Dimf("Attempting to delete %s/%s", resource.Kind, resource.Name)
 		if resource.OwnerName != "" {
@@ -261,11 +268,7 @@ func (d *Deployer) preventOtherControllersFromReconciling(ctx context.Context) e
 }
 
 func (d *Deployer) preventCABundleInjection(ctx context.Context) error {
-	configMapName := "injected-cabundle-stackrox-central-services"
-
-	if !d.doesResourceExist(ctx, "configmap", configMapName, d.centralNamespace) {
-		return nil
-	}
+	configMapName := injectedCABundleConfigMap
 
 	d.logger.Info("Removing CNO label from injected-cabundle ConfigMap to prevent CNO from injecting the CA bundle during cleanup")
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
