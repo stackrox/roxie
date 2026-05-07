@@ -147,6 +147,11 @@ func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterTy
 		return types.ClusterTypeInfraGKE
 	}
 
+	// Minikube clusters typically have context name "minikube".
+	if contextLower == "minikube" || strings.HasPrefix(contextLower, "minikube-") {
+		return types.ClusterTypeMinikube
+	}
+
 	// Check for OpenShift 4 clusters.
 	if isOpenShift4(apiResources) {
 		if isInfraOpenShift4(config) {
