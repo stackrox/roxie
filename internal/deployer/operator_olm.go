@@ -101,12 +101,17 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 		available[name] = true
 	}
 
+	var missingResources []string
 	for _, resource := range requiredResources {
 		if !available[resource] {
-			d.logger.Errorf("OLM is not properly installed: resource %s not served by the API server.", resource)
-			d.logger.Errorf("Please make sure that OLM is installed properly.")
-			return fmt.Errorf("OLM resource %s not served by the API server", resource)
+			missingResources = append(missingResources, resource)
 		}
+	}
+	if len(missingResources) > 0 {
+		for _, resource := range missingResources {
+			d.logger.Errorf("OLM resource not served by the API server: %s", resource)
+		}
+		return fmt.Errorf("OLM is not properly installed, %d required resource(s) missing", len(missingResources))
 	}
 
 	d.logger.Success("✓ OLM detected in cluster")
