@@ -86,3 +86,10 @@ jobs:
     with:
       cluster-name: ${{ needs.create-openshift-cluster.outputs.cluster-name }}
     secrets: inherit
+
+  e2e-tests-kind:
+    needs: [ build-roxie-image ]
+    uses: ./.github/workflows/e2e-tests-kind.yml
+    with:
+      image: ${{ needs.build-roxie-image.outputs.image }}
+    secrets: inherit
