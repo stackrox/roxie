@@ -452,8 +452,8 @@ type componentWaitConfig struct {
 
 // Only supports component.Central or component.SecuredCluster to be provided.
 func (d *Deployer) constructComponentWaitConfig(comp component.Component) componentWaitConfig {
-	// Without earlyReadiness we wait for the component's CR's Available condition to be True. This indicates all deployments are ready.
-	// With earlyReadiness we just wait for the core workload's Available condition of that component to be True.
+	// Without earlyReadiness we wait for the Available condition of component's CR to be True. This indicates all deployments are ready.
+	// With earlyReadiness we just wait for the Available condition of that component's core Deployment to be True.
 	switch comp {
 	case component.Central:
 		waitFor := "central/" + centralCrName
