@@ -19,7 +19,7 @@ func TestDetectClusterType_Integration(t *testing.T) {
 	t.Logf("Detected cluster type: %s", clusterType)
 
 	// The cluster type should never be invalid (even if Unknown)
-	validTypes := []ClusterType{ClusterTypeUnknown, InfraGKE, InfraOpenShift4, LocalKind}
+	validTypes := []ClusterType{ClusterTypeUnknown, InfraGKE, InfraOpenShift4, OpenShift4, LocalKind}
 	found := false
 	for _, valid := range validTypes {
 		if clusterType == valid {
