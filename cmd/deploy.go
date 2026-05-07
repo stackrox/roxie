@@ -371,7 +371,7 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 	}
 
 	// We need to do this regardless of whether the operator is deployed or not, because
-	// this includes the transformation of StackRox main image tags to semver compatibles versions,
+	// this includes the transformation of StackRox main image tags to semver compatible versions,
 	// which we will make use of later for checking version constraints.
 	if err := deploySettings.Operator.Configure(&deploySettings.Roxie); err != nil {
 		return fmt.Errorf("configuring operator configuration: %w", err)
