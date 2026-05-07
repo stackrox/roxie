@@ -128,6 +128,7 @@ type Deployer struct {
 	securedClusterOverrides   map[string]interface{}
 	featureFlagOverrides      map[string]interface{}
 	envrcFile                 string
+	portForwardPID            int
 	useOLM                    bool
 	useKonflux                bool
 	shouldDeployOperator      bool
@@ -680,7 +681,6 @@ func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string
 		return err
 	}
 
-	// envrc may be used from different processes, so use actual endpoint not port-forward
 	if d.envrcFile != "" {
 		d.logger.Dimf("Writing environment variables to %s", d.envrcFile)
 		if err := d.writeEnvrcFile(ctx, exposure, portForwardWanted); err != nil {
@@ -1103,6 +1103,9 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context, exposure string, portForw
 	fmt.Fprintf(&content, "export ROX_USERNAME=%q\n", AdminUsername)
 	fmt.Fprintf(&content, "export ROX_ADMIN_PASSWORD=%q\n", d.centralPassword)
 	fmt.Fprintf(&content, "export ROX_CA_CERT_FILE=%q\n", d.roxCACertFile)
+	if d.portForwardPID != 0 {
+		fmt.Fprintf(&content, "export ROXIE_PORT_FORWARD_PID=%d\n", d.portForwardPID)
+	}
 
 	if err := os.WriteFile(d.envrcFile, []byte(content.String()), 0600); err != nil {
 		return fmt.Errorf("failed to write envrc file: %w", err)
