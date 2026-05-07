@@ -6,6 +6,7 @@ import (
 
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/types"
+	"gopkg.in/yaml.v3"
 )
 
 // Config is the top-level deployment configuration, combining settings for
@@ -24,6 +25,18 @@ func NewConfig() Config {
 		Central:        DefaultCentralConfig(),
 		SecuredCluster: DefaultSecuredClusterConfig(),
 	}
+}
+
+func (c *Config) DeepCopy() (*Config, error) {
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return nil, err
+	}
+	var copy Config
+	if err := yaml.Unmarshal(data, &copy); err != nil {
+		return nil, err
+	}
+	return &copy, nil
 }
 
 // MergeIn deep-merges another Config into this one.
