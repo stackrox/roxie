@@ -336,7 +336,7 @@ func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 // detectOperatorDeploymentMode detects how the operator is currently deployed.
 // Returns (operatorExists bool, isOLM OperatorDeploymentMode)
 func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, OperatorDeploymentMode, error) {
-	var olmLabel = "olm.owner"
+	const olmOwnerLabel = "olm.owner"
 
 	// First, check if a Subscription exists (OLM-specific resource)
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
@@ -347,7 +347,7 @@ func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, Oper
 	}
 
 	// If no subscription, check if operator deployment exists/if it has the expected OLM label.
-	labelValue, err := k8s.RetrieveClusterResourceLabel(ctx, d.logger, operatorNamespace, "deployment", operatorDeploymentName, olmLabel)
+	labelValue, err := k8s.RetrieveClusterResourceLabel(ctx, d.logger, operatorNamespace, "deployment", operatorDeploymentName, olmOwnerLabel)
 	if k8s.IsResourceNotFound(err) {
 		// No operator deployment found.
 		return false, OperatorModeNonOLM, nil
