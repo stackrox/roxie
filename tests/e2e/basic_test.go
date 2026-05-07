@@ -11,7 +11,7 @@ import (
 
 // TestDeployBothSimple tests deploying both components together (simplest scenario)
 func TestDeployBothSimple(t *testing.T) {
-	dumpClusterOnFailure(t)
+	dumpClusterStateOnFailure(t)
 
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
