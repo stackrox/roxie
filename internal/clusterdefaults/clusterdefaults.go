@@ -43,55 +43,21 @@ func ApplyClusterDefaults(
 	return defaultsCopy, nil
 }
 
-// getDefaultsForClusterType returns the recommended defaults for a given cluster type.
-func getDefaultsForClusterType(clusterType types.ClusterType) map[string]interface{} {
+func getDefaultsForClusterType(clusterType types.ClusterType) *deployer.Config {
 	switch clusterType {
-	case types.ClusterTypeKind:
-		// Kind clusters are local, lightweight, and don't support LoadBalancer.
-		return map[string]interface{}{
-			"central": map[string]interface{}{
-				"exposure":       types.ExposureNone.String(),
-				"portForwarding": true,
+	case types.ClusterTypeKind, types.ClusterTypeMinikube, types.ClusterTypeK3s, types.ClusterTypeCRC:
+		return &deployer.Config{
+			Central: deployer.CentralConfig{
+				Exposure:       ptr.To(types.ExposureNone),
+				PortForwarding: ptr.To(true),
 			},
 		}
 
-	case types.ClusterTypeMinikube:
-		return map[string]interface{}{
-			"central": map[string]interface{}{
-				"exposure":       types.ExposureNone.String(),
-				"portForwarding": true,
-			},
-		}
-
-	case types.ClusterTypeK3s:
-		return map[string]interface{}{
-			"central": map[string]interface{}{
-				"exposure":       types.ExposureNone.String(),
-				"portForwarding": true,
-			},
-		}
-
-	case types.ClusterTypeCRC:
-		return map[string]interface{}{
-			"central": map[string]interface{}{
-				"exposure":       types.ExposureNone.String(),
-				"portForwarding": true,
-			},
-		}
-
-	case types.ClusterTypeInfraGKE:
-		return map[string]interface{}{
-			"central": map[string]interface{}{
-				"exposure":       types.ExposureLoadBalancer.String(),
-				"portForwarding": false,
-			},
-		}
-
-	case types.ClusterTypeInfraOpenShift4:
-		return map[string]interface{}{
-			"central": map[string]interface{}{
-				"exposure":       types.ExposureLoadBalancer.String(),
-				"portForwarding": false,
+	case types.ClusterTypeInfraGKE, types.ClusterTypeInfraOpenShift4:
+		return &deployer.Config{
+			Central: deployer.CentralConfig{
+				Exposure:       ptr.To(types.ExposureLoadBalancer),
+				PortForwarding: ptr.To(false),
 			},
 		}
 
