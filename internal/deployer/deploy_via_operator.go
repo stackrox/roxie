@@ -440,42 +440,14 @@ func (d *Deployer) waitForResourceToExist(ctx context.Context, resource, namespa
 	}
 }
 
-type componentWaitConfig struct {
-	namespace      string
-	earlyReadiness bool
-	waitFor        string
-	timeout        time.Duration
-}
-
-// Only supports component.Central or component.SecuredCluster to be provided.
-func (d *Deployer) constructComponentWaitConfig(comp component.Component) componentWaitConfig {
-	// Without earlyReadiness we wait for the Available condition of component's CR to be True. This indicates all deployments are ready.
-	// With earlyReadiness we just wait for the Available condition of that component's core Deployment to be True.
+func (d *Deployer) getWaitConfig(comp component.Component) WaitConfig {
 	switch comp {
 	case component.Central:
-		waitFor := "central/" + centralCrName
-		if d.config.Central.EarlyReadiness {
-			waitFor = "deployment/central"
-		}
-		return componentWaitConfig{
-			namespace:      d.config.Central.Namespace,
-			earlyReadiness: d.config.Central.EarlyReadiness,
-			waitFor:        waitFor,
-			timeout:        d.config.Central.DeployTimeout,
-		}
+		return d.config.Central.GetWaitConfig()
 	case component.SecuredCluster:
-		waitFor := "securedcluster/" + securedClusterCrName
-		if d.config.SecuredCluster.EarlyReadiness {
-			waitFor = "deployment/sensor"
-		}
-		return componentWaitConfig{
-			namespace:      d.config.SecuredCluster.Namespace,
-			earlyReadiness: d.config.SecuredCluster.EarlyReadiness,
-			waitFor:        waitFor,
-			timeout:        d.config.SecuredCluster.DeployTimeout,
-		}
+		return d.config.SecuredCluster.GetWaitConfig()
 	default:
-		return componentWaitConfig{}
+		return WaitConfig{}
 	}
 }
 
@@ -484,23 +456,23 @@ func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Com
 	if comp != component.Central && comp != component.SecuredCluster {
 		return errors.New("waitForComponentReady only supports Central or SecuredCluster components")
 	}
-	waitCfg := d.constructComponentWaitConfig(comp)
-	d.logger.Infof("⏳ Waiting for %s to become ready (timeout: %s)...", comp, waitCfg.timeout)
+	waitCfg := d.getWaitConfig(comp)
+	d.logger.Infof("⏳ Waiting for %s to become ready (timeout: %s)...", comp, waitCfg.Timeout)
 
 	const padding = 5 * time.Second
-	waitCtx, cancel := context.WithTimeout(ctx, waitCfg.timeout+padding)
+	waitCtx, cancel := context.WithTimeout(ctx, waitCfg.Timeout+padding)
 	defer cancel()
 
 	// Spawn a goroutine, which waits until some success condition, sending the result (nil or error) through a dedicated channel.
 	waitChannel := make(chan error, 1)
 
 	go func() {
-		err := d.waitForAvailableCondition(waitCtx, waitCfg.waitFor, waitCfg.namespace, waitCfg.timeout)
+		err := d.waitForAvailableCondition(waitCtx, waitCfg.WaitFor, waitCfg.Namespace, waitCfg.Timeout)
 		if err != nil {
 			waitChannel <- fmt.Errorf("error waiting for %s deployment to become Available: %v", comp, err)
 			return
 		}
-		d.logger.Infof("Resource %s is now ready.", waitCfg.waitFor)
+		d.logger.Infof("Resource %s is now ready.", waitCfg.WaitFor)
 		waitChannel <- nil
 	}()
 
@@ -522,19 +494,19 @@ func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Com
 			return fmt.Errorf("timeout reached")
 		case <-ticker.C:
 			// Track seen deployments and their states to avoid duplicate messages.
-			deploymentsProgressed, err := d.checkDeploymentProgressInNamespace(waitCtx, waitCfg.namespace, seenDeployments)
+			deploymentsProgressed, err := d.checkDeploymentProgressInNamespace(waitCtx, waitCfg.Namespace, seenDeployments)
 			if err != nil {
-				d.logger.Warningf("failed to check for deployment progress in namespace %s: %v", waitCfg.namespace, err)
+				d.logger.Warningf("failed to check for deployment progress in namespace %s: %v", waitCfg.Namespace, err)
 			}
-			podsProgressed, err := d.checkPodProgressInNamespace(waitCtx, waitCfg.namespace, seenPods)
+			podsProgressed, err := d.checkPodProgressInNamespace(waitCtx, waitCfg.Namespace, seenPods)
 			if err != nil {
-				d.logger.Warningf("failed to check for pod progress in namespace %s: %v", waitCfg.namespace, err)
+				d.logger.Warningf("failed to check for pod progress in namespace %s: %v", waitCfg.Namespace, err)
 			}
 			if deploymentsProgressed || podsProgressed {
 				lastUpdate = time.Now()
 			} else {
 				if time.Since(lastUpdate) > progressUpdatePeriod {
-					d.logger.Dimf("Still waiting for component %s in namespace %s", comp, waitCfg.namespace)
+					d.logger.Dimf("Still waiting for component %s in namespace %s", comp, waitCfg.Namespace)
 					lastUpdate = time.Now()
 				}
 			}
