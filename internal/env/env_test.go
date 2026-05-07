@@ -3,6 +3,8 @@ package env
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stackrox/roxie/internal/types"
 )
 
@@ -42,7 +44,7 @@ func TestDetectClusterType_GKE_ExactMatch(t *testing.T) {
 	}
 }
 
-func TestDetectClusterType_OpenShift4(t *testing.T) {
+func TestDetectClusterType_InfraOpenShift4(t *testing.T) {
 	config := KubeConfig{
 		CurrentContext: "admin",
 		Clusters: []KubeCluster{
@@ -60,18 +62,16 @@ func TestDetectClusterType_OpenShift4(t *testing.T) {
 	}
 
 	result := DetectClusterType(config, apiResources)
-	if result != types.ClusterTypeInfraOpenShift4 {
-		t.Errorf("DetectClusterType() = %v (%s), want %v", result, result.String(), types.ClusterTypeInfraOpenShift4)
-	}
+	assert.Equal(t, types.ClusterTypeInfraOpenShift4, result)
 }
 
-func TestDetectClusterType_OpenShift4_WrongHostname(t *testing.T) {
+func TestDetectClusterType_OpenShift4(t *testing.T) {
 	config := KubeConfig{
-		CurrentContext: "admin",
+		CurrentContext: "some-context-name",
 		Clusters: []KubeCluster{
 			{
-				Name:   "openshift-cluster",
-				Server: "https://api.my-cluster.example.com:6443",
+				Name:   "some-other-name",
+				Server: "https://my-cluster.example.com:6443",
 			},
 		},
 	}
@@ -79,12 +79,11 @@ func TestDetectClusterType_OpenShift4_WrongHostname(t *testing.T) {
 		"pods",
 		"services",
 		"clusterversions.config.openshift.io",
+		"clusteroperators.config.openshift.io",
 	}
 
 	result := DetectClusterType(config, apiResources)
-	if result != types.ClusterTypeUnknown {
-		t.Errorf("DetectClusterType() = %v (%s), want %v", result, result.String(), types.ClusterTypeUnknown)
-	}
+	assert.Equal(t, types.ClusterTypeOpenShift4, result)
 }
 
 func TestDetectClusterType_OpenShift4_NoAPIResources(t *testing.T) {
@@ -295,8 +294,13 @@ func TestClusterTypeString(t *testing.T) {
 			want:        "GKE",
 		},
 		{
-			name:        "types.ClusterTypeInfraOpenShift4",
+			name:        "InfraOpenShift4",
 			clusterType: types.ClusterTypeInfraOpenShift4,
+			want:        "OpenShift4 (infra)",
+		},
+		{
+			name:        "OpenShift4",
+			clusterType: types.ClusterTypeOpenShift4,
 			want:        "OpenShift4",
 		},
 		{

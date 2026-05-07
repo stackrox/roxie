@@ -17,7 +17,6 @@ import (
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
-	"github.com/stackrox/roxie/internal/types"
 )
 
 const (
@@ -202,7 +201,7 @@ func (d *Deployer) getOperatorBundleImage() string {
 
 // ensureKonfluxImageRewriting configures image rewriting for Konflux images
 func (d *Deployer) ensureKonfluxImageRewriting(ctx context.Context) error {
-	if env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4 {
+	if !env.GetCurrentClusterType().IsOpenShift() {
 		return errors.New("image rewriting for Konflux is only supported on OpenShift4 clusters")
 	}
 
@@ -290,7 +289,7 @@ func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
 
 // removeKonfluxImageRewriting removes the ImageContentSourcePolicy for Konflux images if it exists
 func (d *Deployer) removeKonfluxImageRewriting(ctx context.Context) error {
-	if env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4 {
+	if !env.GetCurrentClusterType().IsOpenShift() {
 		return nil
 	}
 
@@ -643,7 +642,10 @@ func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 
 // teardownOperator removes the operator if it exists, detecting the deployment mode automatically.
 func (d *Deployer) teardownOperator(ctx context.Context) error {
-	operatorExists, operatorMode := d.detectOperatorDeploymentMode(ctx)
+	operatorExists, operatorMode, err := d.detectOperatorDeploymentMode(ctx)
+	if err != nil {
+		return fmt.Errorf("detecting operator deployment mode: %w", err)
+	}
 	if !operatorExists {
 		d.logger.Dim("No operator deployment found, skipping operator teardown")
 		return nil

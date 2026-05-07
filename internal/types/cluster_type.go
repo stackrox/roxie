@@ -10,6 +10,8 @@ const (
 	ClusterTypeInfraGKE
 	// ClusterTypeInfraOpenShift4 represents an OpenShift 4 cluster
 	ClusterTypeInfraOpenShift4
+	// Generic OpenShift4 cluster (e.g. for prow CI)
+	ClusterTypeOpenShift4
 	// ClusterTypeKind represents a Kind (Kubernetes in Docker) cluster
 	ClusterTypeKind
 	// ClusterTypeMinikube represents a Minikube cluster
@@ -20,12 +22,18 @@ const (
 	ClusterTypeCRC
 )
 
+func (ct ClusterType) IsOpenShift() bool {
+	return ct == ClusterTypeInfraOpenShift4 || ct == ClusterTypeOpenShift4
+}
+
 // String returns the string representation of a ClusterType
 func (ct ClusterType) String() string {
 	switch ct {
 	case ClusterTypeInfraGKE:
 		return "GKE"
 	case ClusterTypeInfraOpenShift4:
+		return "OpenShift4 (infra)"
+	case ClusterTypeOpenShift4:
 		return "OpenShift4"
 	case ClusterTypeKind:
 		return "Kind"
@@ -48,5 +56,6 @@ func AllClusterTypes() []ClusterType {
 		ClusterTypeK3s,
 		ClusterTypeCRC,
 		ClusterTypeInfraOpenShift4,
+		ClusterTypeOpenShift4,
 	}
 }

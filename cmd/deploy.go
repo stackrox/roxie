@@ -534,7 +534,7 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
 		}
 		clusterType := env.GetCurrentClusterType()
-		if clusterType != types.ClusterTypeInfraOpenShift4 {
+		if !clusterType.IsOpenShift() {
 			return fmt.Errorf("--konflux flag is only supported on OpenShift 4 clusters (current cluster type: %s)", clusterType.String())
 		}
 	}

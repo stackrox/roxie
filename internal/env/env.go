@@ -147,22 +147,12 @@ func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterTy
 		return types.ClusterTypeInfraGKE
 	}
 
-	// Minikube clusters typically have context name "minikube".
-	if contextLower == "minikube" || strings.HasPrefix(contextLower, "minikube-") {
-		return types.ClusterTypeMinikube
-	}
-
-	// Check for OpenShift 4 clusters by examining the server hostname.
-	if serverURL := getServerURL(config); serverURL != "" {
-		if parsedURL, err := url.Parse(serverURL); err == nil {
-			hostname := parsedURL.Hostname()
-			if strings.HasSuffix(hostname, ".ocp.infra.rox.systems") {
-				// Further verify it's OpenShift 4 by checking the API resources
-				if isOpenShift4(apiResources) {
-					return types.ClusterTypeInfraOpenShift4
-				}
-			}
+	// Check for OpenShift 4 clusters.
+	if isOpenShift4(apiResources) {
+		if isInfraOpenShift4(config) {
+			return types.ClusterTypeInfraOpenShift4
 		}
+		return types.ClusterTypeOpenShift4
 	}
 
 	// K3s clusters often have "k3s" in the context name
@@ -182,6 +172,19 @@ func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterTy
 	}
 
 	return types.ClusterTypeUnknown
+}
+
+func isInfraOpenShift4(config KubeConfig) bool {
+	serverURL := getServerURL(config)
+	if serverURL == "" {
+		return false
+	}
+	parsedURL, err := url.Parse(serverURL)
+	if err != nil {
+		return false
+	}
+	hostname := parsedURL.Hostname()
+	return strings.HasSuffix(hostname, ".ocp.infra.rox.systems")
 }
 
 // getServerURL retrieves the server URL from the KubeConfig
