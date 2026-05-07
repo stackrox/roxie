@@ -10,7 +10,6 @@ import (
 
 	"github.com/stackrox/roxie/internal/k8s"
 	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 const (
@@ -108,23 +107,6 @@ func (d *Deployer) getOperatorIndexImage() string {
 func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) error {
 	d.logger.Info("Creating CatalogSource...")
 
-	securityContextConfigSupported, err := d.catalogSourceSupportsSecurityContextConfig(ctx)
-	if err != nil {
-		d.logger.Warning("Could not check CatalogSource CRD capabilities, proceeding without securityContextConfig")
-		securityContextConfigSupported = false
-	}
-
-	catalogSourceSpec := map[string]interface{}{
-		"sourceType":  "grpc",
-		"image":       indexImage,
-		"displayName": "StackRox Operator Index",
-	}
-	if securityContextConfigSupported {
-		catalogSourceSpec["grpcPodConfig"] = map[string]interface{}{
-			"securityContextConfig": "restricted",
-		}
-	}
-
 	catalogSource := map[string]interface{}{
 		"apiVersion": "operators.coreos.com/v1alpha1",
 		"kind":       "CatalogSource",
@@ -132,7 +114,14 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 			"name":      catalogSourceName,
 			"namespace": operatorNamespace,
 		},
-		"spec": catalogSourceSpec,
+		"spec": map[string]interface{}{
+			"sourceType":  "grpc",
+			"image":       indexImage,
+			"displayName": "StackRox Operator Index",
+			"grpcPodConfig": map[string]interface{}{
+				"securityContextConfig": "restricted",
+			},
+		},
 	}
 
 	yamlData, err := yaml.Marshal(catalogSource)
@@ -141,7 +130,9 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 	}
 
 	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
-		Args:  []string{"apply", "-f", "-"},
+		// Apply with --validate=ignore because securityContextConfig may not
+		// be in the CatalogSource CRD schema.
+		Args:  []string{"apply", "--validate=ignore", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
@@ -150,51 +141,6 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 
 	d.logger.Success("✓ CatalogSource created")
 	return nil
-}
-
-// catalogSourceSupportsSecurityContextConfig checks if any served CatalogSource CRD version
-// includes securityContextConfig in its schema.
-func (d *Deployer) catalogSourceSupportsSecurityContextConfig(ctx context.Context) (bool, error) {
-	crdName := "catalogsources.operators.coreos.com"
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{"get", "crd", crdName, "-o", "yaml"},
-	})
-	if err != nil {
-		return false, err
-	}
-
-	obj := &unstructured.Unstructured{}
-	if err := yaml.Unmarshal([]byte(result.Stdout), &obj.Object); err != nil {
-		return false, fmt.Errorf("failed to parse CatalogSource CRD: %w", err)
-	}
-
-	// Note, we cannot use NestedSlice, because that does an implicit runtime.DeepCopyJSONValue, which fail,
-	// because the versions slice YAML also contains unsupported types (int).
-	versions, _, _ := unstructured.NestedFieldNoCopy(obj.Object, "spec", "versions")
-	versionsSlice, ok := versions.([]interface{})
-	if !ok {
-		return false, fmt.Errorf("failed to extract spec.versions from crd %s", crdName)
-	}
-
-	for _, v := range versionsSlice {
-		version, ok := v.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		served, _, _ := unstructured.NestedBool(version, "served")
-		if !served {
-			continue
-		}
-		_, found, _ := unstructured.NestedMap(version,
-			"schema", "openAPIV3Schema", "properties", "spec",
-			"properties", "grpcPodConfig", "properties", "securityContextConfig",
-		)
-		if found {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 // createOperatorGroup creates the OperatorGroup.
