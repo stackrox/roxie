@@ -71,6 +71,13 @@ jobs:
       skip-olm-tests: 'false'
     secrets: inherit
 
+  e2e-tests-kind:
+    needs: [ build-roxie-image ]
+    uses: ./.github/workflows/e2e-tests-kind.yml
+    with:
+      image: ${{ needs.build-roxie-image.outputs.image }}
+    secrets: inherit
+
   delete-gke-cluster:
     if: ${{ always() && needs.create-gke-cluster.result == 'success' }}
     needs: [ create-gke-cluster, e2e-tests ]
