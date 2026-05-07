@@ -297,17 +297,17 @@ func dumpOLMResources() {
 	}
 
 	fmt.Fprintln(os.Stderr, "--- OLM Resources ---")
-	olmNamespace := "rhacs-operator-system"
-	runKubectlDump("get", "subscriptions.operators.coreos.com", "-n", olmNamespace, "-o", "wide")
-	runKubectlDump("describe", "subscriptions.operators.coreos.com", "-n", olmNamespace)
-	runKubectlDump("get", "installplans.operators.coreos.com", "-n", olmNamespace, "-o", "wide")
-	runKubectlDump("describe", "installplans.operators.coreos.com", "-n", olmNamespace)
-	runKubectlDump("get", "catalogsources.operators.coreos.com", "-n", olmNamespace, "-o", "wide")
-	runKubectlDump("describe", "catalogsources.operators.coreos.com", "-n", olmNamespace)
-	runKubectlDump("get", "clusterserviceversions.operators.coreos.com", "-n", olmNamespace, "-o", "wide")
-	runKubectlDump("describe", "clusterserviceversions.operators.coreos.com", "-n", olmNamespace)
-	runKubectlDump("get", "operatorgroups.operators.coreos.com", "-n", olmNamespace, "-o", "wide")
-	runKubectlDump("describe", "operatorgroups.operators.coreos.com", "-n", olmNamespace)
+	operatorNamespace := "rhacs-operator-system"
+	runKubectlDump("get", "subscriptions.operators.coreos.com", "-n", operatorNamespace, "-o", "wide")
+	runKubectlDump("describe", "subscriptions.operators.coreos.com", "-n", operatorNamespace)
+	runKubectlDump("get", "installplans.operators.coreos.com", "-n", operatorNamespace, "-o", "wide")
+	runKubectlDump("describe", "installplans.operators.coreos.com", "-n", operatorNamespace)
+	runKubectlDump("get", "catalogsources.operators.coreos.com", "-n", operatorNamespace, "-o", "wide")
+	runKubectlDump("describe", "catalogsources.operators.coreos.com", "-n", operatorNamespace)
+	runKubectlDump("get", "clusterserviceversions.operators.coreos.com", "-n", operatorNamespace, "-o", "wide")
+	runKubectlDump("describe", "clusterserviceversions.operators.coreos.com", "-n", operatorNamespace)
+	runKubectlDump("get", "operatorgroups.operators.coreos.com", "-n", operatorNamespace, "-o", "wide")
+	runKubectlDump("describe", "operatorgroups.operators.coreos.com", "-n", operatorNamespace)
 }
 
 func runKubectlDump(args ...string) {
