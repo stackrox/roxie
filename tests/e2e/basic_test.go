@@ -20,7 +20,7 @@ func TestDeployBothSimple(t *testing.T) {
 	envrcFile.Close()
 
 	t.Log("=== Deploying both components together ===")
-	args := append([]string{roxieBinary, "deploy", "--early-readiness", "both", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "--early-readiness", "both", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout*2, nil, args...)
 
 	// Verify namespaces exist and have managed-by labels
