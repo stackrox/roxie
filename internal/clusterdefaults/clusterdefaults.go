@@ -1,10 +1,12 @@
 package clusterdefaults
 
 import (
+	"fmt"
+
+	"dario.cat/mergo"
 	"github.com/stackrox/roxie/internal/deployer"
-	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/types"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 )
 
 // ApplyClusterDefaults detects the cluster type and applies appropriate defaults to the
@@ -13,7 +15,7 @@ import (
 func ApplyClusterDefaults(
 	clusterType types.ClusterType,
 	config *deployer.Config,
-) (map[string]interface{}, error) {
+) (*deployer.Config, error) {
 	if config == nil {
 		panic("applying cluster defaults to nil config")
 	}
@@ -23,23 +25,15 @@ func ApplyClusterDefaults(
 	}
 
 	// Make a copy.
-	defaultsCopy := runtime.DeepCopyJSON(defaults)
-
-	configMap, err := helpers.StructToMap(config)
+	defaultsCopy, err := defaults.DeepCopy()
 	if err != nil {
-		return nil, err
-	}
-	mergeResult := make(map[string]interface{})
-	if err = helpers.DeepMerge(mergeResult, defaults); err != nil {
-		return nil, err
-	}
-	if err := helpers.DeepMerge(mergeResult, configMap); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("deep-copying cluster defaults: %w", err)
 	}
 
-	if err := helpers.MapToStruct(mergeResult, config); err != nil {
-		return nil, err
+	if err := mergo.Merge(config, defaultsCopy, mergo.WithoutDereference); err != nil {
+		return nil, fmt.Errorf("merging-in cluster defaults: %w", err)
 	}
+
 	return defaultsCopy, nil
 }
 
