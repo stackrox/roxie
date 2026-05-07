@@ -12,15 +12,13 @@ import (
 
 func TestClusterDefaults(t *testing.T) {
 	tests := []struct {
-		name                string
-		clusterType         types.ClusterType
-		wantResourceProfile types.ResourceProfile
-		wantConfig          deployer.Config
+		name        string
+		clusterType types.ClusterType
+		wantConfig  deployer.Config
 	}{
 		{
-			name:                "kind cluster with default params",
-			clusterType:         types.ClusterTypeKind,
-			wantResourceProfile: types.ResourceProfileSmall,
+			name:        "kind cluster with default params",
+			clusterType: types.ClusterTypeKind,
 			wantConfig: deployer.Config{
 				Central: deployer.CentralConfig{
 					Exposure:       ptr.To(types.ExposureNone),
@@ -29,9 +27,8 @@ func TestClusterDefaults(t *testing.T) {
 			},
 		},
 		{
-			name:                "kind cluster with already correct params",
-			clusterType:         types.ClusterTypeKind,
-			wantResourceProfile: types.ResourceProfileSmall,
+			name:        "kind cluster with already correct params",
+			clusterType: types.ClusterTypeKind,
 			wantConfig: deployer.Config{
 				Central: deployer.CentralConfig{
 					Exposure:       ptr.To(types.ExposureNone),
@@ -40,9 +37,8 @@ func TestClusterDefaults(t *testing.T) {
 			},
 		},
 		{
-			name:                "kind cluster with partial match",
-			clusterType:         types.ClusterTypeKind,
-			wantResourceProfile: types.ResourceProfileSmall,
+			name:        "kind cluster with partial match",
+			clusterType: types.ClusterTypeKind,
 			wantConfig: deployer.Config{
 				Central: deployer.CentralConfig{
 					Exposure:       ptr.To(types.ExposureNone),
@@ -51,15 +47,13 @@ func TestClusterDefaults(t *testing.T) {
 			},
 		},
 		{
-			name:                "unknown cluster type",
-			clusterType:         types.ClusterTypeUnknown,
-			wantResourceProfile: types.ResourceProfileAcsDefaults,
-			wantConfig:          deployer.Config{},
+			name:        "unknown cluster type",
+			clusterType: types.ClusterTypeUnknown,
+			wantConfig:  deployer.Config{},
 		},
 		{
-			name:                "minikube cluster",
-			clusterType:         types.ClusterTypeMinikube,
-			wantResourceProfile: types.ResourceProfileSmall,
+			name:        "minikube cluster",
+			clusterType: types.ClusterTypeMinikube,
 			wantConfig: deployer.Config{
 				Central: deployer.CentralConfig{
 					Exposure:       ptr.To(types.ExposureNone),
@@ -68,9 +62,8 @@ func TestClusterDefaults(t *testing.T) {
 			},
 		},
 		{
-			name:                "crc cluster",
-			clusterType:         types.ClusterTypeCRC,
-			wantResourceProfile: types.ResourceProfileSmall,
+			name:        "crc cluster",
+			clusterType: types.ClusterTypeCRC,
 			wantConfig: deployer.Config{
 				Central: deployer.CentralConfig{
 					Exposure:       ptr.To(types.ExposureNone),
@@ -79,9 +72,8 @@ func TestClusterDefaults(t *testing.T) {
 			},
 		},
 		{
-			name:                "gke cluster",
-			clusterType:         types.ClusterTypeInfraGKE,
-			wantResourceProfile: types.ResourceProfileMedium,
+			name:        "gke cluster",
+			clusterType: types.ClusterTypeInfraGKE,
 			wantConfig: deployer.Config{
 				Central: deployer.CentralConfig{
 					Exposure:       ptr.To(types.ExposureLoadBalancer),
@@ -90,9 +82,8 @@ func TestClusterDefaults(t *testing.T) {
 			},
 		},
 		{
-			name:                "openshift cluster",
-			clusterType:         types.ClusterTypeInfraOpenShift4,
-			wantResourceProfile: types.ResourceProfileMedium,
+			name:        "openshift cluster",
+			clusterType: types.ClusterTypeInfraOpenShift4,
 			wantConfig: deployer.Config{
 				Central: deployer.CentralConfig{
 					Exposure:       ptr.To(types.ExposureLoadBalancer),
@@ -107,11 +98,6 @@ func TestClusterDefaults(t *testing.T) {
 			config := deployer.NewConfig()
 			_, err := ApplyClusterDefaults(tt.clusterType, &config)
 			require.NoError(t, err)
-
-			gotResourceProfile := ResolveAutoResourceProfile(tt.clusterType)
-			if gotResourceProfile != tt.wantResourceProfile {
-				t.Errorf("Apply() resources = %v, want %v", gotResourceProfile, tt.wantResourceProfile)
-			}
 
 			if tt.wantConfig.Central.Exposure == nil {
 				assert.Nil(t, config.Central.Exposure, "central exposure is not nil")
@@ -128,6 +114,57 @@ func TestClusterDefaults(t *testing.T) {
 				assert.Equal(t, *tt.wantConfig.Central.PortForwarding, *config.Central.PortForwarding,
 					"portForward = %v, want %v", *config.Central.PortForwarding, *tt.wantConfig.Central.PortForwarding)
 			}
+		})
+	}
+}
+
+func TestResolveAutoResourceProfile(t *testing.T) {
+	tests := []struct {
+		name        string
+		clusterType types.ClusterType
+		want        types.ResourceProfile
+	}{
+		{
+			name:        "kind cluster",
+			clusterType: types.ClusterTypeKind,
+			want:        types.ResourceProfileSmall,
+		},
+		{
+			name:        "minikube cluster",
+			clusterType: types.ClusterTypeMinikube,
+			want:        types.ResourceProfileSmall,
+		},
+		{
+			name:        "k3s cluster",
+			clusterType: types.ClusterTypeK3s,
+			want:        types.ResourceProfileSmall,
+		},
+		{
+			name:        "crc cluster",
+			clusterType: types.ClusterTypeCRC,
+			want:        types.ResourceProfileSmall,
+		},
+		{
+			name:        "gke cluster",
+			clusterType: types.ClusterTypeInfraGKE,
+			want:        types.ResourceProfileMedium,
+		},
+		{
+			name:        "openshift cluster",
+			clusterType: types.ClusterTypeInfraOpenShift4,
+			want:        types.ResourceProfileMedium,
+		},
+		{
+			name:        "unknown cluster type",
+			clusterType: types.ClusterTypeUnknown,
+			want:        types.ResourceProfileAcsDefaults,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ResolveAutoResourceProfile(tt.clusterType)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
