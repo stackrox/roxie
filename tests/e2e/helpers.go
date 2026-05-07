@@ -26,8 +26,7 @@ const (
 )
 
 var (
-	commonDeployArgs              = []string{"--port-forwarding", "--exposure=none", "--resources=small"}
-	commonDeployArgsNoPortForward = []string{"--exposure=loadbalancer", "--resources=small"}
+	commonDeployArgs = []string{"--resources=small"}
 
 	roxieBinary = "roxie"
 )
