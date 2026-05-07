@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"syscall"
 	"sync"
 	"time"
 
@@ -556,6 +558,12 @@ func New(log *logger.Logger) (*Deployer, error) {
 		d.roxCACertFile = caCert
 	}
 
+	if pidStr := os.Getenv("ROXIE_PORT_FORWARD_PID"); pidStr != "" {
+		if pid, err := strconv.Atoi(pidStr); err == nil {
+			d.portForwardPID = pid
+		}
+	}
+
 	d.kubeContext = env.GetCurrentContext()
 
 	clusterResourceKinds, err := d.getClusterResourceKinds()
@@ -600,6 +608,22 @@ func (d *Deployer) Cleanup() {
 			d.logger.Warningf("Deployer Cleanup failed to remove %q: %v", d.tempDir, err)
 		}
 	}
+}
+
+func (d *Deployer) stopDetachedPortForward() {
+	if d.portForwardPID == 0 {
+		return
+	}
+	proc, err := os.FindProcess(d.portForwardPID)
+	if err != nil {
+		return
+	}
+	if err := proc.Signal(syscall.SIGKILL); err != nil {
+		d.logger.Dimf("Detached port-forward (pid %d) already gone", d.portForwardPID)
+		return
+	}
+	d.logger.Dimf("Stopped detached port-forward (pid %d)", d.portForwardPID)
+	d.portForwardPID = 0
 }
 
 // Deploy deploys the specified components to the cluster.
@@ -757,6 +781,7 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 	}
 
 	d.portForward.Stop()
+	d.stopDetachedPortForward()
 
 	// Add pause-reconcile annotation to not have the operator interfere during resource deletion.
 	if d.doesResourceExist(ctx, "central", "stackrox-central-services", d.centralNamespace) {
