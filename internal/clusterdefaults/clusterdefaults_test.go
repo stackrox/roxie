@@ -15,64 +15,90 @@ func TestClusterDefaults(t *testing.T) {
 		name                string
 		clusterType         types.ClusterType
 		wantResourceProfile types.ResourceProfile
-		wantExposure        *types.Exposure
-		wantPortForwarding  *bool
+		wantConfig          deployer.Config
 	}{
 		{
 			name:                "kind cluster with default params",
 			clusterType:         types.ClusterTypeKind,
 			wantResourceProfile: types.ResourceProfileSmall,
-			wantExposure:        ptr.To(types.ExposureNone),
-			wantPortForwarding:  ptr.To(true),
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 		{
 			name:                "kind cluster with already correct params",
 			clusterType:         types.ClusterTypeKind,
 			wantResourceProfile: types.ResourceProfileSmall,
-			wantExposure:        ptr.To(types.ExposureNone),
-			wantPortForwarding:  ptr.To(true),
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 		{
 			name:                "kind cluster with partial match",
 			clusterType:         types.ClusterTypeKind,
 			wantResourceProfile: types.ResourceProfileSmall,
-			wantExposure:        ptr.To(types.ExposureNone),
-			wantPortForwarding:  ptr.To(true),
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 		{
 			name:                "unknown cluster type",
 			clusterType:         types.ClusterTypeUnknown,
 			wantResourceProfile: types.ResourceProfileAcsDefaults,
-			wantExposure:        nil,
-			wantPortForwarding:  nil,
+			wantConfig:          deployer.Config{},
 		},
 		{
 			name:                "minikube cluster",
 			clusterType:         types.ClusterTypeMinikube,
 			wantResourceProfile: types.ResourceProfileSmall,
-			wantExposure:        ptr.To(types.ExposureNone),
-			wantPortForwarding:  ptr.To(true),
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 		{
 			name:                "crc cluster",
 			clusterType:         types.ClusterTypeCRC,
 			wantResourceProfile: types.ResourceProfileSmall,
-			wantExposure:        ptr.To(types.ExposureNone),
-			wantPortForwarding:  ptr.To(true),
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 		{
 			name:                "gke cluster",
 			clusterType:         types.ClusterTypeInfraGKE,
 			wantResourceProfile: types.ResourceProfileMedium,
-			wantExposure:        ptr.To(types.ExposureLoadBalancer),
-			wantPortForwarding:  ptr.To(false),
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureLoadBalancer),
+					PortForwarding: ptr.To(false),
+				},
+			},
 		},
 		{
 			name:                "openshift cluster",
 			clusterType:         types.ClusterTypeInfraOpenShift4,
 			wantResourceProfile: types.ResourceProfileMedium,
-			wantExposure:        ptr.To(types.ExposureLoadBalancer),
-			wantPortForwarding:  ptr.To(false),
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureLoadBalancer),
+					PortForwarding: ptr.To(false),
+				},
+			},
 		},
 	}
 
@@ -87,20 +113,20 @@ func TestClusterDefaults(t *testing.T) {
 				t.Errorf("Apply() resources = %v, want %v", gotResourceProfile, tt.wantResourceProfile)
 			}
 
-			if tt.wantExposure == nil {
+			if tt.wantConfig.Central.Exposure == nil {
 				assert.Nil(t, config.Central.Exposure, "central exposure is not nil")
 			} else {
 				require.NotNil(t, config.Central.Exposure, "central exposure is nil")
-				assert.Equal(t, *tt.wantExposure, *config.Central.Exposure,
-					"exposure = %v, want %v", *config.Central.Exposure, *tt.wantExposure)
+				assert.Equal(t, *tt.wantConfig.Central.Exposure, *config.Central.Exposure,
+					"exposure = %v, want %v", *config.Central.Exposure, *tt.wantConfig.Central.Exposure)
 			}
 
-			if tt.wantPortForwarding == nil {
+			if tt.wantConfig.Central.PortForwarding == nil {
 				assert.Nil(t, config.Central.PortForwarding, "central port forwarding is not nil")
 			} else {
 				require.NotNil(t, config.Central.PortForwarding, "central port forwarding is nil")
-				assert.Equal(t, *tt.wantPortForwarding, *config.Central.PortForwarding,
-					"portForward = %v, want %v", *config.Central.PortForwarding, *tt.wantPortForwarding)
+				assert.Equal(t, *tt.wantConfig.Central.PortForwarding, *config.Central.PortForwarding,
+					"portForward = %v, want %v", *config.Central.PortForwarding, *tt.wantConfig.Central.PortForwarding)
 			}
 		})
 	}
