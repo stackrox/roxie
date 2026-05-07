@@ -33,6 +33,8 @@ const (
 	InfraGKE
 	// InfraOpenShift4 represents an OpenShift 4 cluster
 	InfraOpenShift4
+	// Generic OpenShift4 cluster (e.g. for prow CI)
+	OpenShift4
 	// LocalKind represents a Kind (Kubernetes in Docker) cluster
 	LocalKind
 )
@@ -115,12 +117,18 @@ func (ct ClusterType) String() string {
 	case InfraGKE:
 		return "GKE"
 	case InfraOpenShift4:
+		return "OpenShift4 (infra)"
+	case OpenShift4:
 		return "OpenShift4"
 	case LocalKind:
 		return "Kind"
 	default:
 		return "Unknown"
 	}
+}
+
+func (ct ClusterType) IsOpenShift() bool {
+	return ct == InfraOpenShift4 || ct == OpenShift4
 }
 
 // KubeConfig represents a simplified kubectl configuration
@@ -183,17 +191,12 @@ func detectClusterType(config KubeConfig, apiResources []string) ClusterType {
 		return InfraGKE
 	}
 
-	// Check for OpenShift 4 clusters by examining the server hostname
-	if serverURL := getServerURL(config); serverURL != "" {
-		if parsedURL, err := url.Parse(serverURL); err == nil {
-			hostname := parsedURL.Hostname()
-			if strings.HasSuffix(hostname, ".ocp.infra.rox.systems") {
-				// Further verify it's OpenShift 4 by checking the API resources
-				if isOpenShift4(apiResources) {
-					return InfraOpenShift4
-				}
-			}
+	// Check for OpenShift 4 clusters.
+	if isOpenShift4(apiResources) {
+		if isInfraOpenShift4(config) {
+			return InfraOpenShift4
 		}
+		return OpenShift4
 	}
 
 	// Check for Kind clusters
@@ -203,6 +206,19 @@ func detectClusterType(config KubeConfig, apiResources []string) ClusterType {
 	}
 
 	return ClusterTypeUnknown
+}
+
+func isInfraOpenShift4(config KubeConfig) bool {
+	serverURL := getServerURL(config)
+	if serverURL == "" {
+		return false
+	}
+	parsedURL, err := url.Parse(serverURL)
+	if err != nil {
+		return false
+	}
+	hostname := parsedURL.Hostname()
+	return strings.HasSuffix(hostname, ".ocp.infra.rox.systems")
 }
 
 // getServerURL retrieves the server URL from the KubeConfig

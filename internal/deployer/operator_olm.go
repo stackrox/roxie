@@ -72,26 +72,46 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	return nil
 }
 
-// checkOLMInstalled checks if OLM is installed in the cluster.
+// checkOLMInstalled checks if OLM is installed in the cluster by verifying
+// the API server is ready to serve the required OLM resource types.
 func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
-	// Check for OLM CRDs
-	requiredCRDs := []string{
+	requiredResources := []string{
 		"catalogsources.operators.coreos.com",
 		"subscriptions.operators.coreos.com",
 		"installplans.operators.coreos.com",
 		"clusterserviceversions.operators.coreos.com",
 	}
 
-	for _, crd := range requiredCRDs {
-		// TODO(ROX-34499): actually this is not the right way to check whether it's safe to create a resource of a given kind.
-		// A CRD can be present, but still being loaded or end up not accepted by the API server.
-		// Instead we should use the `kubectl api-resources` subcommand which exposes the status we're looking for.
-		_, err := d.runKubectl(ctx, k8s.KubectlOptions{
-			Args: []string{"get", "crd", crd},
-		})
-		if err != nil {
-			return fmt.Errorf("OLM not installed: CRD %s not found. Please install OLM first", crd)
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		Args: []string{"api-resources", "--api-group=operators.coreos.com", "-o", "name"},
+	})
+	if err != nil {
+		if result.Stderr != "" {
+			d.logger.Error("kubectl stderr:")
+			for stderrLine := range strings.SplitSeq(result.Stderr, "\n") {
+				d.logger.Errorf("stderr: %s", stderrLine)
+			}
 		}
+		return fmt.Errorf("failed to query api-group operators.coreos.com: %w", err)
+	}
+
+	available := make(map[string]bool)
+	for line := range strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n") {
+		name := strings.TrimSpace(line)
+		available[name] = true
+	}
+
+	var missingResources []string
+	for _, resource := range requiredResources {
+		if !available[resource] {
+			missingResources = append(missingResources, resource)
+		}
+	}
+	if len(missingResources) > 0 {
+		for _, resource := range missingResources {
+			d.logger.Errorf("OLM resource not served by the API server: %s", resource)
+		}
+		return fmt.Errorf("OLM is not properly installed, %d required resource(s) missing", len(missingResources))
 	}
 
 	d.logger.Success("✓ OLM detected in cluster")
@@ -335,35 +355,34 @@ func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 
 // detectOperatorDeploymentMode detects how the operator is currently deployed.
 // Returns (operatorExists bool, isOLM OperatorDeploymentMode)
-func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, OperatorDeploymentMode) {
+func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, OperatorDeploymentMode, error) {
+	const olmOwnerLabel = "olm.owner"
+
 	// First, check if a Subscription exists (OLM-specific resource)
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace},
 	})
 	if err == nil {
-		return true, OperatorModeOLM
+		return true, OperatorModeOLM, nil
 	}
 
-	// If no subscription, check if operator deployment exists.
-	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace},
-	})
-	if err == nil {
-		// Deployment exists - check if it has OLM owner labels.
-		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-			Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace, "-o", "jsonpath={.metadata.labels}"},
-		})
-		// TODO(ROX-34499): This is not very robust. Better retrieve a specific label in the `get`
-		// command?
-		if err == nil && strings.Contains(result.Stdout, "olm.owner") {
-			return true, OperatorModeOLM
-		}
-		// Deployment exists without OLM labels = non-OLM deployment.
-		return true, OperatorModeNonOLM
+	// If no subscription, check if operator deployment exists/if it has the expected OLM label.
+	labelValue, err := k8s.RetrieveClusterResourceLabel(ctx, d.logger, operatorNamespace, "deployment", operatorDeploymentName, olmOwnerLabel)
+	if k8s.IsResourceNotFound(err) {
+		// No operator deployment found.
+		return false, OperatorModeNonOLM, nil
+	}
+	if err != nil {
+		return false, OperatorModeNonOLM, err
 	}
 
-	// No operator found.
-	return false, OperatorModeNonOLM
+	if labelValue == "" {
+		// Deployment exists without OLM labels -> non-OLM deployment.
+		return true, OperatorModeNonOLM, nil
+	}
+
+	// Label set -> OLM deployment.
+	return true, OperatorModeOLM, nil
 }
 
 // teardownOperatorOLM removes the operator when installed via OLM.

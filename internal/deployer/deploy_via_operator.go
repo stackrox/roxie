@@ -55,7 +55,10 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	}
 
 	// Detect current operator deployment mode
-	operatorExists, currentMode := d.detectOperatorDeploymentMode(ctx)
+	operatorExists, currentMode, err := d.detectOperatorDeploymentMode(ctx)
+	if err != nil {
+		return fmt.Errorf("detecting operator deployment mode: %w", err)
+	}
 	needsDeployment := false
 	needsTeardown := false
 
