@@ -464,7 +464,7 @@ func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Com
 	defer cancel()
 
 	// Spawn a goroutine, which waits until some success condition, sending the result (nil or error) through a dedicated channel.
-	waitChannel := make(chan error, 1)
+	waitChannel := make(chan error)
 
 	go func() {
 		err := d.waitForAvailableCondition(waitCtx, waitCfg.WaitFor, waitCfg.Namespace, waitCfg.Timeout)
