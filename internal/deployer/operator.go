@@ -642,7 +642,10 @@ func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 
 // teardownOperator removes the operator if it exists, detecting the deployment mode automatically.
 func (d *Deployer) teardownOperator(ctx context.Context) error {
-	operatorExists, operatorMode := d.detectOperatorDeploymentMode(ctx)
+	operatorExists, operatorMode, err := d.detectOperatorDeploymentMode(ctx)
+	if err != nil {
+		return fmt.Errorf("detecting operator deployment mode: %w", err)
+	}
 	if !operatorExists {
 		d.logger.Dim("No operator deployment found, skipping operator teardown")
 		return nil

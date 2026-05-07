@@ -335,35 +335,34 @@ func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 
 // detectOperatorDeploymentMode detects how the operator is currently deployed.
 // Returns (operatorExists bool, isOLM OperatorDeploymentMode)
-func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, OperatorDeploymentMode) {
+func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, OperatorDeploymentMode, error) {
+	const olmOwnerLabel = "olm.owner"
+
 	// First, check if a Subscription exists (OLM-specific resource)
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace},
 	})
 	if err == nil {
-		return true, OperatorModeOLM
+		return true, OperatorModeOLM, nil
 	}
 
-	// If no subscription, check if operator deployment exists.
-	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace},
-	})
-	if err == nil {
-		// Deployment exists - check if it has OLM owner labels.
-		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-			Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace, "-o", "jsonpath={.metadata.labels}"},
-		})
-		// TODO(ROX-34499): This is not very robust. Better retrieve a specific label in the `get`
-		// command?
-		if err == nil && strings.Contains(result.Stdout, "olm.owner") {
-			return true, OperatorModeOLM
-		}
-		// Deployment exists without OLM labels = non-OLM deployment.
-		return true, OperatorModeNonOLM
+	// If no subscription, check if operator deployment exists/if it has the expected OLM label.
+	labelValue, err := k8s.RetrieveClusterResourceLabel(ctx, d.logger, operatorNamespace, "deployment", operatorDeploymentName, olmOwnerLabel)
+	if k8s.IsResourceNotFound(err) {
+		// No operator deployment found.
+		return false, OperatorModeNonOLM, nil
+	}
+	if err != nil {
+		return false, OperatorModeNonOLM, err
 	}
 
-	// No operator found.
-	return false, OperatorModeNonOLM
+	if labelValue == "" {
+		// Deployment exists without OLM labels -> non-OLM deployment.
+		return true, OperatorModeNonOLM, nil
+	}
+
+	// Label set -> OLM deployment.
+	return true, OperatorModeOLM, nil
 }
 
 // teardownOperatorOLM removes the operator when installed via OLM.
