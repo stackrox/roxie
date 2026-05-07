@@ -458,6 +458,7 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 	}
 	if deploySettings.SecuredCluster.ResourceProfile == types.ResourceProfileAuto {
 		profile := clusterdefaults.ResolveAutoResourceProfile(clusterType)
+		log.Dimf("Selecting resource profile %v for SecuredCluster", profile)
 		deploySettings.SecuredCluster.ResourceProfile = profile
 	}
 
