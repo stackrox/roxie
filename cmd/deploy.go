@@ -111,7 +111,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			return errors.New("cannot use both --olm and --konflux flags together (not currently implemented)")
 		}
 		clusterType := env.GetCurrentClusterType()
-		if clusterType != env.InfraOpenShift4 {
+		if !clusterType.IsOpenShift() {
 			return fmt.Errorf("--konflux flag is only supported on OpenShift 4 clusters (current cluster type: %s)", clusterType.String())
 		}
 	}
