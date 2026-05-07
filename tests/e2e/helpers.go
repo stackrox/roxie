@@ -245,7 +245,7 @@ var clusterDumpNamespaces = []string{
 	"stackrox",
 }
 
-func dumpClusterOnFailure(t *testing.T) {
+func dumpClusterStateOnFailure(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
 		if !t.Failed() {
