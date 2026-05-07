@@ -86,7 +86,13 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 		Args: []string{"api-resources", "--api-group=operators.coreos.com", "-o", "name"},
 	})
 	if err != nil {
-		return fmt.Errorf("OLM not installed: api-group operators.coreos.com not available. Please install OLM first")
+		if result.Stderr != "" {
+			d.logger.Error("kubectl stderr:")
+			for stderrLine := range strings.SplitSeq(result.Stderr, "\n") {
+				d.logger.Errorf("stderr: %s", stderrLine)
+			}
+		}
+		return fmt.Errorf("failed to query api-group operators.coreos.com: %w", err)
 	}
 
 	available := make(map[string]bool)
