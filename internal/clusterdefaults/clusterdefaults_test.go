@@ -14,6 +14,7 @@ func TestClusterDefaults(t *testing.T) {
 	tests := []struct {
 		name        string
 		clusterType types.ClusterType
+		config      deployer.Config
 		wantConfig  deployer.Config
 	}{
 		{
@@ -95,7 +96,7 @@ func TestClusterDefaults(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := deployer.NewConfig()
+			config := tt.config
 			_, err := ApplyClusterDefaults(tt.clusterType, &config)
 			require.NoError(t, err)
 
