@@ -397,11 +397,8 @@ func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}
 }
 
 // waitForAvailableCondition waits for the specified namespace/resource
-func (d *Deployer) waitForAvailableCondition(ctx context.Context, resource, namespace string) error {
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		return errors.New("waitForAvailableCondition requires a deadline be set on the provided context")
-	}
+func (d *Deployer) waitForAvailableCondition(ctx context.Context, resource, namespace string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
 
 	// We need this extra step, because a "kubectl wait" fails immediately, when waiting for readiness of a deployment
 	// which does not exist (yet).
@@ -490,14 +487,15 @@ func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Com
 	waitCfg := d.constructComponentWaitConfig(comp)
 	d.logger.Infof("⏳ Waiting for %s to become ready (timeout: %s)...", comp, waitCfg.timeout)
 
-	waitCtx, cancel := context.WithTimeout(ctx, waitCfg.timeout)
+	const padding = 5 * time.Second
+	waitCtx, cancel := context.WithTimeout(ctx, waitCfg.timeout+padding)
 	defer cancel()
 
 	// Spawn a goroutine, which waits until some success condition, sending the result (nil or error) through a dedicated channel.
 	waitChannel := make(chan error, 1)
 
 	go func() {
-		err := d.waitForAvailableCondition(waitCtx, waitCfg.waitFor, waitCfg.namespace)
+		err := d.waitForAvailableCondition(waitCtx, waitCfg.waitFor, waitCfg.namespace, waitCfg.timeout)
 		if err != nil {
 			waitChannel <- fmt.Errorf("error waiting for %s deployment to become Available: %v", comp, err)
 			return
