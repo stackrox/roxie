@@ -72,26 +72,46 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	return nil
 }
 
-// checkOLMInstalled checks if OLM is installed in the cluster.
+// checkOLMInstalled checks if OLM is installed in the cluster by verifying
+// the API server is ready to serve the required OLM resource types.
 func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
-	// Check for OLM CRDs
-	requiredCRDs := []string{
+	requiredResources := []string{
 		"catalogsources.operators.coreos.com",
 		"subscriptions.operators.coreos.com",
 		"installplans.operators.coreos.com",
 		"clusterserviceversions.operators.coreos.com",
 	}
 
-	for _, crd := range requiredCRDs {
-		// TODO(ROX-34499): actually this is not the right way to check whether it's safe to create a resource of a given kind.
-		// A CRD can be present, but still being loaded or end up not accepted by the API server.
-		// Instead we should use the `kubectl api-resources` subcommand which exposes the status we're looking for.
-		_, err := d.runKubectl(ctx, k8s.KubectlOptions{
-			Args: []string{"get", "crd", crd},
-		})
-		if err != nil {
-			return fmt.Errorf("OLM not installed: CRD %s not found. Please install OLM first", crd)
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		Args: []string{"api-resources", "--api-group=operators.coreos.com", "-o", "name"},
+	})
+	if err != nil {
+		if result.Stderr != "" {
+			d.logger.Error("kubectl stderr:")
+			for stderrLine := range strings.SplitSeq(result.Stderr, "\n") {
+				d.logger.Errorf("stderr: %s", stderrLine)
+			}
 		}
+		return fmt.Errorf("failed to query api-group operators.coreos.com: %w", err)
+	}
+
+	available := make(map[string]bool)
+	for line := range strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n") {
+		name := strings.TrimSpace(line)
+		available[name] = true
+	}
+
+	var missingResources []string
+	for _, resource := range requiredResources {
+		if !available[resource] {
+			missingResources = append(missingResources, resource)
+		}
+	}
+	if len(missingResources) > 0 {
+		for _, resource := range missingResources {
+			d.logger.Errorf("OLM resource not served by the API server: %s", resource)
+		}
+		return fmt.Errorf("OLM is not properly installed, %d required resource(s) missing", len(missingResources))
 	}
 
 	d.logger.Success("✓ OLM detected in cluster")
