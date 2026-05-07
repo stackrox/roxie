@@ -370,7 +370,7 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		deploySettings.SecuredCluster.ResourceProfile = profile
 	}
 
-	// We need to do this irregardless of wether the operator is deployed or not, because
+	// We need to do this regardless of whether the operator is deployed or not, because
 	// this includes the transformation of StackRox main image tags to semver compatibles versions,
 	// which we will make use of later for checking version constraints.
 	if err := deploySettings.Operator.Configure(&deploySettings.Roxie); err != nil {
