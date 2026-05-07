@@ -440,23 +440,23 @@ func (d *Deployer) waitForResourceToExist(ctx context.Context, resource, namespa
 	}
 }
 
-func (d *Deployer) getWaitConfig(comp component.Component) WaitConfig {
+func (d *Deployer) getWaitConfig(comp component.Component) (WaitConfig, error) {
 	switch comp {
 	case component.Central:
-		return d.config.Central.GetWaitConfig()
+		return d.config.Central.GetWaitConfig(), nil
 	case component.SecuredCluster:
-		return d.config.SecuredCluster.GetWaitConfig()
+		return d.config.SecuredCluster.GetWaitConfig(), nil
 	default:
-		return WaitConfig{}
+		return WaitConfig{}, fmt.Errorf("unsupported component for wait config: %s", comp)
 	}
 }
 
 // waitForComponentReady waits for a component to be ready.
 func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Component) error {
-	if comp != component.Central && comp != component.SecuredCluster {
-		return errors.New("waitForComponentReady only supports Central or SecuredCluster components")
+	waitCfg, err := d.getWaitConfig(comp)
+	if err != nil {
+		return err
 	}
-	waitCfg := d.getWaitConfig(comp)
 	d.logger.Infof("⏳ Waiting for %s to become ready (timeout: %s)...", comp, waitCfg.Timeout)
 
 	const padding = 5 * time.Second
