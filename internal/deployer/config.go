@@ -12,10 +12,10 @@ import (
 // Config is the top-level deployment configuration, combining settings for
 // roxie itself, the operator, Central, and SecuredCluster.
 type Config struct {
-	Roxie          RoxieConfig          `yaml:"roxie"`
-	Operator       OperatorConfig       `yaml:"operator"`
-	Central        CentralConfig        `yaml:"central"`
-	SecuredCluster SecuredClusterConfig `yaml:"securedCluster"`
+	Roxie          RoxieConfig          `yaml:"roxie,omitempty"`
+	Operator       OperatorConfig       `yaml:"operator,omitempty"`
+	Central        CentralConfig        `yaml:"central,omitempty"`
+	SecuredCluster SecuredClusterConfig `yaml:"securedCluster,omitempty"`
 }
 
 // NewConfig returns a Config populated with default values.
@@ -65,9 +65,9 @@ func (c *Config) MergeInUnstructured(m map[string]interface{}) error {
 
 // RoxieConfig holds roxie-level settings such as version and feature flags.
 type RoxieConfig struct {
-	Version       string          `yaml:"version"`
-	KonfluxImages bool            `yaml:"konfluxImages"`
-	FeatureFlags  map[string]bool `yaml:"featureFlags"`
+	Version       string          `yaml:"version,omitempty"`
+	KonfluxImages bool            `yaml:"konfluxImages,omitempty"`
+	FeatureFlags  map[string]bool `yaml:"featureFlags,omitempty"`
 }
 
 // NewRoxieConfig returns a RoxieConfig with initialized defaults.
@@ -79,9 +79,9 @@ func NewRoxieConfig() RoxieConfig {
 
 // OperatorConfig controls how the ACS operator is deployed.
 type OperatorConfig struct {
-	SkipDeployment bool   `yaml:"skipDeployment"`
-	DeployViaOlm   bool   `yaml:"deployViaOlm"`
-	Version        string `yaml:"version"`
+	SkipDeployment bool   `yaml:"skipDeployment,omitempty"`
+	DeployViaOlm   bool   `yaml:"deployViaOlm,omitempty"`
+	Version        string `yaml:"version,omitempty"`
 }
 
 // Configure derives the operator version from the roxie configuration.
@@ -92,14 +92,14 @@ func (c *OperatorConfig) Configure(roxieConfig *RoxieConfig) error {
 
 // CentralConfig holds deployment settings for the Central component.
 type CentralConfig struct {
-	Namespace           string                 `yaml:"namespace"`
-	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile"`
-	PauseReconciliation bool                   `yaml:"pauseReconciliation"`
-	Exposure            *types.Exposure        `yaml:"exposure"`
-	DeployTimeout       time.Duration          `yaml:"deployTimeout"`
-	PortForwarding      *bool                  `yaml:"portForwarding"`
-	EarlyReadiness      bool                   `yaml:"earlyReadiness"`
-	Spec                map[string]interface{} `yaml:"spec"`
+	Namespace           string                 `yaml:"namespace,omitempty"`
+	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
+	PauseReconciliation bool                   `yaml:"pauseReconciliation,omitempty"`
+	Exposure            *types.Exposure        `yaml:"exposure,omitempty"`
+	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
+	PortForwarding      *bool                  `yaml:"portForwarding,omitempty"`
+	EarlyReadiness      bool                   `yaml:"earlyReadiness,omitempty"`
+	Spec                map[string]interface{} `yaml:"spec,omitempty"`
 }
 
 // DefaultCentralConfig returns a CentralConfig with sensible defaults.
@@ -194,12 +194,12 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 
 // SecuredClusterConfig holds deployment settings for the SecuredCluster component.
 type SecuredClusterConfig struct {
-	Namespace           string                 `yaml:"namespace"`
-	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile"`
-	PauseReconciliation bool                   `yaml:"pauseReconciliation"`
-	DeployTimeout       time.Duration          `yaml:"deployTimeout"`
-	EarlyReadiness      bool                   `yaml:"earlyReadiness"`
-	Spec                map[string]interface{} `yaml:"spec"`
+	Namespace           string                 `yaml:"namespace,omitempty"`
+	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
+	PauseReconciliation bool                   `yaml:"pauseReconciliation,omitempty"`
+	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
+	EarlyReadiness      bool                   `yaml:"earlyReadiness,omitempty"`
+	Spec                map[string]interface{} `yaml:"spec,omitempty"`
 }
 
 // DefaultSecuredClusterConfig returns a SecuredClusterConfig with sensible defaults.
