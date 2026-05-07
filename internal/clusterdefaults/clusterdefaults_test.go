@@ -92,6 +92,22 @@ func TestClusterDefaults(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:        "cluster does not override existing values",
+			clusterType: types.ClusterTypeInfraGKE,
+			config: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
