@@ -98,10 +98,10 @@ var (
 		"storageclasses",
 		"validatingwebhookconfigurations",
 	}
-)
 
-const (
-	injectedCABundleConfigMap = "injected-cabundle-stackrox-central-services"
+	injectedCABundleConfigMapPrefix         = "injected-cabundle-"
+	injectedCABundleConfigMapCentral        = injectedCABundleConfigMapPrefix + centralCrName
+	injectedCABundleConfigMapSecuredCluster = injectedCABundleConfigMapPrefix + securedClusterCrName
 )
 
 // Deployer is the base deployer for ACS
@@ -209,14 +209,13 @@ func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error 
 	// Pause reconciliation for other controllers, not just our RHACS operator.
 	// This is needed to ensure that there is no race causing the Cluster Network Operator
 	// to re-create the injected-ca-bundle ConfigMap during resource deletion.
-	err := d.preventOtherControllersFromReconciling(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to prevent other controllers from reconciling: %w", err)
+	if err := d.preventOtherControllersFromReconciling(ctx, component.Central); err != nil {
+		return fmt.Errorf("failed to prevent other controllers from reconciling Central resources: %w", err)
 	}
 
 	// Delete other resources by brute force.
 	resourceKinds := d.filterResourceKinds(allInstallableCentralResourceKinds)
-	err = d.deleteResources(ctx, d.centralNamespace, resourceKinds, "-l=app.kubernetes.io/part-of=stackrox-central-services")
+	err := d.deleteResources(ctx, d.centralNamespace, resourceKinds, "-l=app.kubernetes.io/part-of=stackrox-central-services")
 	if err != nil {
 		return err
 	}
@@ -226,9 +225,9 @@ func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error 
 		{Name: "central-db-backup", Kind: "pvc", OwnerName: centralCrName},
 		{Name: "admin-password", Kind: "secret"},
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: centralCrName},
-		// In case the Cluster Network Operator has succeeded in re-creating the injectedCABundleConfigMap
+		// In case the Cluster Network Operator has succeeded in re-creating the injected-cabundle configmap
 		// after our operator has already deleted it.
-		{Name: injectedCABundleConfigMap, Kind: "configmap"},
+		{Name: injectedCABundleConfigMapCentral, Kind: "configmap"},
 	} {
 		d.logger.Dimf("Attempting to delete %s/%s", resource.Kind, resource.Name)
 		if resource.OwnerName != "" {
@@ -263,17 +262,22 @@ func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error 
 	return nil
 }
 
-func (d *Deployer) preventOtherControllersFromReconciling(ctx context.Context) error {
-	return d.preventCABundleInjection(ctx)
+func (d *Deployer) preventOtherControllersFromReconciling(ctx context.Context, comp component.Component) error {
+	switch comp {
+	case component.Central:
+		return d.preventCABundleInjection(ctx, injectedCABundleConfigMapCentral, d.centralNamespace)
+	case component.SecuredCluster:
+		return d.preventCABundleInjection(ctx, injectedCABundleConfigMapSecuredCluster, d.sensorNamespace)
+	default:
+		return nil
+	}
 }
 
-func (d *Deployer) preventCABundleInjection(ctx context.Context) error {
-	configMapName := injectedCABundleConfigMap
-
+func (d *Deployer) preventCABundleInjection(ctx context.Context, configMapName, namespace string) error {
 	d.logger.Info("Removing CNO label from injected-cabundle ConfigMap to prevent CNO from injecting the CA bundle during cleanup")
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
-			"label", "configmap", configMapName, "-n", d.centralNamespace,
+			"label", "configmap", configMapName, "-n", namespace,
 			"config.openshift.io/inject-trusted-cabundle-",
 		},
 		IgnoreErrors: true,
@@ -305,6 +309,13 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context, wait bool)
 		}
 	}
 
+	// Pause reconciliation for other controllers, not just our RHACS operator.
+	// This is needed to ensure that there is no race causing the Cluster Network Operator
+	// to re-create the injected-ca-bundle ConfigMap during resource deletion.
+	if err := d.preventOtherControllersFromReconciling(ctx, component.SecuredCluster); err != nil {
+		return fmt.Errorf("failed to prevent other controllers from reconciling SecuredCluster resources: %w", err)
+	}
+
 	// In the meantime, delete other resources by brute force.
 	resourceKinds := d.filterResourceKinds(allInstallableSecuredClusterResourceKinds)
 	err := d.deleteResources(ctx, d.sensorNamespace, resourceKinds, "-l=app.kubernetes.io/part-of=stackrox-secured-cluster-services")
@@ -317,6 +328,9 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context, wait bool)
 		// We need to make sure that don't accidentally delete a scanner-db-password belonging to the central CR,
 		// when both are deployed into the same namespace.
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: securedClusterCrName},
+		// In case the Cluster Network Operator has succeeded in re-creating the injected-cabundle configmap
+		// after our operator has already deleted it.
+		{Name: injectedCABundleConfigMapSecuredCluster, Kind: "configmap"},
 	} {
 		d.logger.Dimf("Attempting to delete %s/%s", resource.Kind, resource.Name)
 		if resource.OwnerName != "" {
