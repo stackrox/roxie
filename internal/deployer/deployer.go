@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"syscall"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/fatih/color"
