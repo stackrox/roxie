@@ -122,8 +122,8 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 	}
 
 	for _, resource := range []ResourceToDelete{
-		{Name: "central-db", Kind: "pvc", OwnerName: centralCrName},
-		{Name: "central-db-backup", Kind: "pvc", OwnerName: centralCrName},
+		{Name: "central-db", Kind: "pvc"},
+		{Name: "central-db-backup", Kind: "pvc"},
 		{Name: "admin-password", Kind: "secret"},
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: centralCrName},
 	} {
