@@ -104,18 +104,33 @@ func (d *Deployer) deleteResources(ctx context.Context, namespace string, resour
 // Expects that reconciliation for the RHACS operator is paused.
 func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 	d.logger.Info("Deleting Central resources")
+	crExists := true
 
-	d.logger.Info("Removing any pause-reconcile annotation from Central")
-	if err := d.removePauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.centralNamespace); err != nil {
-		return err
-	}
-	if d.verbose {
-		d.logger.Dim("Removed any pause-reconcile annotation from Central")
+	if _, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.centralNamespace, "central", "stackrox-central-services"); err != nil {
+		if !k8s.IsResourceNotFound(err) {
+			return fmt.Errorf("retrieving Central CR: %w", err)
+		}
+		crExists = false
 	}
 
-	err := d.deleteResource(ctx, d.centralNamespace, "central", "stackrox-central-services", "--wait")
-	if err != nil {
-		return err
+	if crExists {
+		d.logger.Info("Removing any pause-reconcile annotation from Central")
+		if err := d.removePauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.centralNamespace); err != nil {
+			return err
+		}
+		if d.verbose {
+			d.logger.Dim("Removed any pause-reconcile annotation from Central")
+		}
+
+		err := d.deleteResource(ctx, d.centralNamespace, "central", "stackrox-central-services", "--wait")
+		if err != nil {
+			return err
+		}
+		if d.verbose {
+			d.logger.Dim("Deleted Central CR")
+		}
+	} else {
+		d.logger.Info("Deletion of Central resources requested, but Central CR is not present anymore")
 	}
 	if d.verbose {
 		d.logger.Dim("Deleted Central CR")
@@ -154,21 +169,33 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 
 func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 	d.logger.Info("Deleting SecuredCluster resources")
+	crExists := true
 
-	d.logger.Info("Removing any pause-reconcile annotation from SecuredCluster")
-	if err := d.removePauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace); err != nil {
-		return err
-	}
-	if d.verbose {
-		d.logger.Dim("Removed any pause-reconcile annotation from SecuredCluster")
+	if _, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.sensorNamespace, "securedcluster", "stackrox-secured-cluster-services"); err != nil {
+		if !k8s.IsResourceNotFound(err) {
+			return fmt.Errorf("retrieving SecuredCluster CR: %w", err)
+		}
+		crExists = false
 	}
 
-	err := d.deleteResource(ctx, d.sensorNamespace, "securedcluster", "stackrox-secured-cluster-services", "--wait")
-	if err != nil {
-		return err
-	}
-	if d.verbose {
-		d.logger.Dim("Deleted SecuredCluster CR")
+	if crExists {
+		d.logger.Info("Removing any pause-reconcile annotation from SecuredCluster")
+		if err := d.removePauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace); err != nil {
+			return err
+		}
+		if d.verbose {
+			d.logger.Dim("Removed any pause-reconcile annotation from SecuredCluster")
+		}
+
+		err := d.deleteResource(ctx, d.sensorNamespace, "securedcluster", "stackrox-secured-cluster-services", "--wait")
+		if err != nil {
+			return err
+		}
+		if d.verbose {
+			d.logger.Dim("Deleted SecuredCluster CR")
+		}
+	} else {
+		d.logger.Info("Deletion of SecuredCluster resources requested, but SecuredCluster CR is not present anymore")
 	}
 
 	// Delete resources, which are treated special.
@@ -867,6 +894,7 @@ func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceT
 			"-n", namespace,
 			fmt.Sprintf("%s-", pauseReconcileAnnotationKey),
 		},
+		IgnoreErrors: true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to remove pause-reconcile annotation: %w", err)

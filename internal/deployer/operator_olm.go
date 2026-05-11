@@ -127,13 +127,6 @@ func (d *Deployer) getOperatorIndexImage() string {
 func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) error {
 	d.logger.Info("Creating CatalogSource...")
 
-	// Check if CatalogSource CRD supports securityContextConfig (OCP 4.14+).
-	hasSecurityContextConfig, err := d.catalogSourceSupportsSecurityContextConfig(ctx)
-	if err != nil {
-		d.logger.Warning("Could not check CatalogSource CRD capabilities, proceeding without securityContextConfig")
-		hasSecurityContextConfig = false
-	}
-
 	catalogSource := map[string]interface{}{
 		"apiVersion": "operators.coreos.com/v1alpha1",
 		"kind":       "CatalogSource",
@@ -145,15 +138,10 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 			"sourceType":  "grpc",
 			"image":       indexImage,
 			"displayName": "StackRox Operator Index",
+			"grpcPodConfig": map[string]interface{}{
+				"securityContextConfig": "restricted",
+			},
 		},
-	}
-
-	// TODO(ROX-34499): Add security context config if supported.
-	if hasSecurityContextConfig {
-		spec := catalogSource["spec"].(map[string]interface{})
-		spec["grpcPodConfig"] = map[string]interface{}{
-			"securityContextConfig": "restricted",
-		}
 	}
 
 	yamlData, err := yaml.Marshal(catalogSource)
@@ -162,7 +150,9 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 	}
 
 	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
-		Args:  []string{"apply", "-f", "-"},
+		// Apply with --validate=ignore because securityContextConfig may not
+		// be in the CatalogSource CRD schema.
+		Args:  []string{"apply", "--validate=ignore", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
@@ -171,20 +161,6 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 
 	d.logger.Success("✓ CatalogSource created")
 	return nil
-}
-
-// catalogSourceSupportsSecurityContextConfig checks if the CatalogSource CRD supports securityContextConfig.
-func (d *Deployer) catalogSourceSupportsSecurityContextConfig(ctx context.Context) (bool, error) {
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{"get", "crd", "catalogsources.operators.coreos.com", "-o", "yaml"},
-	})
-	if err != nil {
-		return false, err
-	}
-
-	// TODO(ROX-34499): this is overly optimistic and would incorrectly succeed if an api version
-	// that contains this had "serving: false"
-	return strings.Contains(result.Stdout, "securityContextConfig"), nil
 }
 
 // createOperatorGroup creates the OperatorGroup.
