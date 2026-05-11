@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stackrox/roxie/internal/clusterdefaults"
@@ -28,62 +29,7 @@ var (
 	sharedNamespace = "stackrox"
 )
 
-// configShortCut implements pflag.Value so that CLI flags can directly mutate
-// the deployment configuration. Each flag carries its own apply function, which
-// may modify one or more fields in deployer.Config, or merge in an arbitrary
-// YAML overlay.
-type configShortCut struct {
-	settings *deployer.Config
-	flagType string
-	applyFn  func(val string, settings *deployer.Config) error
-}
-
-func newConfigShortCut(
-	settings *deployer.Config,
-	flagType string,
-	applyFn func(val string, settings *deployer.Config) error,
-) *configShortCut {
-	return &configShortCut{
-		flagType: flagType,
-		settings: settings,
-		applyFn:  applyFn,
-	}
-}
-
-func (y *configShortCut) Set(val string) error {
-	return y.applyFn(val, y.settings)
-}
-
-func (y *configShortCut) String() string {
-	return "" // Not sure what to return here.
-}
-
-func (y *configShortCut) Type() string {
-	return y.flagType
-}
-
-func newConfigShortCutBool(settings *deployer.Config, path string) *configShortCut {
-	pathElements := strings.Split(path, ".")
-	applyFn := func(val string, settings *deployer.Config) error {
-		var valParsed bool
-		if err := yaml.Unmarshal([]byte(val), &valParsed); err != nil {
-			return err
-		}
-		u, err := helpers.StructToMap(settings)
-		if err != nil {
-			return err
-		}
-		if err := unstructured.SetNestedField(u, valParsed, pathElements...); err != nil {
-			return err
-		}
-		return helpers.MapToStruct(u, settings)
-	}
-	return newConfigShortCut(settings, "bool", applyFn)
-}
-
 func newDeployCmd(settings *deployer.Config) *cobra.Command {
-	var flag *pflag.Flag
-
 	cmd := &cobra.Command{
 		Use:   "deploy [component]",
 		Short: "Deploy ACS components",
@@ -105,113 +51,93 @@ Examples:
 	// --envrc <filename>.
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
 
-	// --olm[=true/false].
-	flag = cmd.Flags().VarPF(newConfigShortCutBool(settings, "operator.deployViaOlm"), "olm", "", "Deploy operator via OLM (requires OLM installed)")
-	flag.NoOptDefVal = "true"
+	registerFlag(cmd, settings, "olm", "Deploy operator via OLM (requires OLM installed)",
+		WithNoOptDefVal("true"),
+		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+			config.Operator.DeployViaOlm = val
+			return nil
+		}),
+	)
 
-	// --konflux[=true/false]
-	flag = cmd.Flags().VarPF(newConfigShortCutBool(settings, "roxie.konfluxImages"), "konflux", "", "Use Konflux images")
-	flag.NoOptDefVal = "true"
+	registerFlag(cmd, settings, "konflux", "Use Konflux images",
+		WithNoOptDefVal("true"),
+		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+			config.Roxie.KonfluxImages = val
+			return nil
+		}),
+	)
 
-	// --deploy-operator[=true/false].
-	flag = cmd.Flags().VarPF(
-		newConfigShortCut(
-			settings,
-			"bool",
-			func(val string, settings *deployer.Config) error {
-				var valParsed bool
-				if err := yaml.Unmarshal([]byte(val), &valParsed); err != nil {
-					return err
-				}
-				settings.Operator.SkipDeployment = !valParsed
-				return nil
-			},
-		), "deploy-operator", "", "Whether to deploy and manage the operator")
-	flag.NoOptDefVal = "true"
+	registerFlag(cmd, settings, "deploy-operator", "Whether to deploy and manage the operator",
+		WithNoOptDefVal("true"),
+		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+			config.Operator.SkipDeployment = !val
+			return nil
+		}),
+	)
 
-	// --port-forward[=true/false].
-	flag = cmd.Flags().VarPF(
-		newConfigShortCut(
-			settings, "bool",
-			func(val string, settings *deployer.Config) error {
-				var valParsed bool
-				if err := yaml.Unmarshal([]byte(val), &valParsed); err != nil {
-					return err
-				}
-				settings.Central.PortForwarding = ptr.To(valParsed)
-				return nil
-			},
-		), "port-forwarding", "", "Enable localhost port-forward for Central")
-	flag.NoOptDefVal = "true"
+	registerFlag(cmd, settings, "port-forwarding", "Enable localhost port-forward for Central",
+		WithNoOptDefVal("true"),
+		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+			config.Central.PortForwarding = ptr.To(val)
+			return nil
+		}),
+	)
 
-	// --pause-reconciliation[=true/false].
-	flag = cmd.Flags().VarPF(
-		newConfigShortCut(
-			settings, "bool",
-			func(val string, settings *deployer.Config) error {
-				var valParsed bool
-				if err := yaml.Unmarshal([]byte(val), &valParsed); err != nil {
-					return err
-				}
-				settings.Central.PauseReconciliation = valParsed
-				settings.SecuredCluster.PauseReconciliation = valParsed
-				return nil
-			},
-		), "pause-reconciliation", "", "Pause reconciliation after deployment")
-	flag.NoOptDefVal = "true"
+	registerFlag(cmd, settings, "pause-reconciliation", "Pause reconciliation after deployment",
+		WithNoOptDefVal("true"),
+		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+			config.Central.PauseReconciliation = val
+			config.SecuredCluster.PauseReconciliation = val
+			return nil
+		}),
+	)
 
-	// --config/-c <filename>.
-	cmd.Flags().VarP(
-		newConfigShortCut(
-			settings, "file",
-			func(filename string, settings *deployer.Config) error {
-				if filename == "-" {
-					filename = "/dev/stdin"
-				}
-				data, err := os.ReadFile(filename)
-				if err != nil {
-					return fmt.Errorf("failed to read config file %q: %w", filename, err)
-				}
-				var obj map[string]interface{}
-				if err := yaml.Unmarshal(data, &obj); err != nil {
-					return fmt.Errorf("failed to decode config file %q: %w", filename, err)
-				}
-				return settings.MergeInUnstructured(obj)
-			},
-		), "config", "c", "Path to YAML config file")
+	registerFlag(cmd, settings, "config", "Path to YAML config file",
+		WithShortName("c"),
+		WithApplyFn("filename", func(config *deployer.Config, filename string) error {
+			if filename == "-" {
+				filename = "/dev/stdin"
+			}
+			data, err := os.ReadFile(filename)
+			if err != nil {
+				return fmt.Errorf("failed to read config file %q: %w", filename, err)
+			}
+			var configFromFile deployer.Config
+			if err := yaml.Unmarshal(data, &configFromFile); err != nil {
+				return fmt.Errorf("failed to unmarshal config file %q: %w", filename, err)
+			}
+			if err := mergo.Merge(config, configFromFile, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+				return fmt.Errorf("mergin config file %q into deployer Config: %w", filename, err)
+			}
+			return nil
+		}),
+	)
 
-	// --exposure loadbalancer/none.
-	cmd.Flags().Var(
-		newConfigShortCut(
-			settings, "exposure",
-			func(val string, settings *deployer.Config) error {
-				var exposure types.Exposure
-				if err := yaml.Unmarshal([]byte(val), &exposure); err != nil {
-					return err
-				}
-				settings.Central.Exposure = ptr.To(exposure)
-				return nil
-			},
-		), "exposure", "Central exposure backend (loadbalancer, none)")
+	registerFlag(cmd, settings, "exposure", "Central exposure backend (loadbalancer, none)",
+		WithApplyFn("exposure", func(config *deployer.Config, val string) error {
+			var exposure types.Exposure
+			if err := yaml.Unmarshal([]byte(val), &exposure); err != nil {
+				return err
+			}
+			config.Central.Exposure = ptr.To(exposure)
+			return nil
+		}),
+	)
 
-	// --resources <resource profile name>.
-	cmd.Flags().Var(
-		newConfigShortCut(
-			settings, "resource-profile",
-			func(val string, settings *deployer.Config) error {
-				var valParsed types.ResourceProfile
-				if err := yaml.Unmarshal([]byte(val), &valParsed); err != nil {
-					return err
-				}
-				settings.Central.ResourceProfile = valParsed
-				settings.SecuredCluster.ResourceProfile = valParsed
-				return nil
-			},
-		), "resources", fmt.Sprintf("Resource sizing preset (%s)", types.ResourceProfilesJoined()))
+	registerFlag(cmd, settings, "resources", fmt.Sprintf("Resource sizing preset (%s)", types.ResourceProfilesJoined()),
+		WithApplyFn("resource-profile", func(config *deployer.Config, val string) error {
+			var valParsed types.ResourceProfile
+			if err := yaml.Unmarshal([]byte(val), &valParsed); err != nil {
+				return err
+			}
+			config.Central.ResourceProfile = valParsed
+			config.SecuredCluster.ResourceProfile = valParsed
+			return nil
+		}),
+	)
 
-	// --set <set expressions>.
-	cmd.Flags().Var(newConfigShortCut(settings, "set-expression",
-		func(expr string, settings *deployer.Config) error {
+	registerFlag(cmd, settings, "set", "Set expressions, e.g. securedCluster.spec.clusterName=sensor",
+		WithApplyFn("set-expression", func(config *deployer.Config, expr string) error {
 			key, yamlValue, found := strings.Cut(expr, "=")
 			if !found {
 				return fmt.Errorf("invalid set expression '%s': expected format 'key.path=value'", expr)
@@ -221,6 +147,7 @@ Examples:
 				return fmt.Errorf("failed to unmarshal value '%s' for key '%s': %w", yamlValue, key, err)
 			}
 			// SetNestedField requires JSON-compatible types: float64 for numbers, not int.
+			// Fix types if needed.
 			switch v := val.(type) {
 			case int:
 				val = float64(v)
@@ -229,119 +156,84 @@ Examples:
 			}
 			pathElements := strings.Split(key, ".")
 			if len(pathElements) > 0 && pathElements[0] == "spec" {
-				// Special error reporting for this case, because it was supported previously.
-				return errors.New("set expression begin with 'spec.' -- it must be prefixed with 'central.' or 'securedCluster.'")
+				return errors.New("set expression begins with 'spec.' -- it must be prefixed with 'central.' or 'securedCluster.'")
 			}
-			u, err := helpers.StructToMap(settings)
-			if err != nil {
+			unstructuredPatch := make(map[string]interface{})
+			if err := unstructured.SetNestedField(unstructuredPatch, val, pathElements...); err != nil {
 				return err
 			}
-			if err := unstructured.SetNestedField(u, val, pathElements...); err != nil {
+			var patch deployer.Config
+			if err := helpers.MapToStruct(unstructuredPatch, &patch); err != nil {
 				return err
 			}
-			var updatedSettings deployer.Config
-			if err := helpers.MapToStruct(u, &updatedSettings); err != nil {
-				return err
+			if reflect.DeepEqual(patch, deployer.Config{}) {
+				return fmt.Errorf("set expression %q had no effect -- typo?", expr)
 			}
-			if reflect.DeepEqual(settings, &updatedSettings) {
-				return fmt.Errorf("Set expression %q had no effect -- typo?", expr)
+
+			if err := mergo.Merge(config, &patch, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+				return fmt.Errorf("merging set-expression %q into deployer Config: %w", expr, err)
 			}
-			*settings = updatedSettings
 
 			return nil
+		}),
+	)
 
-		},
-	), "set", "Set expressions, e.g. securedCluster.spec.clusterName=sensor")
+	registerFlag(cmd, settings, "single-namespace", "Deploy all components in a single namespace ('stackrox')",
+		WithNoOptDefVal("true"),
+		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+			if val {
+				config.Central.Namespace = sharedNamespace
+				config.SecuredCluster.Namespace = sharedNamespace
+			}
+			return nil
+		}),
+	)
 
-	// --single-namespace[=true/false].
-	flag = cmd.Flags().VarPF(
-		newConfigShortCut(
-			settings, "bool",
-			func(val string, settings *deployer.Config) error {
-				var valParsed bool
-				if err := yaml.Unmarshal([]byte(val), &valParsed); err != nil {
-					return err
-				}
-				if valParsed {
-					settings.Central.Namespace = sharedNamespace
-					settings.SecuredCluster.Namespace = sharedNamespace
-				}
-				return nil
-			},
-		), "single-namespace", "", "Deploy all components in a single namespace ('stackrox')")
-	flag.NoOptDefVal = "true"
+	registerFlag(cmd, settings, "tag", "Main image tag to use for deployment (takes precedence over MAIN_IMAGE_TAG environment variable)",
+		WithShortName("t"),
+		WithApplyFn("version", func(config *deployer.Config, mainImageTag string) error {
+			config.Roxie.Version = mainImageTag
+			return nil
+		}),
+	)
 
-	// --tag/-t <main image tag>.
-	cmd.Flags().VarP(
-		newConfigShortCut(
-			settings, "version",
-			func(mainImageTag string, settings *deployer.Config) error {
-				settings.Roxie.Version = mainImageTag
-				return nil
-			},
-		), "tag", "t", "Main image tag to use for deployment (takes precedence over MAIN_IMAGE_TAG environment variable)")
+	registerFlag(cmd, settings, "features", "Feature flag settings (e.g., +ROX_FOO,-ROX_BAR,ROX_BAZ=true)",
+		WithApplyFn("feature-flags", func(config *deployer.Config, featureFlagExpr string) error {
+			featureFlags, err := deployer.ParseFeatureFlags([]string{featureFlagExpr})
+			if err != nil {
+				return fmt.Errorf("parsing feature flags: %w", err)
+			}
+			for k, v := range featureFlags {
+				config.Roxie.FeatureFlags[k] = v
+			}
+			return nil
+		}),
+	)
 
-	// --features <feature flags...>
-	cmd.Flags().Var(
-		newConfigShortCut(
-			settings, "feature-flags",
-			func(featureFlagExpr string, settings *deployer.Config) error {
-				featureFlags, err := deployer.ParseFeatureFlags([]string{featureFlagExpr})
-				if err != nil {
-					return fmt.Errorf("parsing feature flags: %w", err)
-				}
-				for k, v := range featureFlags {
-					settings.Roxie.FeatureFlags[k] = v
-				}
-				return nil
-			},
-		), "features", "Feature flag settings (e.g., +ROX_FOO,-ROX_BAR,ROX_BAZ=true)")
+	registerFlag(cmd, settings, "central-wait", "maximum wait time for central to become ready (e.g., 5m, 10m)",
+		WithApplyFnDuration(func(config *deployer.Config, duration time.Duration) error {
+			config.Central.DeployTimeout = duration
+			return nil
+		}),
+	)
 
-	// --central-wait <duration>.
-	cmd.Flags().Var(
-		newConfigShortCut(
-			settings, "duration",
-			func(val string, settings *deployer.Config) error {
-				duration, err := time.ParseDuration(val)
-				if err != nil {
-					return err
-				}
-				settings.Central.DeployTimeout = duration
-				return nil
-			},
-		), "central-wait", "maximum wait time for central to become ready (e.g., 5m, 10m)")
+	registerFlag(cmd, settings, "secured-cluster-wait", "maximum wait time for secured cluster to become ready (e.g., 5m, 10m)",
+		WithApplyFnDuration(func(config *deployer.Config, duration time.Duration) error {
+			config.SecuredCluster.DeployTimeout = duration
+			return nil
+		}),
+	)
 
-	// --secured-cluster-wait <duration>.
-	cmd.Flags().Var(
-		newConfigShortCut(
-			settings, "duration",
-			func(val string, settings *deployer.Config) error {
-				duration, err := time.ParseDuration(val)
-				if err != nil {
-					return err
-				}
-				settings.SecuredCluster.DeployTimeout = duration
-				return nil
-			},
-		), "secured-cluster-wait", "maximum wait time for secured cluster to become ready (e.g., 5m, 10m)")
-
-	// --early-readiness[=true/false].
-	flag = cmd.Flags().VarPF(
-		newConfigShortCut(
-			settings, "bool",
-			func(val string, settings *deployer.Config) error {
-				var valParsed bool
-				if err := yaml.Unmarshal([]byte(val), &valParsed); err != nil {
-					return err
-				}
-				if valParsed {
-					settings.Central.EarlyReadiness = true
-					settings.SecuredCluster.EarlyReadiness = true
-				}
-				return nil
-			},
-		), "early-readiness", "", "Only wait for essential workloads (central/sensor) to be ready")
-	flag.NoOptDefVal = "true"
+	registerFlag(cmd, settings, "early-readiness", "Only wait for essential workloads (central/sensor) to be ready",
+		WithNoOptDefVal("true"),
+		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+			if val {
+				config.Central.EarlyReadiness = true
+				config.SecuredCluster.EarlyReadiness = true
+			}
+			return nil
+		}),
+	)
 
 	// Make --override an alias for --config, for backwards compatibility.
 	cmd.Flags().SetNormalizeFunc(func(f *pflag.FlagSet, name string) pflag.NormalizedName {
