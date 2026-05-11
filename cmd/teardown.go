@@ -22,23 +22,16 @@ func newTeardownCmd(settings *deployer.Config) *cobra.Command {
 		RunE:      runTeardown,
 	}
 
-	// // --single-namespace[=true/false].
-	// flag := cmd.Flags().VarPF(
-	// 	newConfigShortCut(
-	// 		settings, "bool",
-	// 		func(val string, settings *deployer.Config) error {
-	// 			var valParsed bool
-	// 			if err := yaml.Unmarshal([]byte(val), &valParsed); err != nil {
-	// 				return err
-	// 			}
-	// 			if valParsed {
-	// 				settings.Central.Namespace = sharedNamespace
-	// 				settings.SecuredCluster.Namespace = sharedNamespace
-	// 			}
-	// 			return nil
-	// 		},
-	// 	), "single-namespace", "", "Deploy all components in a single namespace ('stackrox')")
-	// flag.NoOptDefVal = "true"
+	registerFlag(cmd, settings, "single-namespace", "Deploy all components in a single namespace ('stackrox')",
+		WithNoOptDefVal("true"),
+		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+			if val {
+				config.Central.Namespace = sharedNamespace
+				config.SecuredCluster.Namespace = sharedNamespace
+			}
+			return nil
+		}),
+	)
 
 	return cmd
 }
