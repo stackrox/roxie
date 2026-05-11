@@ -30,70 +30,6 @@ var (
 
 	// AdminUsername is the default admin username for StackRox Central
 	AdminUsername = "admin"
-
-	// TODO(#91): at some point this will get out of date. If we filter by the app.../part-of
-	// label anyway, then maybe we should just delete all resource kinds present on cluster?
-	// also we should use the fully-qualified types
-	allInstallableCentralResourceKinds = []string{
-		"applications",
-		"clusterroles",
-		"configmaps",
-		"deployments",
-		"destinationrules",
-		"endpoints",
-		"endpointslices",
-		"horizontalpodautoscalers",
-		"networkpolicys",
-		"leases",
-		"persistentvolumes",
-		"persistentvolumeclaims",
-		"pods",
-		"podsecuritypolicys",
-		"prometheusrules",
-		"roles",
-		"rolebindings",
-		"replicasets",
-		"routes",
-		"secrets",
-		"services",
-		"serviceaccounts",
-		"servicemonitors",
-		"storageclasses",
-	}
-
-	allInstallableSecuredClusterResourceKinds = []string{
-		"clusterroles",
-		"clusterrolebindings",
-		"configmaps",
-		"consoleplugins",
-		"controllerrevisions",
-		"daemonsets",
-		"deployments",
-		"endpoints",
-		"endpointslices",
-		"destinationrules",
-		"horizontalpodautoscalers",
-		"networkpolicys",
-		"leases",
-		"persistentvolumes",
-		"persistentvolumeclaims",
-		"pods",
-		"podsecuritypolicys",
-		"prometheusrules",
-		"replicasets",
-		"roles",
-		"rolebindings",
-		"secrets",
-		"services",
-		"serviceaccounts",
-		"servicemonitors",
-		"storageclasses",
-		"validatingwebhookconfigurations",
-	}
-
-	injectedCABundleConfigMapPrefix         = "injected-cabundle-"
-	injectedCABundleConfigMapCentral        = injectedCABundleConfigMapPrefix + centralCrName
-	injectedCABundleConfigMapSecuredCluster = injectedCABundleConfigMapPrefix + securedClusterCrName
 )
 
 // Deployer is the base deployer for ACS
@@ -126,16 +62,6 @@ type ResourceToDelete struct {
 	OwnerName string
 }
 
-func (d *Deployer) filterResourceKinds(resourceKinds []string) []string {
-	filteredResourceKinds := make([]string, 0, len(resourceKinds))
-	for _, resourceKind := range resourceKinds {
-		if _, ok := d.clusterResourceKinds[resourceKind]; ok {
-			filteredResourceKinds = append(filteredResourceKinds, resourceKind)
-		}
-	}
-	return filteredResourceKinds
-}
-
 func (d *Deployer) deleteResource(ctx context.Context, namespace, resourceType, resourceName string, args ...string) error {
 	return d.deleteResources(ctx, namespace, []string{resourceType}, append([]string{resourceName}, args...)...)
 }
@@ -155,59 +81,43 @@ func (d *Deployer) deleteResources(ctx context.Context, namespace string, resour
 	return err
 }
 
-func (d *Deployer) deleteFinalizers(ctx context.Context, namespace, resourceType, resourceName string) error {
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{
-			"-n", namespace, "patch", resourceType, resourceName,
-			"-p", `{"metadata":{"finalizers":null}}`,
-			"--type=merge",
-		},
-	})
-	return err
-}
-
 // Expects that reconciliation for the RHACS operator is paused.
-func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error {
+func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 	d.logger.Info("Deleting Central resources")
-	var crExists bool
+	crExists := true
 
-	if d.doesResourceExist(ctx, "central", "stackrox-central-services", d.config.Central.Namespace) {
-		crExists = true
-
-		// Trigger async deletion of the Central CR.
-		err := d.deleteResource(ctx, d.config.Central.Namespace, "central", "stackrox-central-services", "--wait=false")
-		if err != nil {
-			return fmt.Errorf("failed to asynchronously delete Central CR: %w", err)
+	if _, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.config.Central.Namespace, "central", "stackrox-central-services"); err != nil {
+		if !k8s.IsResourceNotFound(err) {
+			return fmt.Errorf("retrieving Central CR: %w", err)
 		}
-
-		err = d.deleteFinalizers(ctx, d.config.Central.Namespace, "central", "stackrox-central-services")
-		if err != nil {
-			return fmt.Errorf("failed to delete finalizers on Central CR: %w", err)
-		}
+		crExists = false
 	}
 
-	// Pause reconciliation for other controllers, not just our RHACS operator.
-	// This is needed to ensure that there is no race causing the Cluster Network Operator
-	// to re-create the injected-ca-bundle ConfigMap during resource deletion.
-	if err := d.preventOtherControllersFromReconciling(ctx, component.Central); err != nil {
-		return fmt.Errorf("failed to prevent other controllers from reconciling Central resources: %w", err)
-	}
+	if crExists {
+		d.logger.Info("Removing any pause-reconcile annotation from Central")
+		if err := d.removePauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.config.Central.Namespace); err != nil {
+			return err
+		}
+		if d.verbose {
+			d.logger.Dim("Removed any pause-reconcile annotation from Central")
+		}
 
-	// Delete other resources by brute force.
-	resourceKinds := d.filterResourceKinds(allInstallableCentralResourceKinds)
-	err := d.deleteResources(ctx, d.config.Central.Namespace, resourceKinds, "-l=app.kubernetes.io/part-of=stackrox-central-services")
-	if err != nil {
-		return err
+		err := d.deleteResource(ctx, d.config.Central.Namespace, "central", "stackrox-central-services", "--wait")
+		if err != nil {
+			return err
+		}
+		if d.verbose {
+			d.logger.Dim("Deleted Central CR")
+		}
+	} else {
+		d.logger.Info("Deletion of Central resources requested, but Central CR is not present anymore")
 	}
 
 	for _, resource := range []ResourceToDelete{
-		{Name: "central-db", Kind: "pvc", OwnerName: centralCrName},
-		{Name: "central-db-backup", Kind: "pvc", OwnerName: centralCrName},
+		{Name: "central-db", Kind: "pvc"},
+		{Name: "central-db-backup", Kind: "pvc"},
 		{Name: "admin-password", Kind: "secret"},
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: centralCrName},
-		// In case the Cluster Network Operator has succeeded in re-creating the injected-cabundle configmap
-		// after our operator has already deleted it.
-		{Name: injectedCABundleConfigMapCentral, Kind: "configmap"},
 	} {
 		d.logger.Dimf("Attempting to delete %s/%s", resource.Kind, resource.Name)
 		if resource.OwnerName != "" {
@@ -231,86 +141,46 @@ func (d *Deployer) deleteCentralResources(ctx context.Context, wait bool) error 
 		}
 	}
 
-	if crExists {
-		// Now delete the Central CR synchronously.
-		err := d.deleteResource(ctx, d.config.Central.Namespace, "central", "stackrox-central-services")
-		if err != nil {
-			return fmt.Errorf("failed to delete Central CR: %w", err)
-		}
-	}
-
 	return nil
 }
 
-func (d *Deployer) preventOtherControllersFromReconciling(ctx context.Context, comp component.Component) error {
-	switch comp {
-	case component.Central:
-		return d.preventCABundleInjection(ctx, injectedCABundleConfigMapCentral, d.config.Central.Namespace)
-	case component.SecuredCluster:
-		return d.preventCABundleInjection(ctx, injectedCABundleConfigMapSecuredCluster, d.config.SecuredCluster.Namespace)
-	default:
-		return nil
-	}
-}
-
-func (d *Deployer) preventCABundleInjection(ctx context.Context, configMapName, namespace string) error {
-	d.logger.Info("Removing CNO label from injected-cabundle ConfigMap to prevent CNO from injecting the CA bundle during cleanup")
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{
-			"label", "configmap", configMapName, "-n", namespace,
-			"config.openshift.io/inject-trusted-cabundle-",
-		},
-		IgnoreErrors: true,
-	})
-
-	if err != nil {
-		d.logger.Warningf("Failed to remove CNO label from %s: %v", configMapName, err)
-	}
-
-	return nil
-}
-
-func (d *Deployer) deleteSecuredClusterResources(ctx context.Context, wait bool) error {
+func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 	d.logger.Info("Deleting SecuredCluster resources")
-	var crExists bool
+	crExists := true
 
-	if d.doesResourceExist(ctx, "securedcluster", "stackrox-secured-cluster-services", d.config.SecuredCluster.Namespace) {
-		crExists = true
+	if _, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.config.SecuredCluster.Namespace, "securedcluster", "stackrox-secured-cluster-services"); err != nil {
+		if !k8s.IsResourceNotFound(err) {
+			return fmt.Errorf("retrieving SecuredCluster CR: %w", err)
+		}
+		crExists = false
+	}
 
-		// Trigger async deletion of the SecuredCluster CR.
-		err := d.deleteResource(ctx, d.config.SecuredCluster.Namespace, "securedcluster", "stackrox-secured-cluster-services", "--wait=false")
+	if crExists {
+		d.logger.Info("Removing any pause-reconcile annotation from SecuredCluster")
+		if err := d.removePauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.config.SecuredCluster.Namespace); err != nil {
+			return err
+		}
+		if d.verbose {
+			d.logger.Dim("Removed any pause-reconcile annotation from SecuredCluster")
+		}
+
+		err := d.deleteResource(ctx, d.config.SecuredCluster.Namespace, "securedcluster", "stackrox-secured-cluster-services", "--wait")
 		if err != nil {
 			return err
 		}
-
-		err = d.deleteFinalizers(ctx, d.config.SecuredCluster.Namespace, "securedcluster", "stackrox-secured-cluster-services")
-		if err != nil {
-			return fmt.Errorf("failed to delete finalizers on SecuredCluster CR: %w", err)
+		if d.verbose {
+			d.logger.Dim("Deleted SecuredCluster CR")
 		}
+	} else {
+		d.logger.Info("Deletion of SecuredCluster resources requested, but SecuredCluster CR is not present anymore")
 	}
 
-	// Pause reconciliation for other controllers, not just our RHACS operator.
-	// This is needed to ensure that there is no race causing the Cluster Network Operator
-	// to re-create the injected-ca-bundle ConfigMap during resource deletion.
-	if err := d.preventOtherControllersFromReconciling(ctx, component.SecuredCluster); err != nil {
-		return fmt.Errorf("failed to prevent other controllers from reconciling SecuredCluster resources: %w", err)
-	}
-
-	// In the meantime, delete other resources by brute force.
-	resourceKinds := d.filterResourceKinds(allInstallableSecuredClusterResourceKinds)
-	err := d.deleteResources(ctx, d.config.SecuredCluster.Namespace, resourceKinds, "-l=app.kubernetes.io/part-of=stackrox-secured-cluster-services")
-	if err != nil {
-		return err
-	}
-
+	// Delete resources, which are treated special.
 	for _, resource := range []ResourceToDelete{
 		{Name: "cluster-registration-secret", Kind: "secret"},
 		// We need to make sure that don't accidentally delete a scanner-db-password belonging to the central CR,
 		// when both are deployed into the same namespace.
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: securedClusterCrName},
-		// In case the Cluster Network Operator has succeeded in re-creating the injected-cabundle configmap
-		// after our operator has already deleted it.
-		{Name: injectedCABundleConfigMapSecuredCluster, Kind: "configmap"},
 	} {
 		d.logger.Dimf("Attempting to delete %s/%s", resource.Kind, resource.Name)
 		if resource.OwnerName != "" {
@@ -330,14 +200,6 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context, wait bool)
 		}
 		if err := d.deleteResource(ctx, d.config.SecuredCluster.Namespace, resource.Kind, resource.Name); err != nil {
 			return fmt.Errorf("failed to delete %s/%s: %w", resource.Kind, resource.Name, err)
-		}
-	}
-
-	if crExists {
-		// Now delete the SecuredCluster CR synchronously.
-		err := d.deleteResource(ctx, d.config.SecuredCluster.Namespace, "securedcluster", "stackrox-secured-cluster-services")
-		if err != nil {
-			return fmt.Errorf("failed to delete SecuredCluster CR: %w", err)
 		}
 	}
 
@@ -583,7 +445,7 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 	}
 
 	d.logger.Info("⏳ Waiting for Central resources to be fully deleted...")
-	err := d.deleteCentralResources(ctx, true)
+	err := d.deleteCentralResources(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to delete Central resources: %w", err)
 	}
@@ -608,7 +470,7 @@ func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
 	}
 
 	d.logger.Info("⏳ Waiting for SecuredCluster resources to be fully deleted...")
-	err := d.deleteSecuredClusterResources(ctx, true)
+	err := d.deleteSecuredClusterResources(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to delete SecuredCluster resources: %w", err)
 	}
@@ -740,6 +602,22 @@ func (d *Deployer) addPauseReconcileAnnotation(ctx context.Context, resourceType
 	})
 	if err != nil {
 		return fmt.Errorf("failed to add pause-reconcile annotation: %w", err)
+	}
+
+	return nil
+}
+
+func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		Args: []string{
+			"annotate", resourceType, resourceName,
+			"-n", namespace,
+			fmt.Sprintf("%s-", pauseReconcileAnnotationKey),
+		},
+		IgnoreErrors: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to remove pause-reconcile annotation: %w", err)
 	}
 
 	return nil
