@@ -45,10 +45,8 @@ Examples:
 		RunE:      runDeploy,
 	}
 
-	// --shell <shell name>.
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to spawn after Central deployment")
 
-	// --envrc <filename>.
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
 
 	registerFlag(cmd, settings, "olm", "Deploy operator via OLM (requires OLM installed)",
