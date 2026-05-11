@@ -39,30 +39,6 @@ func (c *Config) DeepCopy() (*Config, error) {
 	return &copy, nil
 }
 
-// MergeIn deep-merges another Config into this one.
-func (c *Config) MergeIn(other *Config) error {
-	if other == nil {
-		return nil
-	}
-	otherAsMap, err := helpers.StructToMap(other)
-	if err != nil {
-		return err
-	}
-	return c.MergeInUnstructured(otherAsMap)
-}
-
-// MergeInUnstructured deep-merges an unstructured map into this Config.
-func (c *Config) MergeInUnstructured(m map[string]interface{}) error {
-	asMap, err := helpers.StructToMap(c)
-	if err != nil {
-		return err
-	}
-	if err := helpers.DeepMerge(asMap, m); err != nil {
-		return err
-	}
-	return helpers.MapToStruct(asMap, c)
-}
-
 // RoxieConfig holds roxie-level settings such as version and feature flags.
 type RoxieConfig struct {
 	Version       string          `yaml:"version,omitempty"`
