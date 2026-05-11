@@ -132,6 +132,9 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 	} else {
 		d.logger.Info("Deletion of Central resources requested, but Central CR is not present anymore")
 	}
+	if d.verbose {
+		d.logger.Dim("Deleted Central CR")
+	}
 
 	for _, resource := range []ResourceToDelete{
 		{Name: "central-db", Kind: "pvc"},
