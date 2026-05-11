@@ -11,8 +11,8 @@ var (
 
 	centralResourcesTiny = map[string]interface{}{
 		"requests": map[string]string{
-			"memory": "600Mi",
-			"cpu":    "300m",
+			"memory": "300Mi",
+			"cpu":    "200m",
 		},
 		"limits": map[string]string{
 			"memory": "2Gi",
@@ -33,8 +33,8 @@ var (
 
 	centralDbResourcesTiny = map[string]interface{}{
 		"requests": map[string]string{
-			"memory": "600Mi",
-			"cpu":    "300m",
+			"memory": "400Mi",
+			"cpu":    "200m",
 		},
 		"limits": map[string]string{
 			"memory": "2Gi",
@@ -77,7 +77,7 @@ var (
 
 	centralScannerV4DbResourcesTiny = map[string]interface{}{
 		"requests": map[string]string{
-			"memory": "512Mi",
+			"memory": "400Mi",
 			"cpu":    "300m",
 		},
 		"limits": map[string]string{
@@ -99,8 +99,8 @@ var (
 
 	centralScannerV4IndexerResourcesTiny = map[string]interface{}{
 		"requests": map[string]string{
-			"memory": "512Mi",
-			"cpu":    "300m",
+			"memory": "300Mi",
+			"cpu":    "200m",
 		},
 		"limits": map[string]string{
 			"memory": "2Gi",
@@ -121,8 +121,8 @@ var (
 
 	centralScannerV4MatcherResourcesTiny = map[string]interface{}{
 		"requests": map[string]string{
-			"memory": "512Mi",
-			"cpu":    "300m",
+			"memory": "300Mi",
+			"cpu":    "200m",
 		},
 		"limits": map[string]string{
 			"memory": "2Gi",
@@ -145,8 +145,8 @@ var (
 
 	securedClusterSensorResourcesTiny = map[string]interface{}{
 		"requests": map[string]string{
-			"memory": "500Mi",
-			"cpu":    "300m",
+			"memory": "300Mi",
+			"cpu":    "200m",
 		},
 		"limits": map[string]string{
 			"memory": "2Gi",
