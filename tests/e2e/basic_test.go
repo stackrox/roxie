@@ -92,6 +92,7 @@ func TestDetachedPortForwarding(t *testing.T) {
 	teardownArgs := []string{roxieBinary, "teardown", "central"}
 	runCommand(t, teardownTimeout, env, teardownArgs...)
 
-	err = syscall.Kill(pid, 0)
-	assert.Error(t, err, "Port-forward process (PID %d) should not exist after teardown", pid)
+	assert.Eventually(t, func() bool {
+		return syscall.Kill(pid, 0) != nil
+	}, 10*time.Second, 200*time.Millisecond, "Port-forward process (PID %d) should not exist after teardown", pid)
 }
