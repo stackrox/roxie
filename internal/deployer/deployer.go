@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/fatih/color"
@@ -64,6 +66,7 @@ type Deployer struct {
 	securedClusterOverrides   map[string]interface{}
 	featureFlagOverrides      map[string]interface{}
 	envrcFile                 string
+	portForwardPID            int
 	useOLM                    bool
 	useKonflux                bool
 	shouldDeployOperator      bool
@@ -434,6 +437,12 @@ func New(log *logger.Logger) (*Deployer, error) {
 		d.roxCACertFile = caCert
 	}
 
+	if pidStr := os.Getenv("ROXIE_PORT_FORWARD_PID"); pidStr != "" {
+		if pid, err := strconv.Atoi(pidStr); err == nil {
+			d.portForwardPID = pid
+		}
+	}
+
 	d.kubeContext = env.GetCurrentContext()
 
 	clusterResourceKinds, err := d.getClusterResourceKinds()
@@ -478,6 +487,22 @@ func (d *Deployer) Cleanup() {
 			d.logger.Warningf("Deployer Cleanup failed to remove %q: %v", d.tempDir, err)
 		}
 	}
+}
+
+func (d *Deployer) stopDetachedPortForward() {
+	if d.portForwardPID == 0 {
+		return
+	}
+	proc, err := os.FindProcess(d.portForwardPID)
+	if err != nil {
+		return
+	}
+	if err := proc.Signal(syscall.SIGKILL); err != nil {
+		d.logger.Dimf("Detached port-forward (pid %d) already gone", d.portForwardPID)
+		return
+	}
+	d.logger.Dimf("Stopped detached port-forward (pid %d)", d.portForwardPID)
+	d.portForwardPID = 0
 }
 
 // Deploy deploys the specified components to the cluster.
@@ -559,7 +584,6 @@ func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string
 		return err
 	}
 
-	// envrc may be used from different processes, so use actual endpoint not port-forward
 	if d.envrcFile != "" {
 		d.logger.Dimf("Writing environment variables to %s", d.envrcFile)
 		if err := d.writeEnvrcFile(ctx, exposure, portForwardWanted); err != nil {
@@ -636,6 +660,7 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 	}
 
 	d.portForward.Stop()
+	d.stopDetachedPortForward()
 
 	// Add pause-reconcile annotation to not have the operator interfere during resource deletion.
 	if d.doesResourceExist(ctx, "central", "stackrox-central-services", d.centralNamespace) {
@@ -998,6 +1023,9 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context, exposure string, portForw
 	fmt.Fprintf(&content, "export ROX_USERNAME=%q\n", AdminUsername)
 	fmt.Fprintf(&content, "export ROX_ADMIN_PASSWORD=%q\n", d.centralPassword)
 	fmt.Fprintf(&content, "export ROX_CA_CERT_FILE=%q\n", d.roxCACertFile)
+	if d.portForwardPID != 0 {
+		fmt.Fprintf(&content, "export ROXIE_PORT_FORWARD_PID=%d\n", d.portForwardPID)
+	}
 
 	if err := os.WriteFile(d.envrcFile, []byte(content.String()), 0600); err != nil {
 		return fmt.Errorf("failed to write envrc file: %w", err)
