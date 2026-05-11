@@ -39,7 +39,7 @@ func deployArgsFromEnv() []string {
 	if profile == "" {
 		profile = "small"
 	}
-	return []string{"--resources=" + profile}
+	return []string{"--verbose", "--resources=" + profile}
 }
 
 func teardownAllDeployments() error {

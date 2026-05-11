@@ -30,7 +30,7 @@ func ApplyClusterDefaults(
 		return nil, fmt.Errorf("deep-copying cluster defaults: %w", err)
 	}
 
-	if err := mergo.Merge(config, defaultsCopy, mergo.WithoutDereference); err != nil {
+	if err := mergo.Merge(config, defaultsCopy, mergo.WithoutDereference, mergo.WithAppendSlice); err != nil {
 		return nil, fmt.Errorf("merging-in cluster defaults: %w", err)
 	}
 
