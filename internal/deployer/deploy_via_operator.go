@@ -288,6 +288,38 @@ func (d *Deployer) createCentralCR(resources, exposure string) (map[string]inter
 
 func (d *Deployer) getCentralResourcesOperator(resourcesName string) map[string]interface{} {
 	switch resourcesName {
+	case "tiny":
+		return map[string]interface{}{
+			"spec": map[string]interface{}{
+				"central": map[string]interface{}{
+					"resources": centralResourcesTiny,
+					"db": map[string]interface{}{
+						"resources": centralDbResourcesTiny,
+						"persistence": map[string]interface{}{
+							"persistentVolumeClaim": map[string]interface{}{
+								"size": centralDbPVCSizeTiny,
+							},
+						},
+					},
+				},
+				"scanner": map[string]interface{}{
+					"scannerComponent": "Disabled",
+				},
+				"scannerV4": map[string]interface{}{
+					"db": map[string]interface{}{
+						"resources": centralScannerV4DbResourcesTiny,
+					},
+					"indexer": map[string]interface{}{
+						"resources": centralScannerV4IndexerResourcesTiny,
+						"scaling":   noScaling,
+					},
+					"matcher": map[string]interface{}{
+						"resources": centralScannerV4MatcherResourcesTiny,
+						"scaling":   noScaling,
+					},
+				},
+			},
+		}
 	case "small":
 		return map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -725,6 +757,20 @@ func (d *Deployer) createSecuredClusterCR(resources string) (map[string]interfac
 
 func (d *Deployer) getSecuredClusterResourcesOperator(resourcesName string) map[string]interface{} {
 	switch resourcesName {
+	case "tiny":
+		return map[string]interface{}{
+			"spec": map[string]interface{}{
+				"sensor": map[string]interface{}{
+					"resources": securedClusterSensorResourcesTiny,
+				},
+				"scanner": map[string]interface{}{
+					"scannerComponent": "Disabled",
+				},
+				"scannerV4": map[string]interface{}{
+					"scannerComponent": "Disabled",
+				},
+			},
+		}
 	case "small":
 		return map[string]interface{}{
 			"spec": map[string]interface{}{
