@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -92,7 +93,16 @@ func TestDetachedPortForwarding(t *testing.T) {
 	teardownArgs := []string{roxieBinary, "teardown", "central"}
 	runCommand(t, teardownTimeout, env, teardownArgs...)
 
+	// Verify port-forward cleanup by checking the port is free. We can't use
+	// kill(pid, 0) because CI containers often lack a proper init to reap
+	// zombies, causing the check to pass for dead processes. Binding to the
+	// port works because even zombies release their file descriptors.
 	assert.Eventually(t, func() bool {
-		return syscall.Kill(pid, 0) != nil
-	}, 10*time.Second, 200*time.Millisecond, "Port-forward process (PID %d) should not exist after teardown", pid)
+		ln, err := net.Listen("tcp", endpoint)
+		if err != nil {
+			return false
+		}
+		ln.Close()
+		return true
+	}, 10*time.Second, 200*time.Millisecond, "Port-forward port %s should be free after teardown", endpoint)
 }
