@@ -48,7 +48,7 @@ func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
 	envrcFile.Close()
 
 	t.Log("=== Deploying both components in single namespace ===")
-	args := append([]string{roxieBinary, "deploy", "both", "--single-namespace", "--early-readiness", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "both", "--single-namespace", "--early-readiness", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout*2, nil, args...)
 
 	verifyCentralInstalled(t, "stackrox")

@@ -79,7 +79,7 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 
 	// Step 1: Deploy central with OLM operator
 	t.Log("=== Step 1: Deploy central with OLM operator ===")
-	args := append([]string{roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator is in OLM mode
@@ -92,7 +92,7 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 
 	// Step 2: Deploy central again without OLM (should switch modes)
 	t.Log("=== Step 2: Redeploy central without OLM (triggering mode switch) ===")
-	args = append([]string{roxieBinary, "deploy", "central", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args = append([]string{roxieBinary, "deploy", "central", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator switched to non-OLM mode
@@ -127,7 +127,7 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 
 	// Step 1: Deploy central without OLM (non-OLM operator)
 	t.Log("=== Step 1: Deploy central with non-OLM operator ===")
-	args := append([]string{roxieBinary, "deploy", "central", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "central", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator is in non-OLM mode
@@ -140,7 +140,7 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 
 	// Step 2: Deploy central again with OLM (should switch modes)
 	t.Log("=== Step 2: Redeploy central with OLM (triggering mode switch) ===")
-	args = append([]string{roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args = append([]string{roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator switched to OLM mode
@@ -179,7 +179,7 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 
 	// Step 1: Deploy central with OLM operator
 	t.Log("=== Step 1: Deploy central with OLM operator ===")
-	args := append([]string{roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator is in OLM mode
@@ -201,7 +201,7 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 
 	// Step 2: Redeploy with same version (should skip if version matches)
 	t.Log("=== Step 2: Redeploy with same version (should detect correct version) ===")
-	args = append([]string{roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args = append([]string{roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator is still in OLM mode and deployment exists
@@ -237,7 +237,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Step 1: Deploy central with OLM
 	t.Log("=== Step 1: Deploy central with OLM ===")
-	args := append([]string{roxieBinary, "deploy", "--early-readiness", "central", "--olm", "--envrc", envrcPath}, commonDeployArgsNoPortForward...)
+	args := append([]string{roxieBinary, "deploy", "--early-readiness", "central", "--olm", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	verifyOperatorMode(t, true)
@@ -251,7 +251,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Step 2: Deploy secured-cluster (should reuse OLM operator)
 	t.Log("=== Step 2: Deploy secured-cluster (should reuse OLM operator) ===")
-	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster", "--olm"}, commonDeployArgsNoPortForward...)
+	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster", "--olm"}, commonDeployArgs...)
 	runCommand(t, deployTimeout, envrcEnv, args...)
 
 	// Verify operator is still in OLM mode
@@ -260,7 +260,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Step 3: Switch to non-OLM by redeploying secured-cluster without --olm
 	t.Log("=== Step 3: Redeploy secured-cluster without OLM (triggering mode switch) ===")
-	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster"}, commonDeployArgsNoPortForward...)
+	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster"}, commonDeployArgs...)
 	runCommand(t, deployTimeout, envrcEnv, args...)
 
 	// Verify operator switched to non-OLM mode
