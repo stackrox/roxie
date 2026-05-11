@@ -16,6 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SKIP_OLM_TESTS: "true"
+      # TODO: Once the config-file-first approach lands, this will be changed from an
+      # environment variable to configuring a YAML configuration file, which will be
+      # used by the e2e tests.
+      ROXIE_RESOURCE_PROFILE: "tiny"
     steps:
       - name: Checkout
         uses: actions/checkout@v6

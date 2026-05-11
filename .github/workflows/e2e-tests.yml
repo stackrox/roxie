@@ -31,6 +31,10 @@ jobs:
       KUBECONFIG: /github/home/artifacts/kubeconfig
       INFRA_TOKEN: ${{ secrets.INFRA_CI_TOKEN }}
       INFRACTL: bin/infractl -k -e localhost:8443
+      # TODO: Once the config-file-first approach lands, this will be changed from an
+      # environment variable to configuring a YAML configuration file, which will be
+      # used by the e2e tests.
+      ROXIE_RESOURCE_PROFILE: "small"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
