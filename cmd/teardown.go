@@ -23,8 +23,9 @@ func newTeardownCmd(settings *deployer.Config) *cobra.Command {
 	}
 
 	registerFlag(cmd, settings, "single-namespace", "Deploy all components in a single namespace ('stackrox')",
-		WithNoOptDefVal("true"),
-		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+		withNoOptDefVal("true"),
+		withApplyFnBool(func(config *deployer.Config, val bool) error {
+			// We do not support --single-namespace=false as of now.
 			if val {
 				config.Central.Namespace = sharedNamespace
 				config.SecuredCluster.Namespace = sharedNamespace

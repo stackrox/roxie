@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type CliFlag struct {
+type cliFlag struct {
 	config      *deployer.Config
 	longName    string
 	shortName   string
@@ -18,22 +18,22 @@ type CliFlag struct {
 	description string
 }
 
-type FlagOpt func(opts *CliFlag)
+type flagOpt func(opts *cliFlag)
 
-func (f *CliFlag) Set(val string) error {
+func (f *cliFlag) Set(val string) error {
 	return f.applyFn(f.config, val)
 }
 
-func (f *CliFlag) String() string {
+func (f *cliFlag) String() string {
 	return "" // Not sure what to return here.
 }
 
-func (f *CliFlag) Type() string {
+func (f *cliFlag) Type() string {
 	return f.flagType
 }
 
-func WithApplyFnBool(boolApplyFn func(config *deployer.Config, val bool) error) FlagOpt {
-	return func(opts *CliFlag) {
+func withApplyFnBool(boolApplyFn func(config *deployer.Config, val bool) error) flagOpt {
+	return func(opts *cliFlag) {
 		opts.flagType = "bool"
 		opts.applyFn = func(config *deployer.Config, val string) error {
 			var valParsed bool
@@ -45,8 +45,8 @@ func WithApplyFnBool(boolApplyFn func(config *deployer.Config, val bool) error) 
 	}
 }
 
-func WithApplyFn(flagType string, stringApplyFn func(config *deployer.Config, val string) error) FlagOpt {
-	return func(opts *CliFlag) {
+func withApplyFn(flagType string, stringApplyFn func(config *deployer.Config, val string) error) flagOpt {
+	return func(opts *cliFlag) {
 		opts.flagType = flagType
 		opts.applyFn = func(config *deployer.Config, val string) error {
 			return stringApplyFn(config, val)
@@ -54,8 +54,8 @@ func WithApplyFn(flagType string, stringApplyFn func(config *deployer.Config, va
 	}
 }
 
-func WithApplyFnDuration(durationApplyFn func(config *deployer.Config, duration time.Duration) error) FlagOpt {
-	return func(opts *CliFlag) {
+func withApplyFnDuration(durationApplyFn func(config *deployer.Config, duration time.Duration) error) flagOpt {
+	return func(opts *cliFlag) {
 		opts.flagType = "duration"
 		opts.applyFn = func(config *deployer.Config, val string) error {
 			var duration time.Duration
@@ -68,30 +68,29 @@ func WithApplyFnDuration(durationApplyFn func(config *deployer.Config, duration 
 	}
 }
 
-func WithNoOptDefVal(defVal string) FlagOpt {
-	return func(opts *CliFlag) {
+func withNoOptDefVal(defVal string) flagOpt {
+	return func(opts *cliFlag) {
 		opts.noOptDefVal = defVal
 	}
 }
 
-func WithShortName(shortName string) FlagOpt {
-	return func(opts *CliFlag) {
+func withShortName(shortName string) flagOpt {
+	return func(opts *cliFlag) {
 		opts.shortName = shortName
 	}
 }
 
-func registerFlag(cmd *cobra.Command, settings *deployer.Config, longName string, description string, flagOpts ...FlagOpt) {
-	cliFlag := CliFlag{
+func registerFlag(cmd *cobra.Command, settings *deployer.Config, longName string, description string, flagOpts ...flagOpt) {
+	f := cliFlag{
 		config:      settings,
 		longName:    longName,
 		description: description,
 	}
 	for _, applyOpt := range flagOpts {
-		applyOpt(&cliFlag)
-
+		applyOpt(&f)
 	}
-	flag := cmd.Flags().VarPF(&cliFlag, cliFlag.longName, cliFlag.shortName, cliFlag.description)
-	if cliFlag.noOptDefVal != "" {
-		flag.NoOptDefVal = cliFlag.noOptDefVal
+	flag := cmd.Flags().VarPF(&f, f.longName, f.shortName, f.description)
+	if f.noOptDefVal != "" {
+		flag.NoOptDefVal = f.noOptDefVal
 	}
 }

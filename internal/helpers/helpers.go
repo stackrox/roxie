@@ -138,15 +138,6 @@ func DeepMerge(base, overlay map[string]interface{}) error {
 	return nil
 }
 
-func StructToMap(v interface{}) (map[string]interface{}, error) {
-	bytes, err := yaml.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	var m map[string]interface{}
-	return m, yaml.Unmarshal(bytes, &m)
-}
-
 func MapToStruct(m map[string]interface{}, out interface{}) error {
 	bytes, err := yaml.Marshal(m)
 	if err != nil {

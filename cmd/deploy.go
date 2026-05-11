@@ -52,40 +52,40 @@ Examples:
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
 
 	registerFlag(cmd, settings, "olm", "Deploy operator via OLM (requires OLM installed)",
-		WithNoOptDefVal("true"),
-		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+		withNoOptDefVal("true"),
+		withApplyFnBool(func(config *deployer.Config, val bool) error {
 			config.Operator.DeployViaOlm = val
 			return nil
 		}),
 	)
 
 	registerFlag(cmd, settings, "konflux", "Use Konflux images",
-		WithNoOptDefVal("true"),
-		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+		withNoOptDefVal("true"),
+		withApplyFnBool(func(config *deployer.Config, val bool) error {
 			config.Roxie.KonfluxImages = val
 			return nil
 		}),
 	)
 
 	registerFlag(cmd, settings, "deploy-operator", "Whether to deploy and manage the operator",
-		WithNoOptDefVal("true"),
-		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+		withNoOptDefVal("true"),
+		withApplyFnBool(func(config *deployer.Config, val bool) error {
 			config.Operator.SkipDeployment = !val
 			return nil
 		}),
 	)
 
 	registerFlag(cmd, settings, "port-forwarding", "Enable localhost port-forward for Central",
-		WithNoOptDefVal("true"),
-		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+		withNoOptDefVal("true"),
+		withApplyFnBool(func(config *deployer.Config, val bool) error {
 			config.Central.PortForwarding = ptr.To(val)
 			return nil
 		}),
 	)
 
 	registerFlag(cmd, settings, "pause-reconciliation", "Pause reconciliation after deployment",
-		WithNoOptDefVal("true"),
-		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+		withNoOptDefVal("true"),
+		withApplyFnBool(func(config *deployer.Config, val bool) error {
 			config.Central.PauseReconciliation = val
 			config.SecuredCluster.PauseReconciliation = val
 			return nil
@@ -93,8 +93,8 @@ Examples:
 	)
 
 	registerFlag(cmd, settings, "config", "Path to YAML config file",
-		WithShortName("c"),
-		WithApplyFn("filename", func(config *deployer.Config, filename string) error {
+		withShortName("c"),
+		withApplyFn("filename", func(config *deployer.Config, filename string) error {
 			if filename == "-" {
 				filename = "/dev/stdin"
 			}
@@ -107,14 +107,14 @@ Examples:
 				return fmt.Errorf("failed to unmarshal config file %q: %w", filename, err)
 			}
 			if err := mergo.Merge(config, configFromFile, mergo.WithOverride, mergo.WithoutDereference); err != nil {
-				return fmt.Errorf("mergin config file %q into deployer Config: %w", filename, err)
+				return fmt.Errorf("merging config file %q into deployer Config: %w", filename, err)
 			}
 			return nil
 		}),
 	)
 
 	registerFlag(cmd, settings, "exposure", "Central exposure backend (loadbalancer, none)",
-		WithApplyFn("exposure", func(config *deployer.Config, val string) error {
+		withApplyFn("exposure", func(config *deployer.Config, val string) error {
 			var exposure types.Exposure
 			if err := yaml.Unmarshal([]byte(val), &exposure); err != nil {
 				return err
@@ -125,7 +125,7 @@ Examples:
 	)
 
 	registerFlag(cmd, settings, "resources", fmt.Sprintf("Resource sizing preset (%s)", types.ResourceProfilesJoined()),
-		WithApplyFn("resource-profile", func(config *deployer.Config, val string) error {
+		withApplyFn("resource-profile", func(config *deployer.Config, val string) error {
 			var valParsed types.ResourceProfile
 			if err := yaml.Unmarshal([]byte(val), &valParsed); err != nil {
 				return err
@@ -137,7 +137,7 @@ Examples:
 	)
 
 	registerFlag(cmd, settings, "set", "Set expressions, e.g. securedCluster.spec.clusterName=sensor",
-		WithApplyFn("set-expression", func(config *deployer.Config, expr string) error {
+		withApplyFn("set-expression", func(config *deployer.Config, expr string) error {
 			key, yamlValue, found := strings.Cut(expr, "=")
 			if !found {
 				return fmt.Errorf("invalid set expression '%s': expected format 'key.path=value'", expr)
@@ -147,7 +147,6 @@ Examples:
 				return fmt.Errorf("failed to unmarshal value '%s' for key '%s': %w", yamlValue, key, err)
 			}
 			// SetNestedField requires JSON-compatible types: float64 for numbers, not int.
-			// Fix types if needed.
 			switch v := val.(type) {
 			case int:
 				val = float64(v)
@@ -179,8 +178,9 @@ Examples:
 	)
 
 	registerFlag(cmd, settings, "single-namespace", "Deploy all components in a single namespace ('stackrox')",
-		WithNoOptDefVal("true"),
-		WithApplyFnBool(func(config *deployer.Config, val bool) error {
+		withNoOptDefVal("true"),
+		withApplyFnBool(func(config *deployer.Config, val bool) error {
+			// We do not support --single-namespace=false as of now.
 			if val {
 				config.Central.Namespace = sharedNamespace
 				config.SecuredCluster.Namespace = sharedNamespace
@@ -190,15 +190,15 @@ Examples:
 	)
 
 	registerFlag(cmd, settings, "tag", "Main image tag to use for deployment (takes precedence over MAIN_IMAGE_TAG environment variable)",
-		WithShortName("t"),
-		WithApplyFn("version", func(config *deployer.Config, mainImageTag string) error {
+		withShortName("t"),
+		withApplyFn("version", func(config *deployer.Config, mainImageTag string) error {
 			config.Roxie.Version = mainImageTag
 			return nil
 		}),
 	)
 
 	registerFlag(cmd, settings, "features", "Feature flag settings (e.g., +ROX_FOO,-ROX_BAR,ROX_BAZ=true)",
-		WithApplyFn("feature-flags", func(config *deployer.Config, featureFlagExpr string) error {
+		withApplyFn("feature-flags", func(config *deployer.Config, featureFlagExpr string) error {
 			featureFlags, err := deployer.ParseFeatureFlags([]string{featureFlagExpr})
 			if err != nil {
 				return fmt.Errorf("parsing feature flags: %w", err)
@@ -211,26 +211,24 @@ Examples:
 	)
 
 	registerFlag(cmd, settings, "central-wait", "maximum wait time for central to become ready (e.g., 5m, 10m)",
-		WithApplyFnDuration(func(config *deployer.Config, duration time.Duration) error {
+		withApplyFnDuration(func(config *deployer.Config, duration time.Duration) error {
 			config.Central.DeployTimeout = duration
 			return nil
 		}),
 	)
 
 	registerFlag(cmd, settings, "secured-cluster-wait", "maximum wait time for secured cluster to become ready (e.g., 5m, 10m)",
-		WithApplyFnDuration(func(config *deployer.Config, duration time.Duration) error {
+		withApplyFnDuration(func(config *deployer.Config, duration time.Duration) error {
 			config.SecuredCluster.DeployTimeout = duration
 			return nil
 		}),
 	)
 
 	registerFlag(cmd, settings, "early-readiness", "Only wait for essential workloads (central/sensor) to be ready",
-		WithNoOptDefVal("true"),
-		WithApplyFnBool(func(config *deployer.Config, val bool) error {
-			if val {
-				config.Central.EarlyReadiness = true
-				config.SecuredCluster.EarlyReadiness = true
-			}
+		withNoOptDefVal("true"),
+		withApplyFnBool(func(config *deployer.Config, val bool) error {
+			config.Central.EarlyReadiness = val
+			config.SecuredCluster.EarlyReadiness = val
 			return nil
 		}),
 	)
