@@ -36,15 +36,6 @@ var requiredCRDs = []string{
 // deployOperatorNonOLM deploys the RHACS operator without OLM
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.operatorTag)
-	if d.useKonflux {
-		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
-			return fmt.Errorf("failed to configure Konflux image rewriting: %w", err)
-		}
-	} else {
-		if err := d.removeKonfluxImageRewriting(ctx); err != nil {
-			return fmt.Errorf("failed to remove Konflux ImageContentSourcePolicy: %v", err)
-		}
-	}
 	bundleImage := d.getOperatorBundleImage()
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)

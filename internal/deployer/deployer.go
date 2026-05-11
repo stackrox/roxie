@@ -504,6 +504,16 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component, r
 
 	d.logger.Infof("Initiating deployment of %s", components)
 
+	if d.useKonflux {
+		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
+			return fmt.Errorf("failed to configure Konflux image rewriting: %w", err)
+		}
+	} else {
+		if err := d.removeKonfluxImageRewriting(ctx); err != nil {
+			return fmt.Errorf("failed to remove Konflux ImageContentSourcePolicy: %w", err)
+		}
+	}
+
 	// If only deploying operator, use the operator-only flow
 	if components.IncludesOperatorExplicitly() {
 		return d.deployOperatorOnly(ctx)
