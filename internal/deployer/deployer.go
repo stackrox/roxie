@@ -621,6 +621,10 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 			}
 		}
 
+		if err := d.removeKonfluxImageRewriting(ctx); err != nil {
+			d.logger.Warningf("Error while removing any lingering image rewriting rules for Konflux deployments: %v", err)
+		}
+
 		return nil
 	default:
 		return fmt.Errorf("unknown component: %s", components)
