@@ -5,8 +5,11 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -345,6 +348,30 @@ func dumpLogsForFailingPods(namespace string) {
 		runKubectlDump("logs", "-n", namespace, podName, "--all-containers", "--tail=100")
 		runKubectlDump("logs", "-n", namespace, podName, "--all-containers", "--previous", "--tail=50")
 	}
+}
+
+func testCentralAPI(t *testing.T, endpoint, caCertFile string) {
+	t.Helper()
+
+	caCert, err := os.ReadFile(caCertFile)
+	require.NoError(t, err, "Failed to read CA cert file: %s", caCertFile)
+	certPool := x509.NewCertPool()
+	require.True(t, certPool.AppendCertsFromPEM(caCert), "Failed to parse CA certificate")
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:    certPool,
+				ServerName: "central.stackrox.svc",
+			},
+		},
+	}
+	resp, err := client.Get(fmt.Sprintf("https://%s/v1/ping", endpoint))
+	require.NoError(t, err, "Failed to reach Central via %s", endpoint)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Central API returned unexpected status")
+	t.Logf("Central at %s responded with status: %d", endpoint, resp.StatusCode)
 }
 
 func verifyAnnotation(t *testing.T, resourceType, resourceName, namespace, annotationKey, expectedValue string) {
