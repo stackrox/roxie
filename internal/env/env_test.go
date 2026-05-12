@@ -2,6 +2,8 @@ package env
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDetectClusterType_GKE(t *testing.T) {
@@ -40,7 +42,7 @@ func TestDetectClusterType_GKE_ExactMatch(t *testing.T) {
 	}
 }
 
-func TestDetectClusterType_OpenShift4(t *testing.T) {
+func TestDetectClusterType_InfraOpenShift4(t *testing.T) {
 	config := KubeConfig{
 		CurrentContext: "admin",
 		Clusters: []KubeCluster{
@@ -58,18 +60,16 @@ func TestDetectClusterType_OpenShift4(t *testing.T) {
 	}
 
 	result := detectClusterType(config, apiResources)
-	if result != InfraOpenShift4 {
-		t.Errorf("detectClusterType() = %v (%s), want %v (%s)", result, result.String(), InfraOpenShift4, InfraOpenShift4.String())
-	}
+	assert.Equal(t, InfraOpenShift4, result)
 }
 
-func TestDetectClusterType_OpenShift4_WrongHostname(t *testing.T) {
+func TestDetectClusterType_OpenShift4(t *testing.T) {
 	config := KubeConfig{
-		CurrentContext: "admin",
+		CurrentContext: "some-context-name",
 		Clusters: []KubeCluster{
 			{
-				Name:   "openshift-cluster",
-				Server: "https://api.my-cluster.example.com:6443",
+				Name:   "some-other-name",
+				Server: "https://my-cluster.example.com:6443",
 			},
 		},
 	}
@@ -77,12 +77,11 @@ func TestDetectClusterType_OpenShift4_WrongHostname(t *testing.T) {
 		"pods",
 		"services",
 		"clusterversions.config.openshift.io",
+		"clusteroperators.config.openshift.io",
 	}
 
 	result := detectClusterType(config, apiResources)
-	if result != ClusterTypeUnknown {
-		t.Errorf("detectClusterType() = %v (%s), want %v (%s)", result, result.String(), ClusterTypeUnknown, ClusterTypeUnknown.String())
-	}
+	assert.Equal(t, OpenShift4, result)
 }
 
 func TestDetectClusterType_OpenShift4_NoAPIResources(t *testing.T) {
@@ -295,6 +294,11 @@ func TestClusterTypeString(t *testing.T) {
 		{
 			name:        "InfraOpenShift4",
 			clusterType: InfraOpenShift4,
+			want:        "OpenShift4 (infra)",
+		},
+		{
+			name:        "OpenShift4",
+			clusterType: OpenShift4,
 			want:        "OpenShift4",
 		},
 		{
