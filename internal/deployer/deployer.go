@@ -144,6 +144,7 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 		{Name: "central-db-backup", Kind: "pvc"},
 		{Name: "admin-password", Kind: "secret"},
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: centralCrName},
+		{Name: "stackrox-central-helm", Kind: "configmap"},
 	} {
 		d.logger.Dimf("Attempting to delete %s/%s", resource.Kind, resource.Name)
 		if resource.OwnerName != "" {
