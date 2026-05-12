@@ -49,6 +49,7 @@ func (d *Deployer) runRoxctl(ctx context.Context, opts RoxctlOptions) (*RoxctlRe
 		"bad gateway",
 		"service unavailable",
 		"context deadline exceeded",
+		"no such host",
 	}
 
 	var lastStderr string
