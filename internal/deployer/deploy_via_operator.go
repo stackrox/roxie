@@ -558,7 +558,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 			}
 			d.centralEndpoint = endpoint
 		}
-	} else if exposure == types.ExposureNone {
+	} else if exposure == types.ExposureLoadBalancer {
 		endpoint, err := d.waitForLoadBalancer(ctx, d.config.Central.Namespace, "central-loadbalancer", 300)
 		if err != nil {
 			return fmt.Errorf("failed to get LoadBalancer endpoint: %w", err)
