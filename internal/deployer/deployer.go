@@ -77,6 +77,7 @@ type Deployer struct {
 	dockerCreds               *dockerauth.Credentials
 	clusterResourceKinds      map[string]struct{}
 	tempDir                   string
+	useOperatorPullSecrets    bool
 }
 
 type ResourceToDelete struct {

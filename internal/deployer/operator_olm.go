@@ -40,7 +40,7 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	indexImage := d.getOperatorIndexImage()
 	d.logger.Infof("Index image: %s", indexImage)
 
-	if err := d.createOperatorNamespace(ctx); err != nil {
+	if err := d.prepareNamespace(ctx, operatorNamespace, false); err != nil {
 		return err
 	}
 

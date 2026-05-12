@@ -319,12 +319,14 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
+	d.useOperatorPullSecrets = d.useKonflux && env.GetCurrentClusterType() != env.InfraOpenShift4
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dim(fmt.Sprintf("  • Namespace: %s", operatorNamespace))
 	d.logger.Dim(fmt.Sprintf("  • ServiceAccount: %s", serviceAccountName))
+	d.logger.Dim(fmt.Sprintf("  • Setting up pull secrets: %v", d.useOperatorPullSecrets))
 
-	if err := d.createOperatorNamespace(ctx); err != nil {
+	if err := d.prepareNamespace(ctx, operatorNamespace, d.useOperatorPullSecrets); err != nil {
 		return err
 	}
 
@@ -392,24 +394,6 @@ func (d *Deployer) parseCSVDeploymentSpec(csvFile string) (map[string]interface{
 	return deploymentSpec, nil
 }
 
-// createOperatorNamespace creates the operator namespace
-func (d *Deployer) createOperatorNamespace(ctx context.Context) error {
-	nsYAML := fmt.Sprintf(`apiVersion: v1
-kind: Namespace
-metadata:
-  name: %s
-  labels:
-    name: %s
-    app.kubernetes.io/managed-by: roxie
-`, operatorNamespace, operatorNamespace)
-
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args:  []string{"apply", "-f", "-"},
-		Stdin: strings.NewReader(nsYAML),
-	})
-	return err
-}
-
 // createServiceAccount creates a service account
 func (d *Deployer) createServiceAccount(ctx context.Context, namespace, name string) error {
 	sa := map[string]interface{}{
@@ -420,6 +404,12 @@ func (d *Deployer) createServiceAccount(ctx context.Context, namespace, name str
 			"namespace": namespace,
 			"labels":    map[string]string{"app": "rhacs-operator"},
 		},
+	}
+
+	if d.useOperatorPullSecrets {
+		sa["imagePullSecrets"] = []map[string]string{
+			{"name": "stackrox"},
+		}
 	}
 
 	yamlData, err := yaml.Marshal(sa)
