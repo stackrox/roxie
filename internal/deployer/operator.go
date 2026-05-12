@@ -45,7 +45,8 @@ func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 			return fmt.Errorf("failed to remove Konflux ImageContentSourcePolicy: %v", err)
 		}
 	}
-	bundleImage := d.getOperatorBundleImage()
+	bundleImage := getOperatorBundleImage(d.operatorTag, d.useKonflux)
+	d.logger.Infof("Using operator bundle image %s", bundleImage)
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
 	if err != nil {
@@ -170,7 +171,8 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	}
 
 	if len(missing) > 0 {
-		bundleImage := d.getOperatorBundleImage()
+		bundleImage := getOperatorBundleImage(d.operatorTag, d.useKonflux)
+		d.logger.Infof("Using operator bundle image %s", bundleImage)
 		d.logger.Warningf("Missing CRDs detected (%s)", strings.Join(missing, ", "))
 		d.logger.Warningf("Fetching bundle %s", bundleImage)
 
@@ -191,12 +193,17 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	return nil
 }
 
-func (d *Deployer) getOperatorBundleImage() string {
-	if d.useKonflux {
-		d.logger.Infof("Using Konflux-built operator bundle image")
-		return fmt.Sprintf(operatorBundleImageReleaseRepo+":v%s", d.operatorTag)
+func getOperatorBundleImage(operatorTag string, konflux bool) string {
+	repo := operatorBundleImageRepo
+	tag := operatorTag
+	if konflux {
+		repo = operatorBundleImageReleaseRepo
+		if !strings.HasSuffix(tag, "-fast") {
+			tag = tag + "-fast"
+		}
 	}
-	return fmt.Sprintf(operatorBundleImageRepo+":v%s", d.operatorTag)
+
+	return fmt.Sprintf("%s:v%s", repo, tag)
 }
 
 // ensureKonfluxImageRewriting configures image rewriting for Konflux images
