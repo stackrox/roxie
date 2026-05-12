@@ -386,14 +386,6 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		return errors.New("running without a controlling terminal requires --envrc to be set")
 	}
 
-	if envrc != "" && deploySettings.Central.PortForwardingEnabled() {
-		return errors.New("cannot use --envrc with central port-forwarding enabled. The --envrc flag is for non-interactive mode with remote cluster access")
-	}
-
-	if envrc != "" && !deploySettings.Central.ExposureEnabled() {
-		return errors.New("cannot use --envrc without central exposure. The --envrc flag requires a remotely accessible endpoint (e.g., --exposure=loadbalancer)")
-	}
-
 	if env.RunningInRoxieContainer {
 		// For running containerized we have specific requirements.
 		if deploySettings.Central.PortForwardingEnabled() {

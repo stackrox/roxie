@@ -544,12 +544,21 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 			}
 		}
 
-		endpoint, err := d.portForward.Start(d.config.Central.Namespace, serviceName, 443, 8443)
-		if err != nil {
-			return fmt.Errorf("failed to start port-forward: %w", err)
+		if d.envrcFile != "" {
+			endpoint, pid, err := d.portForward.StartDetached(d.config.Central.Namespace, serviceName, 443, 8443)
+			if err != nil {
+				return fmt.Errorf("failed to start detached port-forward: %w", err)
+			}
+			d.centralEndpoint = endpoint
+			d.portForwardPID = pid
+		} else {
+			endpoint, err := d.portForward.Start(d.config.Central.Namespace, serviceName, 443, 8443)
+			if err != nil {
+				return fmt.Errorf("failed to start port-forward: %w", err)
+			}
+			d.centralEndpoint = endpoint
 		}
-		d.centralEndpoint = endpoint
-	} else if exposure == types.ExposureLoadBalancer {
+	} else if exposure == types.ExposureNone {
 		endpoint, err := d.waitForLoadBalancer(ctx, d.config.Central.Namespace, "central-loadbalancer", 300)
 		if err != nil {
 			return fmt.Errorf("failed to get LoadBalancer endpoint: %w", err)
