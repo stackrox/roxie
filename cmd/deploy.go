@@ -76,14 +76,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return errors.New("running without a controlling terminal requires --envrc to be set")
 	}
 
-	if envrc != "" && portForwarding {
-		return errors.New("cannot use --envrc with --port-forwarding. The --envrc flag is for non-interactive mode with remote cluster access")
-	}
-
-	if envrc != "" && exposure == "none" {
-		return errors.New("cannot use --envrc with --exposure=none. The --envrc flag requires a remotely accessible endpoint (e.g., --exposure=loadbalancer)")
-	}
-
 	portForwardEnabledFinal := portForwarding || exposure == "none"
 
 	if env.RunningInRoxieContainer {
@@ -111,7 +103,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			return errors.New("cannot use both --olm and --konflux flags together (not currently implemented)")
 		}
 		clusterType := env.GetCurrentClusterType()
-		if clusterType != env.InfraOpenShift4 {
+		if !clusterType.IsOpenShift() {
 			return fmt.Errorf("--konflux flag is only supported on OpenShift 4 clusters (current cluster type: %s)", clusterType.String())
 		}
 	}

@@ -120,6 +120,51 @@ func (m *Manager) Start(namespace, serviceName string, remotePort, preferredLoca
 	return endpoint, nil
 }
 
+// StartDetached starts port-forward as a detached process that survives the
+// parent process exiting. Returns the endpoint and the PID of the subprocess.
+// The caller is responsible for killing the process when done.
+func (m *Manager) StartDetached(namespace, serviceName string, remotePort, preferredLocalPort int) (string, int, error) {
+	localPort, err := m.findFreeLocalPort(preferredLocalPort)
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to find free port: %w", err)
+	}
+
+	cmd := exec.Command(
+		m.kubectl,
+		"-n", namespace,
+		"port-forward",
+		fmt.Sprintf("svc/%s", serviceName),
+		fmt.Sprintf("%d:%d", localPort, remotePort),
+		"--address", "127.0.0.1",
+	)
+
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
+	if err := cmd.Start(); err != nil {
+		return "", 0, fmt.Errorf("failed to start port-forward: %w", err)
+	}
+
+	pid := cmd.Process.Pid
+
+	// Release the process so it won't be waited on by this process.
+	cmd.Process.Release()
+
+	if !m.waitTCPReady("127.0.0.1", localPort, 20.0) {
+		syscall.Kill(pid, syscall.SIGTERM)
+		return "", 0, fmt.Errorf("port-forward did not become ready")
+	}
+
+	endpoint := fmt.Sprintf("127.0.0.1:%d", localPort)
+	m.logger.Successf("✓ Detached port-forward active at https://%s (pid %d)", endpoint, pid)
+
+	return endpoint, pid, nil
+}
+
 // Stop stops the active port-forward if running
 func (m *Manager) Stop() {
 	if m.proc == nil || m.proc.Process == nil {
