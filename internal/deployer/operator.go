@@ -296,7 +296,8 @@ func (d *Deployer) removeKonfluxImageRewriting(ctx context.Context) error {
 
 	d.logger.Dim("Removing Konflux ImageContentSourcePolicy if present...")
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{"delete", "imagecontentsourcepolicy", "acs-konflux-builds", "--ignore-not-found=true"},
+		Args:         []string{"delete", "imagecontentsourcepolicy", "acs-konflux-builds", "--ignore-not-found=true"},
+		IgnoreErrors: true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to delete ImageContentSourcePolicy: %w", err)
