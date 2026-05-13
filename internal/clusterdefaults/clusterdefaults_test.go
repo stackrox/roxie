@@ -113,7 +113,8 @@ func TestClusterDefaults(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := tt.config
-			_, err := ApplyClusterDefaults(tt.clusterType, &config)
+			config.Roxie.ClusterType = tt.clusterType
+			_, err := ApplyClusterDefaults(&config)
 			require.NoError(t, err)
 
 			if tt.wantConfig.Central.Exposure == nil {

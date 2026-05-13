@@ -44,9 +44,10 @@ func (c *Config) DeepCopy() (*Config, error) {
 
 // RoxieConfig holds roxie-level settings such as version and feature flags.
 type RoxieConfig struct {
-	Version       string          `yaml:"version,omitempty"`
-	KonfluxImages bool            `yaml:"konfluxImages,omitempty"`
-	FeatureFlags  map[string]bool `yaml:"featureFlags,omitempty"`
+	Version       string            `yaml:"version,omitempty"`
+	KonfluxImages bool              `yaml:"konfluxImages,omitempty"`
+	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
+	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
 }
 
 // NewRoxieConfig returns a RoxieConfig with initialized defaults.
