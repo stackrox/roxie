@@ -118,7 +118,8 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying Central via Operator...")
 
-	if err := d.prepareNamespace(ctx, d.config.Central.Namespace); err != nil {
+	needPullSecrets := env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4
+	if err := d.prepareNamespace(ctx, d.config.Central.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}
 
@@ -190,14 +191,14 @@ func (d *Deployer) getDeployedOperatorImage(ctx context.Context) (string, error)
 }
 
 // prepareNamespace creates pull secrets in the namespace if needed
-func (d *Deployer) prepareNamespace(ctx context.Context, namespace string) error {
+func (d *Deployer) prepareNamespace(ctx context.Context, namespace string, needPullSecrets bool) error {
 	d.logger.Infof("Preparing namespace %s", namespace)
 
 	if err := d.ensureNamespaceExists(namespace); err != nil {
 		return err
 	}
 
-	if env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4 {
+	if needPullSecrets {
 		if err := d.ensurePullSecretExists(ctx, namespace); err != nil {
 			return fmt.Errorf("ensuring image pull secret exists: %w", err)
 		}
@@ -207,9 +208,11 @@ func (d *Deployer) prepareNamespace(ctx context.Context, namespace string) error
 }
 
 func (d *Deployer) ensurePullSecretExists(ctx context.Context, namespace string) error {
-	// Assemble pull secret YAML from pre-verified credentials
-	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(d.dockerCreds, namespace)
+	if d.dockerCreds == nil {
+		return errors.New("no pull secrets available to set up on the cluster")
+	}
 
+	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(*d.dockerCreds, namespace)
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: strings.NewReader(pullSecretYAML),
@@ -584,7 +587,8 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying SecuredCluster via Operator...")
 
-	if err := d.prepareNamespace(ctx, d.config.SecuredCluster.Namespace); err != nil {
+	needPullSecrets := env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4
+	if err := d.prepareNamespace(ctx, d.config.SecuredCluster.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}
 

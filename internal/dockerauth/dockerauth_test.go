@@ -31,7 +31,7 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	}
 
 	// Test creating YAML from credentials
-	yamlText := da.CreatePullSecretYAMLFromCredentials(creds, "ns")
+	yamlText := da.CreatePullSecretYAMLFromCredentials(*creds, "ns")
 
 	// Verify YAML structure
 	if !strings.Contains(yamlText, "apiVersion: v1") {
