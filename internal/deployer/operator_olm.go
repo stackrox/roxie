@@ -31,7 +31,7 @@ const (
 // deployOperatorViaOLM deploys the RHACS operator using OLM.
 func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying operator via OLM...")
-	d.logger.Infof("Operator tag: %s", d.operatorTag)
+	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
 
 	if err := d.checkOLMInstalled(ctx); err != nil {
 		return err
@@ -120,7 +120,7 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 
 // getOperatorIndexImage returns the operator index image reference.
 func (d *Deployer) getOperatorIndexImage() string {
-	return fmt.Sprintf(operatorIndexImage+":v%s", d.operatorTag)
+	return fmt.Sprintf(operatorIndexImage+":v%s", d.config.Operator.Version)
 }
 
 // createCatalogSource creates the CatalogSource for the operator.
@@ -197,7 +197,7 @@ func (d *Deployer) createOperatorGroup(ctx context.Context) error {
 func (d *Deployer) createSubscription(ctx context.Context) error {
 	d.logger.Info("Creating Subscription...")
 
-	startingCSV := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
+	startingCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 
 	subscription := map[string]interface{}{
 		"apiVersion": "operators.coreos.com/v1alpha1",
@@ -259,7 +259,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	}
 
 	// Sanity check:Verify currentCSV matches expected version.
-	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
+	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.currentCSV}"},
 	})
@@ -301,7 +301,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 
 // waitForCSVSuccess waits for the CSV to reach Succeeded phase.
 func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
-	csvName := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
+	csvName := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 	d.logger.Infof("⏳ Waiting for CSV %s to succeed...", csvName)
 
 	start := time.Now()

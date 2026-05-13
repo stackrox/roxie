@@ -46,7 +46,7 @@ func (d *Deployer) applyCRS(ctx context.Context, crsContent string) error {
 	d.logger.Info("Applying CRS to sensor namespace")
 
 	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args:  []string{"apply", "-n", d.sensorNamespace, "-f", "-"},
+		Args:  []string{"apply", "-n", d.config.SecuredCluster.Namespace, "-f", "-"},
 		Stdin: strings.NewReader(crsContent),
 	})
 	if err != nil {

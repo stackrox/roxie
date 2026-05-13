@@ -3,7 +3,6 @@ package deployer
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,25 +13,18 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"gopkg.in/yaml.v3"
 
-	"github.com/stackrox/roxie/internal/clusterdefaults"
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
-	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagecache"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/portforward"
+	"github.com/stackrox/roxie/internal/types"
 )
 
 var (
-	sharedNamespace  = "stackrox"
-	centralNamespace = "acs-central"
-	sensorNamespace  = "acs-sensor"
-	defaultExposure  = "loadbalancer"
-
 	DefaultCentralWaitTimeout        = 20 * time.Minute
 	DefaultSecuredClusterWaitTimeout = 20 * time.Minute
 
@@ -44,40 +36,28 @@ var (
 
 // Deployer is the base deployer for ACS
 type Deployer struct {
-	logger                    *logger.Logger
-	startTime                 time.Time
-	dockerAuth                *dockerauth.DockerAuth
-	imageCache                *imagecache.ImageCache
-	portForward               *portforward.Manager
-	clusterDefaults           *clusterdefaults.Manager
-	roxctlVersion             string
-	centralNamespace          string
-	sensorNamespace           string
-	mainImageTag              string
-	operatorTag               string
-	centralEndpoint           string
-	centralPassword           string
-	roxCACertFile             string
-	kubeContext               string
-	portForwardEnabled        bool
-	pauseReconciliation       bool
-	exposure                  string
-	centralOverrides          map[string]interface{}
-	securedClusterOverrides   map[string]interface{}
-	featureFlagOverrides      map[string]interface{}
-	envrcFile                 string
-	portForwardPID            int
-	useOLM                    bool
-	useKonflux                bool
-	shouldDeployOperator      bool
-	verbose                   bool
-	earlyReadiness            bool
-	centralWaitTimeout        time.Duration
-	securedClusterWaitTimeout time.Duration
-	dockerCreds               *dockerauth.Credentials
-	clusterResourceKinds      map[string]struct{}
-	tempDir                   string
-	useOperatorPullSecrets    bool
+	// Influencing roxies mode of operation.
+	verbose     bool
+	logger      *logger.Logger
+	startTime   time.Time
+	dockerAuth  *dockerauth.DockerAuth
+	imageCache  *imagecache.ImageCache
+	dockerCreds *dockerauth.Credentials
+	envrcFile   string
+
+	kubeContext          string
+	clusterResourceKinds map[string]struct{}
+
+	config Config
+
+	// State
+	centralEndpoint        string
+	centralPassword        string
+	roxCACertFile          string
+	tempDir                string
+	portForward            *portforward.Manager
+	portForwardPID         int
+	useOperatorPullSecrets bool
 }
 
 type ResourceToDelete struct {
@@ -110,7 +90,7 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 	d.logger.Info("Deleting Central resources")
 	crExists := true
 
-	if _, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.centralNamespace, "central", "stackrox-central-services"); err != nil {
+	if _, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.config.Central.Namespace, "central", "stackrox-central-services"); err != nil {
 		if !k8s.IsResourceNotFound(err) {
 			return fmt.Errorf("retrieving Central CR: %w", err)
 		}
@@ -119,14 +99,14 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 
 	if crExists {
 		d.logger.Info("Removing any pause-reconcile annotation from Central")
-		if err := d.removePauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.centralNamespace); err != nil {
+		if err := d.removePauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.config.Central.Namespace); err != nil {
 			return err
 		}
 		if d.verbose {
 			d.logger.Dim("Removed any pause-reconcile annotation from Central")
 		}
 
-		err := d.deleteResource(ctx, d.centralNamespace, "central", "stackrox-central-services", "--wait")
+		err := d.deleteResource(ctx, d.config.Central.Namespace, "central", "stackrox-central-services", "--wait")
 		if err != nil {
 			return err
 		}
@@ -151,7 +131,7 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 		if resource.OwnerName != "" {
 			// Avoid deletion if the resource does not have the expected owner.
 			// (e.g. in case central and secured cluster are deployed into the same namespace).
-			obj, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.centralNamespace, resource.Kind, resource.Name)
+			obj, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.config.Central.Namespace, resource.Kind, resource.Name)
 			if err != nil {
 				if !k8s.IsResourceNotFound(err) {
 					d.logger.Warningf("Failed to retrieve %s/%s for owner checking: %v. Skipping deletion. Deployment might be affected.", resource.Kind, resource.Name, err)
@@ -164,7 +144,7 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 			}
 		}
 
-		if err := d.deleteResource(ctx, d.centralNamespace, resource.Kind, resource.Name); err != nil {
+		if err := d.deleteResource(ctx, d.config.Central.Namespace, resource.Kind, resource.Name); err != nil {
 			return fmt.Errorf("failed to delete %s/%s: %w", resource.Kind, resource.Name, err)
 		}
 	}
@@ -176,7 +156,7 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 	d.logger.Info("Deleting SecuredCluster resources")
 	crExists := true
 
-	if _, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.sensorNamespace, "securedcluster", "stackrox-secured-cluster-services"); err != nil {
+	if _, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.config.SecuredCluster.Namespace, "securedcluster", "stackrox-secured-cluster-services"); err != nil {
 		if !k8s.IsResourceNotFound(err) {
 			return fmt.Errorf("retrieving SecuredCluster CR: %w", err)
 		}
@@ -185,14 +165,14 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 
 	if crExists {
 		d.logger.Info("Removing any pause-reconcile annotation from SecuredCluster")
-		if err := d.removePauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace); err != nil {
+		if err := d.removePauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.config.SecuredCluster.Namespace); err != nil {
 			return err
 		}
 		if d.verbose {
 			d.logger.Dim("Removed any pause-reconcile annotation from SecuredCluster")
 		}
 
-		err := d.deleteResource(ctx, d.sensorNamespace, "securedcluster", "stackrox-secured-cluster-services", "--wait")
+		err := d.deleteResource(ctx, d.config.SecuredCluster.Namespace, "securedcluster", "stackrox-secured-cluster-services", "--wait")
 		if err != nil {
 			return err
 		}
@@ -214,7 +194,7 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 		if resource.OwnerName != "" {
 			// Avoid deletion if the resource does not have the expected owner.
 			// (e.g. in case central and secured cluster are deployed into the same namespace).
-			obj, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.sensorNamespace, resource.Kind, resource.Name)
+			obj, err := k8s.RetrieveResourceFromCluster(ctx, d.logger, d.config.SecuredCluster.Namespace, resource.Kind, resource.Name)
 			if err != nil {
 				if !k8s.IsResourceNotFound(err) {
 					d.logger.Warningf("Failed to retrieve %s/%s for owner checking: %v. Skipping deletion. Deployment might be affected.", resource.Kind, resource.Name, err)
@@ -226,7 +206,7 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 				continue
 			}
 		}
-		if err := d.deleteResource(ctx, d.sensorNamespace, resource.Kind, resource.Name); err != nil {
+		if err := d.deleteResource(ctx, d.config.SecuredCluster.Namespace, resource.Kind, resource.Name); err != nil {
 			return fmt.Errorf("failed to delete %s/%s: %w", resource.Kind, resource.Name, err)
 		}
 	}
@@ -234,158 +214,8 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 	return nil
 }
 
-var (
-	centralOverridePrefix        = "central"
-	securedClusterOverridePrefix = "securedCluster"
-)
-
-func unmarshalYamlFile(filePath string) (map[string]interface{}, error) {
-	rawContent, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read override file: %w", err)
-	}
-	var content map[string]interface{}
-	if err := yaml.Unmarshal(rawContent, &content); err != nil {
-		return nil, fmt.Errorf("failed to parse override file: %w", err)
-	}
-	return content, nil
-}
-
-func (d *Deployer) SetCombinedOverrideFile(overrideFile string) error {
-	overrides, err := unmarshalYamlFile(overrideFile)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal override file: %w", err)
-	}
-
-	for key, value := range overrides {
-		switch key {
-		case centralOverridePrefix:
-			d.centralOverrides = value.(map[string]interface{})
-		case securedClusterOverridePrefix:
-			d.securedClusterOverrides = value.(map[string]interface{})
-		default:
-			d.logger.Errorf("override file contains key %q; combined deployments require extra nesting under 'central' or 'securedCluster'", key)
-			return fmt.Errorf("unexpected key %q in override file", key)
-		}
-	}
-
-	return nil
-}
-
-// Returns remaining set expressions.
-func setOverrideSetExpressions(overrides map[string]interface{}, prefix string, overrideSetExpressions []string) ([]string, error) {
-	remainingSetExpressions := make([]string, 0)
-	for _, expr := range overrideSetExpressions {
-		key, yamlValue, found := strings.Cut(expr, "=")
-		if !found {
-			return nil, fmt.Errorf("invalid override expression '%s': expected format 'key.path=value'", expr)
-		}
-		if prefix != "" {
-			if !strings.HasPrefix(key, prefix) {
-				remainingSetExpressions = append(remainingSetExpressions, expr)
-				continue
-			}
-			key = strings.TrimPrefix(key, prefix+".")
-		}
-		var val interface{}
-		if err := yaml.Unmarshal([]byte(yamlValue), &val); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal value '%s' for key '%s': %w", yamlValue, key, err)
-		}
-		if err := setNestedValue(overrides, key, val); err != nil {
-			return nil, fmt.Errorf("failed to set value for key '%s': %w", key, err)
-		}
-	}
-
-	return remainingSetExpressions, nil
-}
-
-func (d *Deployer) SetCombinedOverrideSetExpressions(overrideSetExpressions []string) error {
-	if d.centralOverrides == nil {
-		d.centralOverrides = make(map[string]interface{})
-	}
-	if d.securedClusterOverrides == nil {
-		d.securedClusterOverrides = make(map[string]interface{})
-	}
-
-	remainingSetExpressions, err := setOverrideSetExpressions(d.centralOverrides, centralOverridePrefix, overrideSetExpressions)
-	if err != nil {
-		return fmt.Errorf("failed to set central override set expressions: %w", err)
-	}
-	remainingSetExpressions, err = setOverrideSetExpressions(d.securedClusterOverrides, securedClusterOverridePrefix, remainingSetExpressions)
-	if err != nil {
-		return fmt.Errorf("failed to set secured cluster override set expressions: %w", err)
-	}
-
-	if len(remainingSetExpressions) > 0 {
-		return fmt.Errorf("some override expressions were not properly prefixed with 'central.' or 'securedCluster.': %v", remainingSetExpressions)
-	}
-
-	return nil
-}
-
-func (d *Deployer) SetCentralOverrideFile(overrideYaml string) error {
-	centralOverrides, err := unmarshalYamlFile(overrideYaml)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal override file: %w", err)
-	}
-	d.centralOverrides = centralOverrides
-	return nil
-}
-
-func (d *Deployer) SetCentralOverrideSetExpressions(overrideSetExpressions []string) error {
-	if d.centralOverrides == nil {
-		d.centralOverrides = make(map[string]interface{})
-	}
-	_, err := setOverrideSetExpressions(d.centralOverrides, "", overrideSetExpressions)
-	if err != nil {
-		return fmt.Errorf("failed to set central override set expressions: %w", err)
-	}
-	return nil
-}
-
-func (d *Deployer) SetSecuredClusterOverrideFile(overrideYaml string) error {
-	securedClusterOverrides, err := unmarshalYamlFile(overrideYaml)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal override file: %w", err)
-	}
-	d.securedClusterOverrides = securedClusterOverrides
-	return nil
-}
-
-func (d *Deployer) SetSecuredClusterOverrideSetExpressions(overrideSetExpressions []string) error {
-	if d.securedClusterOverrides == nil {
-		d.securedClusterOverrides = make(map[string]interface{})
-	}
-	_, err := setOverrideSetExpressions(d.securedClusterOverrides, "", overrideSetExpressions)
-	if err != nil {
-		return fmt.Errorf("failed to set secured cluster override set expressions: %w", err)
-	}
-	return nil
-}
-
-// SetFeatureFlags parses feature flags and stores them as overrides.
-// Feature flags are applied last (after file-based overrides and --set) to ensure highest precedence.
-func (d *Deployer) SetFeatureFlags(featureFlags []string) error {
-	if len(featureFlags) == 0 {
-		return nil
-	}
-
-	flags, err := parseFeatureFlags(featureFlags)
-	if err != nil {
-		return fmt.Errorf("failed to parse feature flags: %w", err)
-	}
-
-	if len(flags) == 0 {
-		return nil
-	}
-
-	for name, value := range flags {
-		d.logger.Dimf("Feature flag: %s=%t", name, value)
-	}
-
-	d.featureFlagOverrides = featureFlagsToOverrides(flags)
-
-	return nil
+func (d *Deployer) SetConfig(config Config) {
+	d.config = config
 }
 
 // New creates a new Deployer instance.
@@ -397,33 +227,20 @@ func New(log *logger.Logger) (*Deployer, error) {
 		return nil, err
 	}
 
-	roxctlVersion, err := getRoxctlVersion()
-	if err != nil {
-		return nil, err
-	}
-
 	tempDir, err := os.MkdirTemp("", "roxie-deployer-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
 	d := &Deployer{
-		logger:                    log,
-		startTime:                 time.Now(),
-		roxctlVersion:             roxctlVersion,
-		centralNamespace:          centralNamespace,
-		sensorNamespace:           sensorNamespace,
-		exposure:                  defaultExposure,
-		shouldDeployOperator:      true,
-		centralWaitTimeout:        DefaultCentralWaitTimeout,
-		securedClusterWaitTimeout: DefaultSecuredClusterWaitTimeout,
-		tempDir:                   tempDir,
+		logger:    log,
+		startTime: time.Now(),
+		tempDir:   tempDir,
 	}
 
 	d.dockerAuth = dockerauth.New(log)
 	d.imageCache = imagecache.New(log, "", 20)
 	d.portForward = portforward.New(k8s.GetKubectl(), log)
-	d.clusterDefaults = clusterdefaults.NewManager(log)
 
 	if password := os.Getenv("ROX_ADMIN_PASSWORD"); password != "" {
 		d.centralPassword = password
@@ -447,14 +264,15 @@ func New(log *logger.Logger) (*Deployer, error) {
 
 	d.kubeContext = env.GetCurrentContext()
 
-	clusterResourceKinds, err := d.getClusterResourceKinds()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster resource kinds: %w", err)
+	if d.kubeContext != "" {
+		clusterResourceKinds, err := d.getClusterResourceKinds()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get cluster resource kinds: %w", err)
+		}
+		d.clusterResourceKinds = clusterResourceKinds
 	}
-	d.clusterResourceKinds = clusterResourceKinds
 
 	log.Success("🚀 ACS Deployer initialized")
-	log.Infof("roxctl version: %s", d.roxctlVersion)
 
 	return d, nil
 }
@@ -508,22 +326,9 @@ func (d *Deployer) stopDetachedPortForward() {
 }
 
 // Deploy deploys the specified components to the cluster.
-func (d *Deployer) Deploy(ctx context.Context, components component.Component, resources, exposure string) error {
-	adjustedResources, adjustedExposure, adjustedPortForward := d.clusterDefaults.ApplyConvenienceDefaults(
-		d.kubeContext,
-		resources,
-		exposure,
-		d.portForwardEnabled,
-	)
-
-	resources = adjustedResources
-	exposure = adjustedExposure
-	d.portForwardEnabled = adjustedPortForward
-	d.exposure = exposure
-
-	// Prepare and verify credentials early to fail fast
-
-	if env.GetCurrentClusterType() != env.InfraOpenShift4 {
+func (d *Deployer) Deploy(ctx context.Context, components component.Component) error {
+	// Prepare and verify credentials early to fail fast.
+	if env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4 {
 		if err := d.prepareCredentials(); err != nil {
 			return fmt.Errorf("failed to prepare credentials: %w", err)
 		}
@@ -531,23 +336,23 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component, r
 
 	d.logger.Infof("Initiating deployment of %s", components)
 
-	// If only deploying operator, use the operator-only flow
+	// If only deploying operator, use the operator-only flow.
 	if components.IncludesOperatorExplicitly() {
 		return d.deployOperatorOnly(ctx)
 	}
 
-	// Deploy operator first if needed
+	// Deploy operator first if needed.
 	if err := d.ensureOperatorDeployed(ctx); err != nil {
 		return fmt.Errorf("failed to deploy operator: %w", err)
 	}
 
 	if components.IncludesCentral() {
-		if err := d.deployCentral(ctx, resources, exposure); err != nil {
+		if err := d.deployCentral(ctx); err != nil {
 			return fmt.Errorf("failed to deploy central: %w", err)
 		}
 	}
 	if components.IncludesSensor() {
-		if err := d.deploySecuredCluster(ctx, resources); err != nil {
+		if err := d.deploySecuredCluster(ctx); err != nil {
 			return fmt.Errorf("failed to deploy secured cluster: %w", err)
 		}
 	}
@@ -571,24 +376,22 @@ func (d *Deployer) prepareCredentials() error {
 	return nil
 }
 
-func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string) error {
-	d.logger.Infof("Deploying Central to namespace %s", d.centralNamespace)
-	if d.namespaceExists(d.centralNamespace) {
+func (d *Deployer) deployCentral(ctx context.Context) error {
+	d.logger.Infof("Deploying Central to namespace %s", d.config.Central.Namespace)
+	if d.namespaceExists(d.config.Central.Namespace) {
 		d.logger.Info("Existing Central deployment found, tearing down...")
 		if err := d.teardownCentral(ctx); err != nil {
 			d.logger.Warningf("Error during teardown: %v", err)
 		}
 	}
 
-	portForwardWanted := d.portForwardEnabled
-
-	if err := d.deployCentralOperator(ctx, resources, exposure); err != nil {
+	if err := d.deployCentralOperator(ctx); err != nil {
 		return err
 	}
 
 	if d.envrcFile != "" {
 		d.logger.Dimf("Writing environment variables to %s", d.envrcFile)
-		if err := d.writeEnvrcFile(ctx, exposure, portForwardWanted); err != nil {
+		if err := d.writeEnvrcFile(ctx); err != nil {
 			d.logger.Warningf("Failed to write envrc file: %v", err)
 		}
 	}
@@ -596,16 +399,16 @@ func (d *Deployer) deployCentral(ctx context.Context, resources, exposure string
 	return nil
 }
 
-func (d *Deployer) deploySecuredCluster(ctx context.Context, resources string) error {
-	d.logger.Infof("Deploying SecuredCluster to namespace %s", d.sensorNamespace)
-	if d.namespaceExists(d.sensorNamespace) {
+func (d *Deployer) deploySecuredCluster(ctx context.Context) error {
+	d.logger.Infof("Deploying SecuredCluster to namespace %s", d.config.SecuredCluster.Namespace)
+	if d.namespaceExists(d.config.SecuredCluster.Namespace) {
 		d.logger.Info("Existing SecuredCluster deployment found, tearing down...")
 		if err := d.teardownSecuredCluster(ctx); err != nil {
 			d.logger.Warningf("Error during teardown: %v", err)
 		}
 	}
 
-	return d.deploySecuredClusterOperator(ctx, resources)
+	return d.deploySecuredClusterOperator(ctx)
 }
 
 func (d *Deployer) Teardown(ctx context.Context, components component.Component) error {
@@ -654,10 +457,10 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 }
 
 func (d *Deployer) teardownCentral(ctx context.Context) error {
-	d.logger.Infof("🗑️  Tearing down central in namespace %s", d.centralNamespace)
+	d.logger.Infof("🗑️  Tearing down central in namespace %s", d.config.Central.Namespace)
 
-	if !d.namespaceExists(d.centralNamespace) {
-		d.logger.Infof("Namespace %s doesn't exist, skipping", d.centralNamespace)
+	if !d.namespaceExists(d.config.Central.Namespace) {
+		d.logger.Infof("Namespace %s doesn't exist, skipping", d.config.Central.Namespace)
 		return nil
 	}
 
@@ -665,8 +468,8 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 	d.stopDetachedPortForward()
 
 	// Add pause-reconcile annotation to not have the operator interfere during resource deletion.
-	if d.doesResourceExist(ctx, "central", "stackrox-central-services", d.centralNamespace) {
-		if err := d.addPauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.centralNamespace); err != nil {
+	if d.doesResourceExist(ctx, "central", "stackrox-central-services", d.config.Central.Namespace) {
+		if err := d.addPauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.config.Central.Namespace); err != nil {
 			d.logger.Warningf("Error adding pause-reconcile annotation: %v", err)
 		}
 	}
@@ -677,21 +480,21 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 		return fmt.Errorf("failed to delete Central resources: %w", err)
 	}
 
-	d.logger.Successf("✓ Central resources in namespace %s have been deleted", d.centralNamespace)
+	d.logger.Successf("✓ Central resources in namespace %s have been deleted", d.config.Central.Namespace)
 	return nil
 }
 
 func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
-	d.logger.Infof("🗑️  Tearing down secured cluster in namespace %s", d.sensorNamespace)
+	d.logger.Infof("🗑️  Tearing down secured cluster in namespace %s", d.config.SecuredCluster.Namespace)
 
-	if !d.namespaceExists(d.sensorNamespace) {
-		d.logger.Infof("Namespace %s doesn't exist, skipping", d.sensorNamespace)
+	if !d.namespaceExists(d.config.SecuredCluster.Namespace) {
+		d.logger.Infof("Namespace %s doesn't exist, skipping", d.config.SecuredCluster.Namespace)
 		return nil
 	}
 
-	if d.doesResourceExist(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace) {
+	if d.doesResourceExist(ctx, "securedcluster", "stackrox-secured-cluster-services", d.config.SecuredCluster.Namespace) {
 		// Add pause-reconcile annotation to not have the operator interfere during resource deletion.
-		if err := d.addPauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.sensorNamespace); err != nil {
+		if err := d.addPauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.config.SecuredCluster.Namespace); err != nil {
 			d.logger.Warningf("Error adding pause-reconcile annotation: %v", err)
 		}
 	}
@@ -702,7 +505,7 @@ func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
 		return fmt.Errorf("failed to delete SecuredCluster resources: %w", err)
 	}
 
-	d.logger.Successf("✓ SecuredCluster resources in namespace %s have been deleted", d.sensorNamespace)
+	d.logger.Successf("✓ SecuredCluster resources in namespace %s have been deleted", d.config.SecuredCluster.Namespace)
 	return nil
 }
 
@@ -782,27 +585,6 @@ func checkRequiredTools() error {
 	return nil
 }
 
-func getRoxctlVersion() (string, error) {
-	cmd := exec.Command("roxctl", "version")
-	output, err := cmd.Output()
-	if err != nil {
-		if _, ok := err.(*exec.Error); ok {
-			return "", errors.New("roxctl not found in PATH; please install roxctl and ensure it's available in your PATH")
-		}
-		if _, ok := err.(*exec.ExitError); ok {
-			return "", errors.New("roxctl not found in PATH; please install roxctl and ensure it's available in your PATH")
-		}
-		return "", fmt.Errorf("failed to get roxctl version: %w", err)
-	}
-
-	version := strings.TrimSpace(string(output))
-	if version == "" {
-		return "", errors.New("roxctl returned empty version")
-	}
-
-	return version, nil
-}
-
 func generatePassword() string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 	const passwordLength = 20
@@ -825,67 +607,8 @@ func (d *Deployer) SetEnvrcFile(path string) {
 	d.envrcFile = path
 }
 
-func (d *Deployer) SetPortForwardingEnabled(enabled bool) {
-	d.portForwardEnabled = enabled
-}
-
-func (d *Deployer) SetUseOLM(useOLM bool) error {
-	d.useOLM = useOLM
-	return nil
-}
-
-func (d *Deployer) SetUseKonflux(useKonflux bool) error {
-	d.useKonflux = useKonflux
-	return nil
-}
-
 func (d *Deployer) SetVerbose(verbose bool) {
 	d.verbose = verbose
-}
-
-func (d *Deployer) SetEarlyReadiness(enabled bool) {
-	d.earlyReadiness = enabled
-}
-
-func (d *Deployer) SetCentralWaitTimeout(timeout time.Duration) {
-	d.centralWaitTimeout = timeout
-}
-
-func (d *Deployer) SetSecuredClusterWaitTimeout(timeout time.Duration) {
-	d.securedClusterWaitTimeout = timeout
-}
-
-func (d *Deployer) SetPauseReconciliation(enabled bool) {
-	d.pauseReconciliation = enabled
-}
-
-func (d *Deployer) SetSingleNamespace(enabled bool) {
-	if enabled {
-		d.centralNamespace = sharedNamespace
-		d.sensorNamespace = sharedNamespace
-	}
-}
-
-func (d *Deployer) SetMainImageTag(tag string) {
-	d.mainImageTag = tag
-	d.operatorTag = helpers.ConvertMainTagToOperatorTag(d.mainImageTag)
-}
-
-// maybeAddPauseReconcileAnnotation adds the stackrox.io/pause-reconcile annotation to a custom resource
-func (d *Deployer) maybeAddPauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
-	if !d.pauseReconciliation {
-		return nil
-	}
-
-	d.logger.Infof("Adding pause-reconcile annotation to %s/%s", resourceType, resourceName)
-
-	err := d.addPauseReconcileAnnotation(ctx, resourceType, resourceName, namespace)
-	if err != nil {
-		return err
-	}
-
-	d.logger.Successf("✓ Added pause-reconcile annotation to %s/%s", resourceType, resourceName)
-	return nil
 }
 
 func (d *Deployer) doesResourceExist(ctx context.Context, resourceType, resourceName, namespace string) bool {
@@ -928,14 +651,6 @@ func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceT
 	}
 
 	return nil
-}
-
-func (d *Deployer) SetDeployOperator(deployOperator bool) {
-	d.shouldDeployOperator = deployOperator
-}
-
-func (d *Deployer) GetDeploymentInfo() (endpoint, password, caCertFile, kubeContext, exposure string) {
-	return d.centralEndpoint, d.centralPassword, d.roxCACertFile, d.kubeContext, d.exposure
 }
 
 // WaitForCentral waits for Central to be ready and responding on its endpoint
@@ -1017,7 +732,7 @@ func (d *Deployer) cleanupTempDir(path string, description string) {
 	}
 }
 
-func (d *Deployer) writeEnvrcFile(ctx context.Context, exposure string, portForwardWanted bool) error {
+func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
 	var content strings.Builder
 	fmt.Fprintf(&content, "export API_ENDPOINT=%q\n", d.centralEndpoint)
 	fmt.Fprintf(&content, "export ROX_ENDPOINT=%q\n", d.centralEndpoint)
@@ -1039,10 +754,10 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context, exposure string, portForw
 
 func (d *Deployer) PrintCentralDeploymentSummary() {
 	component := "Central"
-	mainImageTag := d.mainImageTag
-	olm := d.useOLM
-	exposure := d.exposure
-	portForwarding := d.portForwardEnabled
+	mainImageTag := d.config.Roxie.Version
+	olm := d.config.Operator.DeployViaOlm
+	exposure := d.config.Central.GetExposure()
+	portForwarding := d.config.Central.PortForwardingEnabled()
 	log := d.logger
 	kubeContext := d.kubeContext
 
@@ -1101,9 +816,9 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes"))
 	}
 
-	log.Info(cyan.Sprint("│") + createRow("Exposure", exposure))
+	log.Info(cyan.Sprint("│") + createRow("Exposure", exposure.String()))
 
-	if portForwarding || exposure == "none" {
+	if portForwarding || exposure == types.ExposureNone {
 		log.Info(cyan.Sprint("│") + createRow("Port Forwarding", "Enabled (localhost:8443)"))
 	}
 
@@ -1208,8 +923,8 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 // extracted
 func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	component := "Secured Cluster"
-	mainImageTag := d.mainImageTag
-	olm := d.useOLM
+	mainImageTag := d.config.Roxie.Version
+	olm := d.config.Operator.DeployViaOlm
 	log := d.logger
 	kubeContext := d.kubeContext
 
@@ -1270,4 +985,23 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 
 	log.Info(cyan.Sprint("└" + strings.Repeat("─", boxWidth) + "┘"))
 	log.Info("")
+}
+
+type CentralDeploymentInfo struct {
+	Endpoint       string
+	Password       string
+	KubeContext    string
+	Exposure       types.Exposure
+	CACertFile     string
+	HAProxyStarted bool
+}
+
+func (d *Deployer) GetCentralDeploymentInfo() CentralDeploymentInfo {
+	return CentralDeploymentInfo{
+		Endpoint:    d.centralEndpoint,
+		Password:    d.centralPassword,
+		KubeContext: d.kubeContext,
+		Exposure:    d.config.Central.GetExposure(),
+		CACertFile:  d.roxCACertFile,
+	}
 }

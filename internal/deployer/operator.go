@@ -17,6 +17,7 @@ import (
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
+	"github.com/stackrox/roxie/internal/types"
 )
 
 const (
@@ -35,8 +36,8 @@ var requiredCRDs = []string{
 
 // deployOperatorNonOLM deploys the RHACS operator without OLM
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
-	d.logger.Infof("Operator tag: %s", d.operatorTag)
-	if d.useKonflux {
+	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
+	if d.config.Roxie.KonfluxImages {
 		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
 			return fmt.Errorf("failed to configure Konflux image rewriting: %w", err)
 		}
@@ -192,11 +193,11 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 }
 
 func (d *Deployer) getOperatorBundleImage() string {
-	if d.useKonflux {
+	if d.config.Roxie.KonfluxImages {
 		d.logger.Infof("Using Konflux-built operator bundle image")
-		return fmt.Sprintf(operatorBundleImageReleaseRepo+":v%s", d.operatorTag)
+		return fmt.Sprintf(operatorBundleImageReleaseRepo+":v%s", d.config.Operator.Version)
 	}
-	return fmt.Sprintf(operatorBundleImageRepo+":v%s", d.operatorTag)
+	return fmt.Sprintf(operatorBundleImageRepo+":v%s", d.config.Operator.Version)
 }
 
 // ensureKonfluxImageRewriting configures image rewriting for Konflux images
@@ -319,7 +320,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	d.useOperatorPullSecrets = d.useKonflux && env.GetCurrentClusterType() != env.InfraOpenShift4
+	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImages && env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dim(fmt.Sprintf("  • Namespace: %s", operatorNamespace))
