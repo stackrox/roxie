@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/k8s"
@@ -136,7 +137,7 @@ func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 		return fmt.Errorf("failed to apply Central CR: %w", err)
 	}
 
-	if err := d.waitForCentralReady(ctx); err != nil {
+	if err := d.waitForComponentReady(ctx, component.Central); err != nil {
 		return fmt.Errorf("failed waiting for Central: %w", err)
 	}
 
@@ -395,55 +396,122 @@ func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}
 	return nil
 }
 
-// waitForCentralReady waits for Central to be ready
-func (d *Deployer) waitForCentralReady(ctx context.Context) error {
-	timeout := d.config.Central.DeployTimeout
-	d.logger.Infof("⏳ Waiting for Central to become ready (timeout: %s)...", timeout)
+// waitForAvailableCondition waits for the specified namespace/resource
+func (d *Deployer) waitForAvailableCondition(ctx context.Context, resource, namespace string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
 
-	// Track seen deployments and their states to avoid duplicate messages
-	seenDeployments := make(map[string]string)
-	seenPods := make(map[string]string)
-
-	start := time.Now()
-	checkInterval := 3 * time.Second
-
-	for time.Since(start) < timeout {
-		// Check for new deployments
-		d.checkDeploymentProgress(ctx, seenDeployments)
-
-		// Check for pod events if in early readiness mode or verbose
-		if d.config.Central.EarlyReadiness || d.verbose {
-			d.checkPodProgress(ctx, seenPods)
-		}
-
-		// Check if central deployment is ready
-		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-			Args: []string{"get", "deployment", "central", "-n", d.config.Central.Namespace, "-o", "jsonpath={.status.readyReplicas}"},
-		})
-		if err == nil && result.Stdout != "" {
-			replicas := strings.TrimSpace(result.Stdout)
-			if replicas != "0" && replicas != "" {
-				d.logger.Successf("✓ Central is ready (%s replicas)", replicas)
-				return nil
-			}
-		}
-
-		// TODO(ROX-34499): using `kubectl wait` (which in turn - I hope - uses a watch) instead of
-		// polling would allow us to not waste time here
-		time.Sleep(checkInterval)
+	// We need this extra step, because a "kubectl wait" fails immediately, when waiting for readiness of a deployment
+	// which does not exist (yet).
+	if err := d.waitForResourceToExist(ctx, resource, namespace); err != nil {
+		return fmt.Errorf("error waiting for resource %s in namespace %s to exist: %v", resource, namespace, err)
 	}
 
-	return errors.New("timeout waiting for Central to become ready")
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		Args: []string{
+			"wait",
+			"--for=condition=Available",
+			resource,
+			"-n", namespace,
+			"--timeout=" + time.Until(deadline).String(),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("error waiting for resource %s in namespace %s to become Available: %v", resource, namespace, err)
+	}
+	d.logger.Successf("✓ Resource %s in namespace %s is ready", resource, namespace)
+	return nil
 }
 
-// checkDeploymentProgress checks for deployment state changes and reports them
-func (d *Deployer) checkDeploymentProgress(ctx context.Context, seenDeployments map[string]string) {
-	d.checkDeploymentProgressInNamespace(ctx, d.config.Central.Namespace, seenDeployments)
+// waitForResourceToExist polls until the given resource exists in the namespace.
+func (d *Deployer) waitForResourceToExist(ctx context.Context, resource, namespace string) error {
+	d.logger.Infof("Waiting for resource %s to exist in namespace %s...", resource, namespace)
+	for {
+		_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+			Args: []string{"get", resource, "-n", namespace},
+		})
+		if err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
 }
 
-// checkPodProgress checks for pod state changes and reports them
-func (d *Deployer) checkPodProgress(ctx context.Context, seenPods map[string]string) {
-	d.checkPodProgressInNamespace(ctx, d.config.Central.Namespace, seenPods)
+func (d *Deployer) getWaitConfig(comp component.Component) (WaitConfig, error) {
+	switch comp {
+	case component.Central:
+		return d.config.Central.GetWaitConfig(), nil
+	case component.SecuredCluster:
+		return d.config.SecuredCluster.GetWaitConfig(), nil
+	default:
+		return WaitConfig{}, fmt.Errorf("unsupported component for wait config: %s", comp)
+	}
+}
+
+// waitForComponentReady waits for a component to be ready.
+func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Component) error {
+	waitCfg, err := d.getWaitConfig(comp)
+	if err != nil {
+		return err
+	}
+	d.logger.Infof("⏳ Waiting for %s to become ready (timeout: %s)...", comp, waitCfg.Timeout)
+
+	const padding = 5 * time.Second
+	waitCtx, cancel := context.WithTimeout(ctx, waitCfg.Timeout+padding)
+	defer cancel()
+
+	// Spawn a goroutine, which waits until some success condition, sending the result (nil or error) through a dedicated channel.
+	waitChannel := make(chan error)
+
+	go func() {
+		err := d.waitForAvailableCondition(waitCtx, waitCfg.WaitFor, waitCfg.Namespace, waitCfg.Timeout)
+		if err != nil {
+			waitChannel <- fmt.Errorf("error waiting for %s deployment to become Available: %v", comp, err)
+			return
+		}
+		d.logger.Infof("Resource %s is now ready.", waitCfg.WaitFor)
+		waitChannel <- nil
+	}()
+
+	// Show progress while waiting for the wait-goroutine above to terminate.
+	seenDeployments := make(map[string]string)
+	seenPods := make(map[string]string)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	// We will log a generic message when we haven't seen pod/deployment progress
+	// for longer than this duration.
+	progressUpdatePeriod := 1 * time.Minute
+	lastUpdate := time.Now()
+
+	for {
+		select {
+		case err := <-waitChannel:
+			return err
+		case <-waitCtx.Done():
+			return fmt.Errorf("timeout reached")
+		case <-ticker.C:
+			// Track seen deployments and their states to avoid duplicate messages.
+			deploymentsProgressed, err := d.checkDeploymentProgressInNamespace(waitCtx, waitCfg.Namespace, seenDeployments)
+			if err != nil {
+				d.logger.Warningf("failed to check for deployment progress in namespace %s: %v", waitCfg.Namespace, err)
+			}
+			podsProgressed, err := d.checkPodProgressInNamespace(waitCtx, waitCfg.Namespace, seenPods)
+			if err != nil {
+				d.logger.Warningf("failed to check for pod progress in namespace %s: %v", waitCfg.Namespace, err)
+			}
+			if deploymentsProgressed || podsProgressed {
+				lastUpdate = time.Now()
+			} else {
+				if time.Since(lastUpdate) > progressUpdatePeriod {
+					d.logger.Dimf("Still waiting for component %s in namespace %s", comp, waitCfg.Namespace)
+					lastUpdate = time.Now()
+				}
+			}
+		}
+	}
 }
 
 // waitForLoadBalancer waits for a LoadBalancer service to get an external IP.
@@ -619,7 +687,7 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 		return fmt.Errorf("failed to apply SecuredCluster CR: %w", err)
 	}
 
-	if err := d.waitForSecuredClusterReady(ctx); err != nil {
+	if err := d.waitForComponentReady(ctx, component.SecuredCluster); err != nil {
 		return fmt.Errorf("failed waiting for SecuredCluster: %w", err)
 	}
 
@@ -719,68 +787,4 @@ func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]inte
 
 	d.logger.Success("✓ SecuredCluster CR applied")
 	return nil
-}
-
-// waitForSecuredClusterReady waits for SecuredCluster to be ready
-func (d *Deployer) waitForSecuredClusterReady(ctx context.Context) error {
-	timeout := d.config.SecuredCluster.DeployTimeout
-	d.logger.Infof("⏳ Waiting for SecuredCluster to become ready (timeout: %s)...", timeout)
-
-	// Track seen deployments and their states to avoid duplicate messages
-	seenDeployments := make(map[string]string)
-	seenPods := make(map[string]string)
-
-	start := time.Now()
-	checkInterval := 3 * time.Second
-
-	for time.Since(start) < timeout {
-		d.checkDeploymentProgressInNamespace(ctx, d.config.SecuredCluster.Namespace, seenDeployments)
-
-		if d.config.SecuredCluster.EarlyReadiness || d.verbose {
-			d.checkPodProgressInNamespace(ctx, d.config.SecuredCluster.Namespace, seenPods)
-		}
-
-		allReady := true
-
-		// Check sensor deployment
-		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-			Args: []string{"get", "deployment", "sensor", "-n", d.config.SecuredCluster.Namespace, "-o", "jsonpath={.status.readyReplicas}"},
-		})
-		if err != nil || result.Stdout == "" {
-			allReady = false
-		} else {
-			replicas := strings.TrimSpace(result.Stdout)
-			if replicas == "0" || replicas == "" {
-				allReady = false
-			}
-		}
-
-		// Only check additional workloads if early-readiness is not enabled
-		if !d.config.SecuredCluster.EarlyReadiness {
-			// Check admission-control deployment
-			result, err = d.runKubectl(ctx, k8s.KubectlOptions{
-				Args: []string{"get", "deployment", "admission-control", "-n", d.config.SecuredCluster.Namespace, "-o", "jsonpath={.status.readyReplicas}"},
-			})
-			if err != nil || result.Stdout == "" {
-				allReady = false
-			} else {
-				replicas := strings.TrimSpace(result.Stdout)
-				if replicas == "0" || replicas == "" {
-					allReady = false
-				}
-			}
-
-			// collector seems to be crashing on some local cluster types/versions.
-			// TODO(ROX-34499): skip the check only on local clusters, then?
-		}
-
-		if allReady {
-			d.logger.Success("✓ SecuredCluster is ready")
-			return nil
-		}
-
-		time.Sleep(checkInterval)
-	}
-
-	return errors.New("timeout waiting for SecuredCluster to become ready")
 }

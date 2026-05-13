@@ -69,6 +69,14 @@ func (c *OperatorConfig) Configure(roxieConfig *RoxieConfig) error {
 	return nil
 }
 
+// WaitConfig describes how to wait for a component to become ready.
+type WaitConfig struct {
+	Namespace      string
+	EarlyReadiness bool
+	WaitFor        string
+	Timeout        time.Duration
+}
+
 // CentralConfig holds deployment settings for the Central component.
 type CentralConfig struct {
 	Namespace           string                 `yaml:"namespace,omitempty"`
@@ -93,6 +101,23 @@ func DefaultCentralConfig() CentralConfig {
 				},
 			},
 		},
+	}
+}
+
+func (c *CentralConfig) GetWaitConfig() WaitConfig {
+	// Without earlyReadiness we wait for the Available condition of component's CR to be True.
+	// This indicates all deployments are ready.
+	// With earlyReadiness we just wait for the Available condition of that component's core
+	// Deployment to be True.
+	waitFor := "central/" + centralCrName
+	if c.EarlyReadiness {
+		waitFor = "deployment/central"
+	}
+	return WaitConfig{
+		Namespace:      c.Namespace,
+		EarlyReadiness: c.EarlyReadiness,
+		WaitFor:        waitFor,
+		Timeout:        c.DeployTimeout,
 	}
 }
 
@@ -187,6 +212,19 @@ func DefaultSecuredClusterConfig() SecuredClusterConfig {
 		DeployTimeout: DefaultSecuredClusterWaitTimeout,
 		Namespace:     "acs-sensor",
 		Spec:          make(map[string]interface{}),
+	}
+}
+
+func (s *SecuredClusterConfig) GetWaitConfig() WaitConfig {
+	waitFor := "securedcluster/" + securedClusterCrName
+	if s.EarlyReadiness {
+		waitFor = "deployment/sensor"
+	}
+	return WaitConfig{
+		Namespace:      s.Namespace,
+		EarlyReadiness: s.EarlyReadiness,
+		WaitFor:        waitFor,
+		Timeout:        s.DeployTimeout,
 	}
 }
 

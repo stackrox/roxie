@@ -20,6 +20,7 @@ import (
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 
+	"github.com/stackrox/roxie/internal/stackroxversions"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
@@ -279,6 +280,25 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if !deploySettings.Central.EarlyReadiness || !deploySettings.SecuredCluster.EarlyReadiness {
+		// Explanation on the versions involved here:
+		// Deploying StackRox begins with picking a "main image tag" -- this is a version identifier, which cannot be reliably parsed as a semver.
+		// But there is a derived version from that -- the operator version -- which can be parsed as a semver.
+		//
+		// The invocation of deploySettings.Operator.Configure() above in this function prepares the operator deployment config in the sense
+		// that top-level roxie configuration options are propagated to the concrete operator deployment configuration. This includes also
+		// storing of the derived operator version within the operator configuration.
+		//
+		// This is why we use the operator version here when checking version constraints.
+		hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(deploySettings.Operator.Version)
+		if err != nil {
+			return fmt.Errorf("checking version constraint on main image tag %s: %w", deploySettings.Roxie.Version, err)
+		}
+		if !hasSupport {
+			return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
+		}
+	}
+
 	d, err := deployer.New(log)
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
@@ -350,6 +370,9 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		deploySettings.SecuredCluster.ResourceProfile = profile
 	}
 
+	// We need to do this regardless of whether the operator is deployed or not, because
+	// this includes the transformation of StackRox main image tags to semver compatible versions,
+	// which we will make use of later for checking version constraints.
 	if err := deploySettings.Operator.Configure(&deploySettings.Roxie); err != nil {
 		return fmt.Errorf("configuring operator configuration: %w", err)
 	}
