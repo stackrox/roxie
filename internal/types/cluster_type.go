@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 // ClusterType represents different types of Kubernetes clusters
 type ClusterType int
 
@@ -20,6 +22,27 @@ const (
 	ClusterTypeK3s
 	// ClusterTypeCRC represents a CRC (CodeReady Containers) cluster
 	ClusterTypeCRC
+)
+
+var (
+	clusterTypeToIdentifier = map[ClusterType]string{
+		ClusterTypeUnknown:         "Unknown",
+		ClusterTypeInfraGKE:        "InfraGKE",
+		ClusterTypeInfraOpenShift4: "InfraOpenShift4",
+		ClusterTypeOpenShift4:      "OpenShift4",
+		ClusterTypeKind:            "Kind",
+		ClusterTypeMinikube:        "Minikube",
+		ClusterTypeK3s:             "K3s",
+		ClusterTypeCRC:             "CRC",
+	}
+
+	identifierToClusterType = func() map[string]ClusterType {
+		m := make(map[string]ClusterType, len(clusterTypeToIdentifier))
+		for k, v := range clusterTypeToIdentifier {
+			m[v] = k
+		}
+		return m
+	}()
 )
 
 func (ct ClusterType) IsOpenShift() bool {
@@ -58,4 +81,24 @@ func AllClusterTypes() []ClusterType {
 		ClusterTypeInfraOpenShift4,
 		ClusterTypeOpenShift4,
 	}
+}
+
+func (ct ClusterType) MarshalYAML() (any, error) {
+	if id, ok := clusterTypeToIdentifier[ct]; ok {
+		return id, nil
+	}
+	return nil, fmt.Errorf("unknown cluster type: %d", ct)
+}
+
+func (ct *ClusterType) UnmarshalYAML(unmarshal func(any) error) error {
+	var s string
+	if err := unmarshal(&s); err != nil {
+		return err
+	}
+	parsed, ok := identifierToClusterType[s]
+	if !ok {
+		return fmt.Errorf("unknown cluster type identifier: %q", s)
+	}
+	*ct = parsed
+	return nil
 }

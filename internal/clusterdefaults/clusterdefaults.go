@@ -13,12 +13,12 @@ import (
 // provided deployer.Config.
 // Returns *just* the assembled defaults for the given cluster type for logging purposes.
 func ApplyClusterDefaults(
-	clusterType types.ClusterType,
 	config *deployer.Config,
 ) (*deployer.Config, error) {
 	if config == nil {
 		panic("applying cluster defaults to nil config")
 	}
+	clusterType := config.Roxie.ClusterType
 	defaults := getDefaultsForClusterType(clusterType)
 	if defaults == nil {
 		return nil, nil
@@ -27,11 +27,11 @@ func ApplyClusterDefaults(
 	// Make a copy.
 	defaultsCopy, err := defaults.DeepCopy()
 	if err != nil {
-		return nil, fmt.Errorf("deep-copying cluster defaults: %w", err)
+		return nil, fmt.Errorf("deep-copying cluster defaults or cluster type %s: %w", clusterType, err)
 	}
 
 	if err := mergo.Merge(config, defaultsCopy, mergo.WithoutDereference); err != nil {
-		return nil, fmt.Errorf("merging-in cluster defaults: %w", err)
+		return nil, fmt.Errorf("merging-in cluster defaults for cluster type %s: %w", clusterType, err)
 	}
 
 	return defaultsCopy, nil

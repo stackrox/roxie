@@ -347,11 +347,15 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 }
 
 func configureConfig(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
-	clusterType := env.GetCurrentClusterType()
-	log.Dimf("Detected cluster type: %v", clusterType)
-	defaults, err := clusterdefaults.ApplyClusterDefaults(clusterType, deploySettings)
+	if deploySettings.Roxie.ClusterType == types.ClusterTypeUnknown {
+		clusterType := env.GetCurrentClusterType()
+		log.Dimf("Detected cluster type: %v", clusterType)
+		deploySettings.Roxie.ClusterType = clusterType
+	}
+	clusterType := deploySettings.Roxie.ClusterType
+	defaults, err := clusterdefaults.ApplyClusterDefaults(deploySettings)
 	if err != nil {
-		return fmt.Errorf("applying defaults for cluster type %v: %w", clusterType, err)
+		return err
 	}
 	if verbose {
 		log.Dimf("Applying the following defaults based on detected cluster type %v:", clusterType)
@@ -409,6 +413,8 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		return errors.New("running without a controlling terminal requires --envrc to be set")
 	}
 
+	clusterType := deploySettings.Roxie.ClusterType
+
 	if env.RunningInRoxieContainer {
 		// For running containerized we have specific requirements.
 		if deploySettings.Central.PortForwardingEnabled() {
@@ -419,7 +425,7 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		}
 
 		// On infra OpenShift we already get image pull secrets for Quay automatically.
-		if clusterType := env.GetCurrentClusterType(); clusterType != types.ClusterTypeInfraOpenShift4 {
+		if clusterType != types.ClusterTypeInfraOpenShift4 {
 			if os.Getenv("REGISTRY_USERNAME") == "" || os.Getenv("REGISTRY_PASSWORD") == "" {
 				return fmt.Errorf("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables for clusters of type %s", clusterType)
 			}
@@ -437,7 +443,6 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		if deploySettings.Operator.DeployViaOlm {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
 		}
-		clusterType := env.GetCurrentClusterType()
 		if !clusterType.IsOpenShift() {
 			return fmt.Errorf("--konflux flag is only supported on OpenShift 4 clusters (current cluster type: %s)", clusterType.String())
 		}

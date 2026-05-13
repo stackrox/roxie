@@ -309,7 +309,7 @@ func (d *Deployer) stopDetachedPortForward() {
 // Deploy deploys the specified components to the cluster.
 func (d *Deployer) Deploy(ctx context.Context, components component.Component) error {
 	// Prepare and verify credentials early to fail fast.
-	if env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4 {
+	if d.config.Roxie.ClusterType != types.ClusterTypeInfraOpenShift4 {
 		if err := d.prepareCredentials(); err != nil {
 			return fmt.Errorf("failed to prepare credentials: %w", err)
 		}
@@ -317,7 +317,7 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component) e
 
 	d.logger.Infof("Initiating deployment of %s", components)
 
-	if d.config.Roxie.KonfluxImages && env.GetCurrentClusterType() == types.ClusterTypeOpenShift4 {
+	if d.config.Roxie.KonfluxImages && d.config.Roxie.ClusterType == types.ClusterTypeOpenShift4 {
 		// For deploying Konflux-built images, we need to configure image-rewriting on the cluster at the CRI-O level.
 		// But due to https://access.redhat.com/solutions/6540591 the standard pull-secret mechanism won't for the
 		// target image references. A workaround is to inject the pull secrets we need into OpenShift's global
@@ -800,7 +800,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
-	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()))
+	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
@@ -979,7 +979,7 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
-	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()))
+	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
