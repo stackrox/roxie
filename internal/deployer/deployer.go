@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/dockerauth"
@@ -46,6 +47,7 @@ type Deployer struct {
 	envrcFile   string
 
 	kubeContext string
+	k8sClient   kubernetes.Interface
 
 	config Config
 
@@ -262,6 +264,18 @@ func New(log *logger.Logger) (*Deployer, error) {
 	}
 
 	d.kubeContext = env.GetCurrentContext()
+
+	// Created eagerly (not lazily on first use) because
+	// 1. we expect to make more extensive use of it
+	// 2. we need a working connection to the API server anyway.
+	if d.kubeContext != "" {
+		client, err := k8s.NewClient(d.kubeContext)
+		if err != nil {
+			return nil, fmt.Errorf("creating new Kubernetes client: %w", err)
+		}
+		d.k8sClient = client
+
+	}
 
 	log.Success("🚀 ACS Deployer initialized")
 
