@@ -92,8 +92,9 @@ type CentralConfig struct {
 // DefaultCentralConfig returns a CentralConfig with sensible defaults.
 func DefaultCentralConfig() CentralConfig {
 	return CentralConfig{
-		DeployTimeout: DefaultCentralWaitTimeout,
-		Namespace:     "acs-central",
+		DeployTimeout:  DefaultCentralWaitTimeout,
+		Namespace:      "acs-central",
+		EarlyReadiness: true,
 		Spec: map[string]interface{}{
 			"central": map[string]interface{}{
 				"telemetry": map[string]interface{}{
@@ -209,9 +210,10 @@ type SecuredClusterConfig struct {
 // DefaultSecuredClusterConfig returns a SecuredClusterConfig with sensible defaults.
 func DefaultSecuredClusterConfig() SecuredClusterConfig {
 	return SecuredClusterConfig{
-		DeployTimeout: DefaultSecuredClusterWaitTimeout,
-		Namespace:     "acs-sensor",
-		Spec:          make(map[string]interface{}),
+		DeployTimeout:  DefaultSecuredClusterWaitTimeout,
+		Namespace:      "acs-sensor",
+		EarlyReadiness: true,
+		Spec:           make(map[string]interface{}),
 	}
 }
 
