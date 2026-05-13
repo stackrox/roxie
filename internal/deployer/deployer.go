@@ -336,6 +336,17 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component) e
 
 	d.logger.Infof("Initiating deployment of %s", components)
 
+	if d.config.Roxie.KonfluxImages && env.GetCurrentClusterType() == types.ClusterTypeOpenShift4 {
+		// For deploying Konflux-built images, we need to configure image-rewriting on the cluster at the CRI-O level.
+		// But due to https://access.redhat.com/solutions/6540591 the standard pull-secret mechanism won't for the
+		// target image references. A workaround is to inject the pull secrets we need into OpenShift's global
+		// pull secrets.
+		// Infra OpenShift4 clusters already come equipped with this global pull secret.
+		if err := d.InjectGlobalOpenShiftPullSecret(ctx); err != nil {
+			return fmt.Errorf("injecting global OpenShift pull-secret for Konflux images: %w", err)
+		}
+	}
+
 	// If only deploying operator, use the operator-only flow.
 	if components.IncludesOperatorExplicitly() {
 		return d.deployOperatorOnly(ctx)
