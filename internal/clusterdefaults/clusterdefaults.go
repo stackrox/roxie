@@ -37,6 +37,12 @@ func ApplyClusterDefaults(
 	return defaultsCopy, nil
 }
 
+// getDefaultsForClusterType returns a deployer.Config filled with the defaults for the given
+// cluster type.
+// Note that to be able to differentiate "not set" from "set specifically to the empty value",
+// any fields set specifically to the empty value (e.g. false booleans), must be of pointer type
+// in the Config struct. Otherwise, `ApplyClusterDefaults` would not apply those to the caller-provided
+// configuration.
 func getDefaultsForClusterType(clusterType types.ClusterType) *deployer.Config {
 	switch clusterType {
 	case types.ClusterTypeKind, types.ClusterTypeMinikube, types.ClusterTypeK3s, types.ClusterTypeCRC:

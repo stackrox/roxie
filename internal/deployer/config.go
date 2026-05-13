@@ -27,6 +27,9 @@ func NewConfig() Config {
 	}
 }
 
+// DeepCopy creates a deep-copy of the provided config using a YAML marshaling/unmarshaling roundtrip.
+// Due the `omitempty`, this causes empty values (e.g. empty maps) from being discarded (replace with nil
+// in the resulting copy).
 func (c *Config) DeepCopy() (*Config, error) {
 	data, err := yaml.Marshal(c)
 	if err != nil {
