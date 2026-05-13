@@ -95,16 +95,16 @@ MAIN_IMAGE_TAG=4.9.2 ./roxie deploy central
 
 2. Switch kubectl context to the spoke cluster and deploy SecuredCluster:
 ```bash
+ROX_ADMIN_PASSWORD=<admin-password> \
+ROX_CA_CERT_FILE=<path-to-ca-cert> \
 ./roxie deploy secured-cluster \
-  --central-endpoint=<central-loadbalancer-ip>:443 \
-  --central-password=<admin-password> \
-  --ca-cert-file=/tmp/roxie-ca-cert.pem
+  --set securedCluster.centralEndpoint=<central-loadbalancer-ip>:443
 ```
 
 > **Note:** The Central endpoint is printed during deployment. If you are in the roxie subshell,
-> `API_ENDPOINT`, `ROX_ADMIN_PASSWORD`, and `ROX_CA_CERT_FILE` are already set, so you can run:
+> `ROX_ADMIN_PASSWORD` and `ROX_CA_CERT_FILE` are already set, so you can run:
 > ```bash
-> ./roxie deploy secured-cluster --central-endpoint=$API_ENDPOINT
+> ./roxie deploy secured-cluster --set securedCluster.centralEndpoint=$API_ENDPOINT
 > ```
 
 ## Development

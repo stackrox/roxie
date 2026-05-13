@@ -15,11 +15,6 @@ var (
 	envrc   string
 	dryRun  bool
 
-	// Multi-cluster flags
-	centralEndpointFlag string
-	centralPasswordFlag string
-	caCertFileFlag      string
-
 	// We need this set up before command line flags are parsed.
 	deploySettings = deployer.NewConfig()
 )
