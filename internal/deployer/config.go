@@ -105,6 +105,10 @@ func DefaultCentralConfig() CentralConfig {
 }
 
 func (c *CentralConfig) GetWaitConfig() WaitConfig {
+	// Without earlyReadiness we wait for the Available condition of component's CR to be True.
+	// This indicates all deployments are ready.
+	// With earlyReadiness we just wait for the Available condition of that component's core
+	// Deployment to be True.
 	waitFor := "central/" + centralCrName
 	if c.EarlyReadiness {
 		waitFor = "deployment/central"
