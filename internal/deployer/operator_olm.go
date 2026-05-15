@@ -271,7 +271,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 
 	currentCSV := strings.TrimSpace(result.Stdout)
 	if currentCSV != expectedCSV {
-		return fmt.Errorf("Subscription %s progressing to unexpected CSV '%s', expected '%s'", namespacedSubscriptionName, currentCSV, expectedCSV)
+		return fmt.Errorf("Subscription %s progressing to unexpected CSV '%s', expected '%s'", namespacedSubscriptionName, currentCSV, expectedCSV) //nolint:staticcheck // ST1005: capitalized for Kubernetes resource kind
 	}
 
 	// Get InstallPlan name.
