@@ -12,6 +12,7 @@ ARG TARGETARCH
 
 WORKDIR /build
 USER root
+ENV GOTOOLCHAIN=auto
 
 # Copy go mod files first for better layer caching
 COPY go.mod go.sum ./
