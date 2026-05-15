@@ -13,14 +13,11 @@ import (
 )
 
 const (
-	catalogSourceName  = "stackrox-operator-index"
-	subscriptionName   = "stackrox-operator-subscription"
-	operatorGroupName  = "all-namespaces-operator-group"
-	operatorChannel    = "latest"
-	operatorIndexImage = "quay.io/rhacs-eng/stackrox-operator-index"
-)
-
-var (
+	catalogSourceName          = "stackrox-operator-index"
+	subscriptionName           = "stackrox-operator-subscription"
+	operatorGroupName          = "all-namespaces-operator-group"
+	operatorChannel            = "latest"
+	operatorIndexImage         = "quay.io/rhacs-eng/stackrox-operator-index"
 	namespacedSubscriptionName = operatorNamespace + "/" + subscriptionName
 )
 
