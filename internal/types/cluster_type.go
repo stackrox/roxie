@@ -53,7 +53,7 @@ func (ct ClusterType) IsOpenShift() bool {
 func (ct ClusterType) String() string {
 	switch ct {
 	case ClusterTypeInfraGKE:
-		return "GKE"
+		return "GKE (infra)"
 	case ClusterTypeInfraOpenShift4:
 		return "OpenShift4 (infra)"
 	case ClusterTypeOpenShift4:
@@ -61,11 +61,11 @@ func (ct ClusterType) String() string {
 	case ClusterTypeKind:
 		return "Kind"
 	case ClusterTypeMinikube:
-		return "minikube"
+		return "Minikube"
 	case ClusterTypeK3s:
-		return "k3s"
+		return "K3s"
 	case ClusterTypeCRC:
-		return "crc"
+		return "CRC"
 	default:
 		return "Unknown"
 	}

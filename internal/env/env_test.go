@@ -291,7 +291,7 @@ func TestClusterTypeString(t *testing.T) {
 		{
 			name:        "types.ClusterTypeInfraGKE",
 			clusterType: types.ClusterTypeInfraGKE,
-			want:        "GKE",
+			want:        "GKE (infra)",
 		},
 		{
 			name:        "InfraOpenShift4",
