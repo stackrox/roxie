@@ -1,5 +1,5 @@
 **PLEASE NOTE: This repository contains a deployment tool for ACS, which is used by
-ACS engineers. It is not a general-purpose ASC installation frontend for ACS users.**
+ACS engineers. It is **not** a general-purpose installation frontend for ACS or StackRox users.**
 
 # roxie – ACS deployments made easy
 
