@@ -29,6 +29,7 @@ jobs:
           fi
 
   create-gke-cluster:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/create-dev-cluster.yml
     with:
       cluster-name: infra-roxie-pr-${{ github.event.pull_request.number }}-gke
@@ -38,7 +39,7 @@ jobs:
 
   create-openshift-cluster:
     needs: check-olm-label
-    if: needs.check-olm-label.outputs.has-label == 'true'
+    if: needs.check-olm-label.outputs.has-label == 'true' && github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/create-dev-cluster.yml
     with:
       cluster-name: infra-roxie-pr-${{ github.event.pull_request.number }}-openshift
@@ -47,6 +48,7 @@ jobs:
     secrets: inherit
 
   build-roxie-image:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/build-roxie-image.yml
     permissions:
       contents: read
@@ -54,6 +56,7 @@ jobs:
     secrets: inherit
 
   e2e-tests:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     needs: [ create-gke-cluster, build-roxie-image ]
     uses: ./.github/workflows/e2e-tests.yml
     with:
@@ -62,6 +65,7 @@ jobs:
     secrets: inherit
 
   e2e-tests-openshift:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     needs: [ create-openshift-cluster, build-roxie-image ]
     uses: ./.github/workflows/e2e-tests.yml
     with:
@@ -72,7 +76,7 @@ jobs:
     secrets: inherit
 
   delete-gke-cluster:
-    if: ${{ always() && needs.create-gke-cluster.result == 'success' }}
+    if: ${{ always() && needs.create-gke-cluster.result == 'success' && github.event.pull_request.head.repo.full_name == github.repository }}
     needs: [ create-gke-cluster, e2e-tests ]
     uses: ./.github/workflows/delete-dev-cluster.yml
     with:
@@ -80,7 +84,7 @@ jobs:
     secrets: inherit
 
   delete-openshift-cluster:
-    if: ${{ always() && needs.create-openshift-cluster.result == 'success' }}
+    if: ${{ always() && needs.create-openshift-cluster.result == 'success' && github.event.pull_request.head.repo.full_name == github.repository }}
     needs: [ create-openshift-cluster, e2e-tests-openshift ]
     uses: ./.github/workflows/delete-dev-cluster.yml
     with:
