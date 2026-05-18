@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	catalogSourceName  = "stackrox-operator-index"
-	subscriptionName   = "stackrox-operator-subscription"
-	operatorGroupName  = "all-namespaces-operator-group"
-	operatorChannel    = "latest"
-	operatorIndexImage = "quay.io/rhacs-eng/stackrox-operator-index"
+	catalogSourceName          = "stackrox-operator-index"
+	subscriptionName           = "stackrox-operator-subscription"
+	operatorGroupName          = "all-namespaces-operator-group"
+	operatorChannel            = "latest"
+	operatorIndexImage         = "quay.io/rhacs-eng/stackrox-operator-index"
+	namespacedSubscriptionName = operatorNamespace + "/" + subscriptionName
 )
 
 // OperatorDeploymentMode represents how the operator is deployed
@@ -31,7 +32,7 @@ const (
 // deployOperatorViaOLM deploys the RHACS operator using OLM.
 func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying operator via OLM...")
-	d.logger.Infof("Operator tag: %s", d.operatorTag)
+	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
 
 	if err := d.checkOLMInstalled(ctx); err != nil {
 		return err
@@ -40,7 +41,7 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	indexImage := d.getOperatorIndexImage()
 	d.logger.Infof("Index image: %s", indexImage)
 
-	if err := d.createOperatorNamespace(ctx); err != nil {
+	if err := d.prepareNamespace(ctx, operatorNamespace, false); err != nil {
 		return err
 	}
 
@@ -65,7 +66,7 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	}
 
 	if err := d.waitForOperatorReady(ctx, operatorNamespace, operatorDeploymentName, 300); err != nil {
-		return fmt.Errorf("failed waiting for operator: %w", err)
+		return fmt.Errorf("failed waiting for operator in namespace %s to become ready: %w", operatorNamespace, err)
 	}
 
 	d.logger.Success("🎉 Operator deployed successfully via OLM!")
@@ -120,7 +121,7 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 
 // getOperatorIndexImage returns the operator index image reference.
 func (d *Deployer) getOperatorIndexImage() string {
-	return fmt.Sprintf(operatorIndexImage+":v%s", d.operatorTag)
+	return fmt.Sprintf(operatorIndexImage+":v%s", d.config.Operator.Version)
 }
 
 // createCatalogSource creates the CatalogSource for the operator.
@@ -197,7 +198,7 @@ func (d *Deployer) createOperatorGroup(ctx context.Context) error {
 func (d *Deployer) createSubscription(ctx context.Context) error {
 	d.logger.Info("Creating Subscription...")
 
-	startingCSV := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
+	startingCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 
 	subscription := map[string]interface{}{
 		"apiVersion": "operators.coreos.com/v1alpha1",
@@ -226,7 +227,7 @@ func (d *Deployer) createSubscription(ctx context.Context) error {
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create Subscription: %w", err)
+		return fmt.Errorf("failed to create Subscription %s: %w", namespacedSubscriptionName, err)
 	}
 
 	d.logger.Success("✓ Subscription created")
@@ -253,23 +254,21 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	}
 
 	if time.Since(start) >= timeout {
-		// TODO(ROX-34499): some more info on what was wrong would be useful: a dump of the
-		// subscription or at least its name so that the user can investigate
-		return errors.New("timeout waiting for InstallPlan to be created")
+		return fmt.Errorf("timeout waiting for InstallPlan to be created for Subscription %s", namespacedSubscriptionName)
 	}
 
 	// Sanity check:Verify currentCSV matches expected version.
-	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
+	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.currentCSV}"},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to get current CSV from subscription: %w", err)
+		return fmt.Errorf("failed to get current CSV from Subscription %s: %w", namespacedSubscriptionName, err)
 	}
 
 	currentCSV := strings.TrimSpace(result.Stdout)
 	if currentCSV != expectedCSV {
-		return fmt.Errorf("subscription progressing to unexpected CSV '%s', expected '%s'", currentCSV, expectedCSV)
+		return fmt.Errorf("detected Subscription %s progressing to unexpected CSV '%s', expected '%s'", namespacedSubscriptionName, currentCSV, expectedCSV)
 	}
 
 	// Get InstallPlan name.
@@ -277,7 +276,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.installPlanRef.name}"},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to get InstallPlan name: %w", err)
+		return fmt.Errorf("failed to get InstallPlan name from Subscription %s: %w", namespacedSubscriptionName, err)
 	}
 
 	installPlanName := strings.TrimSpace(result.Stdout)
@@ -292,7 +291,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 		Args: []string{"patch", "installplan", installPlanName, "-n", operatorNamespace, "--type", "merge", "-p", `{"spec":{"approved":true}}`},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to approve InstallPlan: %w", err)
+		return fmt.Errorf("failed to approve InstallPlan %s for Subscription %s: %w", installPlanName, namespacedSubscriptionName, err)
 	}
 
 	d.logger.Success("✓ InstallPlan approved")
@@ -301,7 +300,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 
 // waitForCSVSuccess waits for the CSV to reach Succeeded phase.
 func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
-	csvName := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
+	csvName := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 	d.logger.Infof("⏳ Waiting for CSV %s to succeed...", csvName)
 
 	start := time.Now()
@@ -325,8 +324,7 @@ func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 		time.Sleep(5 * time.Second)
 	}
 
-	// TODO(ROX-34499): same as above
-	return fmt.Errorf("timeout waiting for CSV to succeed")
+	return fmt.Errorf("timeout waiting for CSV %s to succeed", csvName)
 }
 
 // detectOperatorDeploymentMode detects how the operator is currently deployed.

@@ -53,9 +53,9 @@ func parseFlagWithPrefix(part string) (name string, value bool, err error) {
 	return name, value, nil
 }
 
-// parseFeatureFlags parses a slice of feature flag strings and returns a map of flag names to boolean values.
+// ParseFeatureFlags parses a slice of feature flag strings and returns a map of flag names to boolean values.
 // Supports formats: +ROX_FOO (enable), -ROX_FOO (disable), ROX_FOO=true, ROX_FOO=false, ROX_FOO (enable)
-func parseFeatureFlags(flags []string) (map[string]bool, error) {
+func ParseFeatureFlags(flags []string) (map[string]bool, error) {
 	result := make(map[string]bool)
 
 	for _, flagStr := range flags {
@@ -106,10 +106,8 @@ func featureFlagsToOverrides(flags map[string]bool) map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"spec": map[string]interface{}{
-			"customize": map[string]interface{}{
-				"envVars": featureFlagsToEnvVars(flags),
-			},
+		"customize": map[string]interface{}{
+			"envVars": featureFlagsToEnvVars(flags),
 		},
 	}
 }
@@ -143,8 +141,11 @@ func mergeEnvVars(base, overlay []interface{}) []interface{} {
 // mergeWithEnvVarSupport merges two maps, with special handling for spec.customize.envVars arrays.
 // Instead of replacing the entire envVars array, it merges individual env vars by name,
 // allowing overlay to override specific env vars while preserving others from base.
-func mergeWithEnvVarSupport(base, overlay map[string]interface{}) map[string]interface{} {
-	result := helpers.MergeMaps(base, overlay)
+func mergeWithEnvVarSupport(base, overlay map[string]interface{}) (map[string]interface{}, error) {
+	result, err := helpers.MergeMaps(base, overlay)
+	if err != nil {
+		return nil, err
+	}
 
 	baseEnvVars, baseFound, _ := unstructured.NestedSlice(base, "spec", "customize", "envVars")
 	overlayEnvVars, overlayFound, _ := unstructured.NestedSlice(overlay, "spec", "customize", "envVars")
@@ -153,5 +154,5 @@ func mergeWithEnvVarSupport(base, overlay map[string]interface{}) map[string]int
 		_ = unstructured.SetNestedSlice(result, mergeEnvVars(baseEnvVars, overlayEnvVars), "spec", "customize", "envVars")
 	}
 
-	return result
+	return result, nil
 }

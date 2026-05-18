@@ -12,7 +12,7 @@ import (
 	"github.com/stackrox/roxie/internal/logger"
 )
 
-func newTeardownCmd() *cobra.Command {
+func newTeardownCmd(settings *deployer.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:       "teardown [component]",
 		Short:     "Teardown ACS components",
@@ -22,7 +22,17 @@ func newTeardownCmd() *cobra.Command {
 		RunE:      runTeardown,
 	}
 
-	cmd.Flags().BoolVar(&singleNamespace, "single-namespace", false, "Deploy all components in a single namespace ('stackrox' by default)")
+	registerFlag(cmd, settings, "single-namespace", "Deploy all components in a single namespace ('stackrox')",
+		withNoOptDefVal("true"),
+		withApplyFnBool(func(config *deployer.Config, val bool) error {
+			// We do not support --single-namespace=false as of now.
+			if val {
+				config.Central.Namespace = sharedNamespace
+				config.SecuredCluster.Namespace = sharedNamespace
+			}
+			return nil
+		}),
+	)
 
 	return cmd
 }
@@ -40,13 +50,18 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 
 	log.Infof("Tearing down %s", components)
 
+	if dryRun {
+		log.Infof("Exiting because of enabled dry-run mode.")
+		return nil
+	}
+
 	d, err := deployer.New(log)
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
 	}
 	defer d.Cleanup()
 
-	d.SetSingleNamespace(singleNamespace)
+	d.SetConfig(deploySettings)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()

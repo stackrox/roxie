@@ -216,7 +216,7 @@ func (d *DockerAuth) VerifyCredentials(username, password string) error {
 }
 
 // CreatePullSecretYAMLFromCredentials creates Kubernetes pull secret YAML from verified credentials.
-func (d *DockerAuth) CreatePullSecretYAMLFromCredentials(creds *Credentials, namespace string) string {
+func (d *DockerAuth) CreatePullSecretYAMLFromCredentials(creds Credentials, namespace string) string {
 	// Create auth string
 	authString := fmt.Sprintf("%s:%s", creds.Username, creds.Password)
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))

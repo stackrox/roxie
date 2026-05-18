@@ -5,28 +5,18 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/stackrox/roxie/internal/deployer"
 )
 
 var (
 	// Global flags
-	verbose                bool
-	earlyReadiness         bool
-	olm                    bool
-	konflux                bool
-	deployOperator         bool
-	portForwarding         bool
-	pauseReconciliation    bool
-	overrideFile           string
-	overrideSetExpressions []string
-	exposure               string
-	resources              string
-	shell                  string
-	envrc                  string
-	singleNamespace        bool
-	tag                    string
-	featureFlags           []string
-	centralWait            string
-	securedClusterWait     string
+	verbose bool
+	shell   string
+	envrc   string
+	dryRun  bool
+
+	// We need this set up before command line flags are parsed.
+	deploySettings = deployer.NewConfig()
 )
 
 func main() {
@@ -48,9 +38,9 @@ Red Hat Advanced Cluster Security (ACS) on any Kubernetes/OpenShift cluster.`,
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output (show CRs)")
-	rootCmd.PersistentFlags().BoolVar(&earlyReadiness, "early-readiness", true, "Only wait for essential workloads (central/sensor) to be ready")
-	rootCmd.AddCommand(newDeployCmd())
-	rootCmd.AddCommand(newTeardownCmd())
+	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Do not actually modify cluster")
+	rootCmd.AddCommand(newDeployCmd(&deploySettings))
+	rootCmd.AddCommand(newTeardownCmd(&deploySettings))
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newEnvCmd())
 	rootCmd.AddCommand(newLogsCmd())

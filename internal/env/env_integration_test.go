@@ -4,6 +4,8 @@ package env
 
 import (
 	"testing"
+
+	"github.com/stackrox/roxie/internal/types"
 )
 
 func TestDetectClusterType_Integration(t *testing.T) {
@@ -19,7 +21,7 @@ func TestDetectClusterType_Integration(t *testing.T) {
 	t.Logf("Detected cluster type: %s", clusterType)
 
 	// The cluster type should never be invalid (even if Unknown)
-	validTypes := []ClusterType{ClusterTypeUnknown, InfraGKE, InfraOpenShift4, OpenShift4, LocalKind}
+	validTypes := types.AllClusterTypes()
 	found := false
 	for _, valid := range validTypes {
 		if clusterType == valid {
