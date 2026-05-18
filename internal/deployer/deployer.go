@@ -45,8 +45,7 @@ type Deployer struct {
 	dockerCreds *dockerauth.Credentials
 	envrcFile   string
 
-	kubeContext          string
-	clusterResourceKinds map[string]struct{}
+	kubeContext string
 
 	config Config
 
@@ -264,38 +263,9 @@ func New(log *logger.Logger) (*Deployer, error) {
 
 	d.kubeContext = env.GetCurrentContext()
 
-	if d.kubeContext != "" {
-		clusterResourceKinds, err := d.getClusterResourceKinds()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get cluster resource kinds: %w", err)
-		}
-		d.clusterResourceKinds = clusterResourceKinds
-	}
-
 	log.Success("🚀 ACS Deployer initialized")
 
 	return d, nil
-}
-
-func (d *Deployer) getClusterResourceKinds() (map[string]struct{}, error) {
-	result, err := d.runKubectl(context.Background(), k8s.KubectlOptions{
-		Args: []string{"api-resources", "-o", "name"},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster resource kinds: %w", err)
-	}
-	kinds := make(map[string]struct{})
-	lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
-	for _, line := range lines {
-		fields := strings.SplitN(line, ".", 2)
-		if len(fields) == 0 || fields[0] == "" {
-			continue
-		}
-		kind := fields[0]
-		kinds[kind] = struct{}{}
-	}
-
-	return kinds, nil
 }
 
 // Cleanup cleans up any temporary resources created by the deployer, such as temporary files.

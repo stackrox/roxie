@@ -1,3 +1,6 @@
+**PLEASE NOTE: This repository contains a deployment tool for ACS, which is used by
+ACS engineers. It is **not** a general-purpose installation frontend for ACS or StackRox users.**
+
 # roxie – ACS deployments made easy
 
 [![Code Quality](https://github.com/stackrox/roxie/actions/workflows/code-quality.yml/badge.svg)](https://github.com/stackrox/roxie/actions/workflows/code-quality.yml)
