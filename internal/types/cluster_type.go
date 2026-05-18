@@ -68,7 +68,7 @@ func (ct *ClusterType) UnmarshalYAML(unmarshal func(any) error) error {
 		return err
 	}
 
-	var sAsClusterType ClusterType = ClusterType(s)
+	var sAsClusterType = ClusterType(s)
 
 	for _, valid := range AllClusterTypes() {
 		if sAsClusterType == valid {
