@@ -5,13 +5,12 @@ on:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+*'
 
-permissions:
-  contents: write
-
 jobs:
   build-and-release:
     name: Build and Release Binaries
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -54,7 +53,7 @@ jobs:
           sha256sum roxie-* > checksums.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           name: Release ${{ steps.version.outputs.version }}
           draft: false

@@ -100,13 +100,8 @@ func (m *Manager) Start(namespace, serviceName string, remotePort, preferredLoca
 
 	// Wait for port to be ready
 	if !m.waitTCPReady("127.0.0.1", localPort, 20.0) {
-		// Kill the process group
 		if cmd.Process != nil {
-			pgid, err := syscall.Getpgid(cmd.Process.Pid)
-			if err == nil {
-				syscall.Kill(-pgid, syscall.SIGTERM)
-			}
-			// TODO(ROX-34499): AFAICT this can get stuck forever if the process blocks SIGTERM...
+			cmd.Process.Kill()
 			cmd.Wait()
 		}
 		return "", fmt.Errorf("port-forward did not become ready")
