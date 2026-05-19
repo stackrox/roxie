@@ -78,3 +78,7 @@ func (ct *ClusterType) UnmarshalYAML(unmarshal func(any) error) error {
 	}
 	return fmt.Errorf("unknown cluster type identifier: %q", s)
 }
+
+func (ct ClusterType) NeedsPullSecrets() bool {
+	return ct != ClusterTypeInfraOpenShift4
+}

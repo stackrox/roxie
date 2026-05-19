@@ -16,7 +16,6 @@ import (
 
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
-	"github.com/stackrox/roxie/internal/types"
 )
 
 const (
@@ -319,7 +318,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImages && d.config.Roxie.ClusterType != types.ClusterTypeInfraOpenShift4
+	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImages && d.config.Roxie.ClusterType.NeedsPullSecrets()
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dim(fmt.Sprintf("  • Namespace: %s", operatorNamespace))

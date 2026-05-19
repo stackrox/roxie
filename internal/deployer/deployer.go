@@ -298,7 +298,7 @@ func (d *Deployer) stopDetachedPortForward() {
 // Deploy deploys the specified components to the cluster.
 func (d *Deployer) Deploy(ctx context.Context, components component.Component) error {
 	// Prepare and verify credentials early to fail fast.
-	if d.config.Roxie.ClusterType != types.ClusterTypeInfraOpenShift4 {
+	if d.config.Roxie.ClusterType.NeedsPullSecrets() {
 		if err := d.prepareCredentials(); err != nil {
 			return fmt.Errorf("failed to prepare credentials: %w", err)
 		}

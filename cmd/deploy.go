@@ -425,7 +425,7 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		}
 
 		// On infra OpenShift we already get image pull secrets for Quay automatically.
-		if clusterType != types.ClusterTypeInfraOpenShift4 {
+		if clusterType.NeedsPullSecrets() {
 			if os.Getenv("REGISTRY_USERNAME") == "" || os.Getenv("REGISTRY_PASSWORD") == "" {
 				return fmt.Errorf("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables for clusters of type %s", clusterType)
 			}
