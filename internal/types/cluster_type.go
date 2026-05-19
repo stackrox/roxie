@@ -7,7 +7,7 @@ type ClusterType string
 
 const (
 	// ClusterTypeUnknown represents an unidentified cluster type
-	ClusterTypeUnknown ClusterType = "Unknown"
+	ClusterTypeUnknown ClusterType = ""
 	// ClusterTypeInfraGKE represents a GKE cluster created via Infra.
 	ClusterTypeInfraGKE ClusterType = "InfraGKE"
 	// ClusterTypeInfraOpenShift4 represents an OpenShift 4 cluster
@@ -35,6 +35,8 @@ func (ct ClusterType) String() string {
 		return "GKE (infra)"
 	case ClusterTypeInfraOpenShift4:
 		return "OpenShift4 (infra)"
+	case ClusterTypeUnknown:
+		return "Unknown"
 	default:
 		return string(ct)
 	}
