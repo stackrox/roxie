@@ -35,18 +35,8 @@ func (ct ClusterType) String() string {
 		return "GKE (infra)"
 	case ClusterTypeInfraOpenShift4:
 		return "OpenShift4 (infra)"
-	case ClusterTypeOpenShift4:
-		return "OpenShift4"
-	case ClusterTypeKind:
-		return "Kind"
-	case ClusterTypeMinikube:
-		return "Minikube"
-	case ClusterTypeK3s:
-		return "K3s"
-	case ClusterTypeCRC:
-		return "CRC"
 	default:
-		return "Unknown"
+		return string(ct)
 	}
 }
 
