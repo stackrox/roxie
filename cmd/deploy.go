@@ -358,7 +358,7 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		return err
 	}
 	if verbose {
-		log.Dimf("Applying the following defaults based on detected cluster type %v:", clusterType)
+		log.Dimf("Applying the following defaults based on cluster type %v:", clusterType)
 		helpers.LogMultilineYaml(log, defaults)
 	}
 
