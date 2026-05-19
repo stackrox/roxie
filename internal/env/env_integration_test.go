@@ -16,7 +16,7 @@ func TestDetectClusterType_Integration(t *testing.T) {
 
 	// This test uses the current kubectl context
 	// The result will depend on the active cluster
-	clusterType := GetCurrentClusterType()
+	clusterType := GetAutoDetectedClusterType()
 
 	t.Logf("Detected cluster type: %s", clusterType)
 

@@ -119,7 +119,7 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying Central via Operator...")
 
-	needPullSecrets := env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4
+	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
 	if err := d.prepareNamespace(ctx, d.config.Central.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}
@@ -655,7 +655,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying SecuredCluster via Operator...")
 
-	needPullSecrets := env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4
+	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
 	if err := d.prepareNamespace(ctx, d.config.SecuredCluster.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}

@@ -298,7 +298,7 @@ func (d *Deployer) stopDetachedPortForward() {
 // Deploy deploys the specified components to the cluster.
 func (d *Deployer) Deploy(ctx context.Context, components component.Component) error {
 	// Prepare and verify credentials early to fail fast.
-	if env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4 {
+	if d.config.Roxie.ClusterType.NeedsPullSecrets() {
 		if err := d.prepareCredentials(); err != nil {
 			return fmt.Errorf("failed to prepare credentials: %w", err)
 		}
@@ -778,7 +778,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
-	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()))
+	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
@@ -957,7 +957,7 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
-	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()))
+	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
