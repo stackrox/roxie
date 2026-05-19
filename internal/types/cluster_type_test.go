@@ -42,6 +42,7 @@ func TestClusterTypeUnmarshalYAML(t *testing.T) {
 		{"Minikube", ClusterTypeMinikube},
 		{"K3s", ClusterTypeK3s},
 		{"CRC", ClusterTypeCRC},
+		{"", ClusterTypeUnknown},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
