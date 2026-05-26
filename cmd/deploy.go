@@ -299,18 +299,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if deploySettings.SecuredCluster.CentralEndpoint != "" {
-		if !components.IncludesSensor() {
-			return errors.New("securedCluster.centralEndpoint can only be used when deploying secured-cluster")
-		}
-		if os.Getenv("ROX_ADMIN_PASSWORD") == "" {
-			return errors.New("securedCluster.centralEndpoint requires ROX_ADMIN_PASSWORD to be set")
-		}
-		if os.Getenv("ROX_CA_CERT_FILE") == "" {
-			return errors.New("securedCluster.centralEndpoint requires ROX_CA_CERT_FILE to be set")
-		}
-	}
-
 	d, err := deployer.New(log)
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)

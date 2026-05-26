@@ -9,31 +9,31 @@ import (
 func TestConfigureSpec_CentralEndpoint(t *testing.T) {
 	tests := []struct {
 		name             string
-		centralEndpoint  string
+		spec             map[string]interface{}
 		centralNamespace string
 		expected         string
 	}{
 		{
-			name:             "falls back to internal endpoint",
-			centralEndpoint:  "",
+			name:             "sets internal endpoint when not provided",
+			spec:             map[string]interface{}{},
 			centralNamespace: "acs-central",
 			expected:         "central.acs-central.svc:443",
 		},
 		{
-			name:             "falls back to internal endpoint with custom namespace",
-			centralEndpoint:  "",
+			name:             "sets internal endpoint with custom namespace",
+			spec:             map[string]interface{}{},
 			centralNamespace: "stackrox",
 			expected:         "central.stackrox.svc:443",
 		},
 		{
-			name:             "uses provided central endpoint",
-			centralEndpoint:  "central.example.com:443",
+			name:             "preserves user-provided endpoint",
+			spec:             map[string]interface{}{"centralEndpoint": "central.example.com:443"},
 			centralNamespace: "acs-central",
 			expected:         "central.example.com:443",
 		},
 		{
-			name:             "provided endpoint takes precedence over namespace",
-			centralEndpoint:  "10.0.0.1:443",
+			name:             "user-provided endpoint takes precedence over internal default",
+			spec:             map[string]interface{}{"centralEndpoint": "10.0.0.1:443"},
 			centralNamespace: "stackrox",
 			expected:         "10.0.0.1:443",
 		},
@@ -42,8 +42,7 @@ func TestConfigureSpec_CentralEndpoint(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sc := &SecuredClusterConfig{
-				CentralEndpoint: tt.centralEndpoint,
-				Spec:            make(map[string]interface{}),
+				Spec: tt.spec,
 			}
 			roxie := &RoxieConfig{FeatureFlags: make(map[string]bool)}
 			central := &CentralConfig{Namespace: tt.centralNamespace}

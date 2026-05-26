@@ -199,7 +199,6 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 // SecuredClusterConfig holds deployment settings for the SecuredCluster component.
 type SecuredClusterConfig struct {
 	Namespace           string                 `yaml:"namespace,omitempty"`
-	CentralEndpoint     string                 `yaml:"centralEndpoint,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
 	PauseReconciliation bool                   `yaml:"pauseReconciliation,omitempty"`
 	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
@@ -235,15 +234,8 @@ func (s *SecuredClusterConfig) ConfigureSpec(roxieConfig *RoxieConfig, centralCo
 		return err
 	}
 
-	centralEndpoint := internalCentralEndpoint(centralConfig.Namespace)
-	if s.CentralEndpoint != "" {
-		centralEndpoint = s.CentralEndpoint
-	}
-
-	if err := helpers.DeepMerge(s.Spec, map[string]interface{}{
-		"centralEndpoint": centralEndpoint,
-	}); err != nil {
-		return err
+	if _, exists := s.Spec["centralEndpoint"]; !exists {
+		s.Spec["centralEndpoint"] = internalCentralEndpoint(centralConfig.Namespace)
 	}
 
 	return nil
