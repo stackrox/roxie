@@ -972,6 +972,7 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 func (d *Deployer) GetCentralDeploymentInfo() types.CentralDeploymentInfo {
 	return types.CentralDeploymentInfo{
 		Endpoint:    d.centralEndpoint,
+		Username:    AdminUsername,
 		Password:    d.centralPassword,
 		KubeContext: d.kubeContext,
 		Exposure:    d.config.Central.GetExposure(),
