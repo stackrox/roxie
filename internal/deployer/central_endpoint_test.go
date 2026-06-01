@@ -3,6 +3,8 @@ package deployer
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -44,23 +46,16 @@ func TestConfigureSpec_CentralEndpoint(t *testing.T) {
 			sc := &SecuredClusterConfig{
 				Spec: tt.spec,
 			}
-			roxie := &RoxieConfig{FeatureFlags: make(map[string]bool)}
+			roxie := NewRoxieConfig()
 			central := &CentralConfig{Namespace: tt.centralNamespace}
 
-			if err := sc.ConfigureSpec(roxie, central); err != nil {
-				t.Fatalf("ConfigureSpec failed: %v", err)
-			}
+			err := sc.ConfigureSpec(&roxie, central)
+			require.NoError(t, err, "ConfigureSpec failed")
 
 			got, found, err := unstructured.NestedString(sc.Spec, "centralEndpoint")
-			if err != nil {
-				t.Fatalf("failed to get centralEndpoint from spec: %v", err)
-			}
-			if !found {
-				t.Fatal("centralEndpoint not found in spec")
-			}
-			if got != tt.expected {
-				t.Errorf("got %q, want %q", got, tt.expected)
-			}
+			require.NoError(t, err, "failed to get centralEndpoint from spec")
+			require.True(t, found, "centralEndpoint not found in spec")
+			assert.Equal(t, tt.expected, got)
 		})
 	}
 }
