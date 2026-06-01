@@ -965,6 +965,10 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes"))
 	}
 
+	if ep, ok := d.config.SecuredCluster.Spec["centralEndpoint"].(string); ok && ep != internalCentralEndpoint(d.config.Central.Namespace) {
+		log.Info(cyan.Sprint("│") + createRow("Central Endpoint", ep))
+	}
+
 	log.Info(cyan.Sprint("└" + strings.Repeat("─", boxWidth) + "┘"))
 	log.Info("")
 }
