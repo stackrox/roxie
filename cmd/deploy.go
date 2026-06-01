@@ -351,7 +351,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	if components.IncludesCentral() && envrc == "" {
-		if err := spawnSubshell(d, log); err != nil {
+		if err := spawnSubshellForDeployerEnv(d, log); err != nil {
 			return fmt.Errorf("failed to spawn subshell: %w", err)
 		}
 	}
