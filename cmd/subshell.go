@@ -171,7 +171,7 @@ func isHAProxyAvailable() bool {
 	return err == nil
 }
 
-func printBanner(centralDeploymentInfo deployer.CentralDeploymentInfo) {
+func printBanner(centralDeploymentInfo types.CentralDeploymentInfo) {
 	cyan := color.New(color.FgCyan, color.Bold)
 	cyan.Println("\n[roxie] Entering a subshell with ACS environment variables set.")
 	cyan.Println("[roxie]")
