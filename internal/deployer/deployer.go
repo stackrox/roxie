@@ -969,17 +969,8 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	log.Info("")
 }
 
-type CentralDeploymentInfo struct {
-	Endpoint       string
-	Password       string
-	KubeContext    string
-	Exposure       types.Exposure
-	CACertFile     string
-	HAProxyStarted bool
-}
-
-func (d *Deployer) GetCentralDeploymentInfo() CentralDeploymentInfo {
-	return CentralDeploymentInfo{
+func (d *Deployer) GetCentralDeploymentInfo() types.CentralDeploymentInfo {
+	return types.CentralDeploymentInfo{
 		Endpoint:    d.centralEndpoint,
 		Password:    d.centralPassword,
 		KubeContext: d.kubeContext,
