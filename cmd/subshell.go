@@ -11,92 +11,98 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/logger"
+	"github.com/stackrox/roxie/internal/roxieenv"
 	"github.com/stackrox/roxie/internal/types"
 )
 
-func spawnSubshell(d *deployer.Deployer, log *logger.Logger) error {
-	shellPath := shell
-	if shellPath == "" {
-		shellPath = os.Getenv("ROXIE_USER_SHELL")
+// spawnSubshellForDeployerEnv assembles the roxie environment from a Deployer and invokes an interactive subshell.
+func spawnSubshellForDeployerEnv(d *deployer.Deployer, log *logger.Logger) error {
+	return runCommandOrSubshell(d.GetCentralDeploymentInfo(), log, nil)
+}
+
+// runCommandOrSubshell spawns an interactive subshell or runs the provided command using the given
+// central deployment info.
+// It handles HAProxy setup, prints the connection banner, and manages shell lifecycle.
+func runCommandOrSubshell(centralDeploymentInfo types.CentralDeploymentInfo, log *logger.Logger, args []string) error {
+	cmdEnv := os.Environ()
+	for name, val := range roxieenv.AssembleRoxieEnvironment(centralDeploymentInfo).Export() {
+		cmdEnv = append(cmdEnv, fmt.Sprintf("%s=%s", name, val))
 	}
-	if shellPath == "" {
-		shellPath = os.Getenv("SHELL")
-	}
-	if shellPath == "" {
-		shellPath = "/bin/bash"
-	}
-
-	log.Infof("Spawning sub-shell: %s", shellPath)
-
-	env := os.Environ()
-
-	centralDeploymentInfo := d.GetCentralDeploymentInfo()
-
-	if centralDeploymentInfo.Endpoint != "" {
-		env = append(env, fmt.Sprintf("API_ENDPOINT=%s", centralDeploymentInfo.Endpoint))
-		env = append(env, fmt.Sprintf("ROX_ENDPOINT=%s", centralDeploymentInfo.Endpoint))
-		env = append(env, fmt.Sprintf("ROX_BASE_URL=https://%s", centralDeploymentInfo.Endpoint))
-	}
-
-	if centralDeploymentInfo.Password != "" {
-		env = append(env, fmt.Sprintf("ROX_ADMIN_PASSWORD=%s", centralDeploymentInfo.Password))
-	}
-
-	if centralDeploymentInfo.CACertFile != "" {
-		env = append(env, fmt.Sprintf("ROX_CA_CERT_FILE=%s", centralDeploymentInfo.CACertFile))
-	}
-
-	env = append(env, fmt.Sprintf("ROX_USERNAME=%s", deployer.AdminUsername))
-	env = append(env, "ROXIE_SHELL=1")
-	env = append(env, fmt.Sprintf("name=acs@%s", centralDeploymentInfo.KubeContext))
+	cmdEnv = append(cmdEnv, "ROXIE_SHELL=1")
+	cmdEnv = append(cmdEnv, fmt.Sprintf("name=acs@%s", centralDeploymentInfo.KubeContext))
 
 	haproxyAvailable := isHAProxyAvailable()
 
-	var haproxyCmd *exec.Cmd
-	var haproxyConfigPath string
-
 	if haproxyAvailable && centralDeploymentInfo.Endpoint != "" && centralDeploymentInfo.CACertFile != "" {
-		var err error
-		haproxyCmd, haproxyConfigPath, err = startHAProxy(centralDeploymentInfo.Endpoint, centralDeploymentInfo.CACertFile, log)
+		haproxyCmd, haproxyConfigPath, err := startHAProxy(centralDeploymentInfo.Endpoint, centralDeploymentInfo.CACertFile, log)
 		if err != nil {
 			log.Warningf("Failed to start HAProxy: %v", err)
 		} else {
-			env = append(env, fmt.Sprintf("ROXIE_HAPROXY_CFG_FILE=%s", haproxyConfigPath))
+			cmdEnv = append(cmdEnv, "ROXIE_HAPROXY_CFG_FILE="+haproxyConfigPath)
 			centralDeploymentInfo.HAProxyStarted = true
 			defer cleanupHAProxy(haproxyCmd, haproxyConfigPath)
 		}
 	}
 
-	printBanner(centralDeploymentInfo)
+	var cmd *exec.Cmd
 
-	shellCmd := exec.Command(shellPath, "-i")
-	shellCmd.Env = env
-	shellCmd.Stdin = os.Stdin
-	shellCmd.Stdout = os.Stdout
-	shellCmd.Stderr = os.Stderr
+	if subShellMode(args) {
+		shellPath := resolveShellPath()
+		log.Infof("Spawning sub-shell: %s", shellPath)
+		printBanner(centralDeploymentInfo)
+		cmd = exec.Command(shellPath, "-i")
+	} else {
+		// args is non-empty.
+		cmd = exec.Command(args[0], args[1:]...)
+	}
+	cmd.Env = cmdEnv
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	err := shellCmd.Run()
+	err := cmd.Run()
 
-	// Print exit message
-	cyan := color.New(color.FgCyan, color.Bold)
-	cyan.Println("\n[roxie] Exited subshell. You are now back in your original shell.")
-	cyan.Println("")
+	if subShellMode(args) {
+		cyan := color.New(color.FgCyan, color.Bold)
+		cyan.Println("")
+		cyan.Println("[roxie] Exited subshell. You are now back in your original shell.")
+		cyan.Println("[roxie] If you accidentally closed the roxie subshell, you can use `roxie shell` to re-open it.")
+		cyan.Println("")
 
-	// Don't treat shell exit as an error - shells can exit with non-zero status
-	// for various reasons (like the last command failing) which is normal behavior
-	if err != nil {
-		// Check if it's a normal exit (exit code from the shell)
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			// Shell exited (could be normal exit or last command failed)
-			// This is not an error condition for roxie - the subshell worked fine
-			_ = exitErr // Acknowledge we handled this
-			return nil
+		// Don't treat shell exit as an error - shells can exit with non-zero status
+		// for various reasons (like the last command failing) which is normal behavior
+		if err != nil {
+			// Check if it's a normal exit (exit code from the shell)
+			if _, ok := err.(*exec.ExitError); ok {
+				return nil
+			}
+			// Only return error if we couldn't even start the shell
+			return fmt.Errorf("failed to run subshell: %w", err)
 		}
-		// Only return error if we couldn't even start the shell
-		return fmt.Errorf("failed to run subshell: %w", err)
+	} else {
+		if err != nil {
+			return fmt.Errorf("failed to execute command: %w", err)
+		}
 	}
 
 	return nil
+}
+
+func subShellMode(args []string) bool {
+	return len(args) == 0
+}
+
+func resolveShellPath() string {
+	if shell != "" {
+		return shell
+	}
+	if s := os.Getenv("ROXIE_USER_SHELL"); s != "" {
+		return s
+	}
+	if s := os.Getenv("SHELL"); s != "" {
+		return s
+	}
+	return "/bin/bash"
 }
 
 func startHAProxy(endpoint, caCertFile string, log *logger.Logger) (*exec.Cmd, string, error) {
