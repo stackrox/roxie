@@ -39,6 +39,7 @@ Examples:
 					// Propagate exit error from the child process.
 					os.Exit(exitErr.ExitCode())
 				}
+				cmd.PrintErrln(err)
 				os.Exit(1)
 			}
 		},
