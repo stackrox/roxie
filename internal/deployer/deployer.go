@@ -21,6 +21,7 @@ import (
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/portforward"
+	"github.com/stackrox/roxie/internal/roxieenv"
 	"github.com/stackrox/roxie/internal/types"
 )
 
@@ -704,12 +705,10 @@ func (d *Deployer) cleanupTempDir(path string, description string) {
 
 func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
 	var content strings.Builder
-	fmt.Fprintf(&content, "export API_ENDPOINT=%q\n", d.centralEndpoint)
-	fmt.Fprintf(&content, "export ROX_ENDPOINT=%q\n", d.centralEndpoint)
-	fmt.Fprintf(&content, "export ROX_BASE_URL='https://%s'\n", d.centralEndpoint)
-	fmt.Fprintf(&content, "export ROX_USERNAME=%q\n", AdminUsername)
-	fmt.Fprintf(&content, "export ROX_ADMIN_PASSWORD=%q\n", d.centralPassword)
-	fmt.Fprintf(&content, "export ROX_CA_CERT_FILE=%q\n", d.roxCACertFile)
+	for name, val := range roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo()).Export() {
+		fmt.Fprintf(&content, "export %s=%q\n", name, val)
+	}
+
 	if d.portForwardPID != 0 {
 		fmt.Fprintf(&content, "export ROXIE_PORT_FORWARD_PID=%d\n", d.portForwardPID)
 	}
@@ -973,18 +972,10 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	log.Info("")
 }
 
-type CentralDeploymentInfo struct {
-	Endpoint       string
-	Password       string
-	KubeContext    string
-	Exposure       types.Exposure
-	CACertFile     string
-	HAProxyStarted bool
-}
-
-func (d *Deployer) GetCentralDeploymentInfo() CentralDeploymentInfo {
-	return CentralDeploymentInfo{
+func (d *Deployer) GetCentralDeploymentInfo() types.CentralDeploymentInfo {
+	return types.CentralDeploymentInfo{
 		Endpoint:    d.centralEndpoint,
+		Username:    AdminUsername,
 		Password:    d.centralPassword,
 		KubeContext: d.kubeContext,
 		Exposure:    d.config.Central.GetExposure(),
