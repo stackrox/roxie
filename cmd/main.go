@@ -6,6 +6,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/deployer"
+	"github.com/stackrox/roxie/internal/logger"
 )
 
 var (
@@ -14,6 +15,8 @@ var (
 	shell   string
 	envrc   string
 	dryRun  bool
+
+	globalLogger = logger.New()
 
 	// We need this set up before command line flags are parsed.
 	deploySettings = deployer.NewConfig()
