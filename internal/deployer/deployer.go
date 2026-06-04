@@ -239,7 +239,10 @@ func New(log *logger.Logger) (*Deployer, error) {
 	}
 
 	d.dockerAuth = dockerauth.New(log)
-	d.imageCache = imagecache.New(log, "", 20)
+	d.imageCache, err = imagecache.New(log, "", 20)
+	if err != nil {
+		return nil, err
+	}
 	d.portForward = portforward.New(k8s.GetKubectl(), log)
 
 	if password := os.Getenv("ROX_ADMIN_PASSWORD"); password != "" {
