@@ -246,7 +246,7 @@ Examples:
 }
 
 func runDeploy(cmd *cobra.Command, args []string) error {
-	log := logger.New()
+	log := globalLogger
 	if !dryRun {
 		if err := env.Initialize(log); err != nil {
 			return err

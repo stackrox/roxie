@@ -9,7 +9,6 @@ import (
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
 )
 
@@ -39,7 +38,7 @@ func newTeardownCmd(settings *deployer.Config) *cobra.Command {
 }
 
 func runTeardown(cmd *cobra.Command, args []string) error {
-	log := logger.New()
+	log := globalLogger
 	if err := env.Initialize(log); err != nil {
 		return err
 	}
