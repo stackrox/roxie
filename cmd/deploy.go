@@ -28,7 +28,7 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-var (
+const (
 	sharedNamespace = "stackrox"
 )
 
