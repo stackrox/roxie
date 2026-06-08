@@ -263,6 +263,19 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Start with default configuration.
+	deploySettings := deployer.DefaultConfig()
+
+	// Apply user config on top (overriding defaults).
+	if err := tryApplyUserDefaults(globalLogger, &deploySettings); err != nil {
+		return fmt.Errorf("applying user config: %w", err)
+	}
+
+	// Apply changes from arg parsing.
+	if err := mergo.Merge(deploySettings, deploySettingsFromArgs, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+		return fmt.Errorf("applying config patches from command line argument: %w", err)
+	}
+
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
 	} else {
