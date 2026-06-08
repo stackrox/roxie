@@ -65,7 +65,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	}
 
 	// Apply changes from arg parsing.
-	if err := mergo.Merge(deploySettings, deploySettingsFromArgs, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+	if err := mergo.Merge(&deploySettings, &deploySettingsFromArgs, mergo.WithOverride, mergo.WithoutDereference); err != nil {
 		return fmt.Errorf("applying config patches from command line argument: %w", err)
 	}
 
