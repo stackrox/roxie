@@ -18,12 +18,21 @@ type Config struct {
 	SecuredCluster SecuredClusterConfig `yaml:"securedCluster,omitempty"`
 }
 
-// NewConfig returns a Config populated with default values.
-func NewConfig() Config {
+// DefaultConfig returns a Config populated with default values.
+func DefaultConfig() Config {
 	return Config{
 		Roxie:          NewRoxieConfig(),
 		Central:        DefaultCentralConfig(),
 		SecuredCluster: DefaultSecuredClusterConfig(),
+	}
+}
+
+// NewConfig returns a Config populated with default values.
+func NewConfig() Config {
+	return Config{
+		Roxie:          NewRoxieConfig(),
+		Central:        NewCentralConfig(),
+		SecuredCluster: NewSecuredClusterConfig(),
 	}
 }
 
@@ -118,20 +127,25 @@ func (c *CentralConfig) EarlyReadinessEnabled() bool {
 	return c.EarlyReadiness != nil && *c.EarlyReadiness
 }
 
+// NewCentralConfig returns an emptry CentralConfig, with deep initialization of data structures.
+func NewCentralConfig() CentralConfig {
+	return CentralConfig{
+		Spec: make(map[string]interface{}),
+	}
+}
+
 // DefaultCentralConfig returns a CentralConfig with sensible defaults.
 func DefaultCentralConfig() CentralConfig {
-	return CentralConfig{
-		DeployTimeout:  DefaultCentralWaitTimeout,
-		Namespace:      "acs-central",
-		EarlyReadiness: new(true),
-		Spec: map[string]interface{}{
-			"central": map[string]interface{}{
-				"telemetry": map[string]interface{}{
-					"enabled": false,
-				},
-			},
+	cfg := NewCentralConfig()
+	cfg.DeployTimeout = DefaultCentralWaitTimeout
+	cfg.Namespace = "acs-central"
+	cfg.EarlyReadiness = new(true)
+	cfg.Spec["central"] = map[string]interface{}{
+		"telemetry": map[string]interface{}{
+			"enabled": false,
 		},
 	}
+	return cfg
 }
 
 func (c *CentralConfig) GetWaitConfig() WaitConfig {
@@ -252,14 +266,20 @@ func (s *SecuredClusterConfig) EarlyReadinessEnabled() bool {
 	return s.EarlyReadiness != nil && *s.EarlyReadiness
 }
 
+// NewSecuredClusterConfig returns an emptry SecuredClusterConfig, with deep initialization of data structures.
+func NewSecuredClusterConfig() SecuredClusterConfig {
+	return SecuredClusterConfig{
+		Spec: make(map[string]interface{}),
+	}
+}
+
 // DefaultSecuredClusterConfig returns a SecuredClusterConfig with sensible defaults.
 func DefaultSecuredClusterConfig() SecuredClusterConfig {
-	return SecuredClusterConfig{
-		DeployTimeout:  DefaultSecuredClusterWaitTimeout,
-		Namespace:      "acs-sensor",
-		EarlyReadiness: new(true),
-		Spec:           make(map[string]interface{}),
-	}
+	cfg := NewSecuredClusterConfig()
+	cfg.DeployTimeout = DefaultSecuredClusterWaitTimeout
+	cfg.Namespace = "acs-sensor"
+	cfg.EarlyReadiness = new(true)
+	return cfg
 }
 
 func (s *SecuredClusterConfig) PauseReconciliationSet() bool {
