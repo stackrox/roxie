@@ -727,7 +727,7 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
 func (d *Deployer) PrintCentralDeploymentSummary() {
 	component := "Central"
 	mainImageTag := d.config.Roxie.Version
-	olm := d.config.Operator.DeployViaOlm
+	olm := d.config.Operator.DeployViaOlmEnabled()
 	exposure := d.config.Central.GetExposure()
 	portForwarding := d.config.Central.PortForwardingEnabled()
 	log := d.logger
@@ -908,7 +908,7 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	component := "Secured Cluster"
 	mainImageTag := d.config.Roxie.Version
-	olm := d.config.Operator.DeployViaOlm
+	olm := d.config.Operator.DeployViaOlmEnabled()
 	log := d.logger
 	kubeContext := d.kubeContext
 

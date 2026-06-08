@@ -35,7 +35,7 @@ var requiredCRDs = []string{
 // deployOperatorNonOLM deploys the RHACS operator without OLM
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
-	if d.config.Roxie.KonfluxImages {
+	if d.config.Roxie.KonfluxImagesEnabled() {
 		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
 			return fmt.Errorf("failed to configure Konflux image rewriting: %w", err)
 		}
@@ -191,7 +191,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 }
 
 func (d *Deployer) getOperatorBundleImage() string {
-	if d.config.Roxie.KonfluxImages {
+	if d.config.Roxie.KonfluxImagesEnabled() {
 		d.logger.Infof("Using Konflux-built operator bundle image")
 		return fmt.Sprintf(operatorBundleImageReleaseRepo+":v%s", d.config.Operator.Version)
 	}
@@ -318,7 +318,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImages && d.config.Roxie.ClusterType.NeedsPullSecrets()
+	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsPullSecrets()
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dim(fmt.Sprintf("  • Namespace: %s", operatorNamespace))

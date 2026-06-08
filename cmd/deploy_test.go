@@ -115,7 +115,7 @@ func TestNewDeployCmd_Flags(t *testing.T) {
 			args: []string{"--pause-reconciliation"},
 			assert: func(t *testing.T, cfg deployer.Config) {
 				assert.True(t, cfg.Central.PauseReconciliationEnabled(), "Central.PauseReconciliation mismatch")
-				assert.True(t, cfg.SecuredCluster.PauseReconciliation, "SecuredCluster.PauseReconciliation mismatch")
+				assert.True(t, cfg.SecuredCluster.PauseReconciliationEnabled(), "SecuredCluster.PauseReconciliation mismatch")
 			},
 		},
 		{

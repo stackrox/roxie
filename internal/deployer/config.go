@@ -45,9 +45,17 @@ func (c *Config) DeepCopy() (*Config, error) {
 // RoxieConfig holds roxie-level settings such as version and feature flags.
 type RoxieConfig struct {
 	Version       string            `yaml:"version,omitempty"`
-	KonfluxImages bool              `yaml:"konfluxImages,omitempty"`
+	KonfluxImages *bool             `yaml:"konfluxImages,omitempty"`
 	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
 	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
+}
+
+func (c *RoxieConfig) KonfluxImagesSet() bool {
+	return c.KonfluxImages != nil
+}
+
+func (c *RoxieConfig) KonfluxImagesEnabled() bool {
+	return c.KonfluxImages != nil && *c.KonfluxImages
 }
 
 // NewRoxieConfig returns a RoxieConfig with initialized defaults.
@@ -59,9 +67,25 @@ func NewRoxieConfig() RoxieConfig {
 
 // OperatorConfig controls how the ACS operator is deployed.
 type OperatorConfig struct {
-	SkipDeployment bool   `yaml:"skipDeployment,omitempty"`
-	DeployViaOlm   bool   `yaml:"deployViaOlm,omitempty"`
+	SkipDeployment *bool  `yaml:"skipDeployment,omitempty"`
+	DeployViaOlm   *bool  `yaml:"deployViaOlm,omitempty"`
 	Version        string `yaml:"version,omitempty"`
+}
+
+func (c *OperatorConfig) SkipDeploymentSet() bool {
+	return c.SkipDeployment != nil
+}
+
+func (c *OperatorConfig) SkipDeploymentEnabled() bool {
+	return c.SkipDeployment != nil && *c.SkipDeployment
+}
+
+func (c *OperatorConfig) DeployViaOlmSet() bool {
+	return c.DeployViaOlm != nil
+}
+
+func (c *OperatorConfig) DeployViaOlmEnabled() bool {
+	return c.DeployViaOlm != nil && *c.DeployViaOlm
 }
 
 // Configure derives the operator version from the roxie configuration.
@@ -82,7 +106,7 @@ type WaitConfig struct {
 type CentralConfig struct {
 	Namespace           string                 `yaml:"namespace,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
-	PauseReconciliation bool                   `yaml:"pauseReconciliation,omitempty"`
+	PauseReconciliation *bool                  `yaml:"pauseReconciliation,omitempty"`
 	Exposure            *types.Exposure        `yaml:"exposure,omitempty"`
 	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
 	PortForwarding      *bool                  `yaml:"portForwarding,omitempty"`
@@ -125,6 +149,18 @@ func (c *CentralConfig) GetWaitConfig() WaitConfig {
 		WaitFor:        waitFor,
 		Timeout:        c.DeployTimeout,
 	}
+}
+
+func (c *CentralConfig) PauseReconciliationSet() bool {
+	return c.PauseReconciliation != nil
+}
+
+func (c *CentralConfig) PauseReconciliationEnabled() bool {
+	return c.PauseReconciliation != nil && *c.PauseReconciliation
+}
+
+func (c *CentralConfig) EarlyReadinessSet() bool {
+	return c.EarlyReadiness != nil
 }
 
 func (c *CentralConfig) PortForwardingSet() bool {
@@ -206,7 +242,7 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 type SecuredClusterConfig struct {
 	Namespace           string                 `yaml:"namespace,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
-	PauseReconciliation bool                   `yaml:"pauseReconciliation,omitempty"`
+	PauseReconciliation *bool                  `yaml:"pauseReconciliation,omitempty"`
 	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
 	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
 	Spec                map[string]interface{} `yaml:"spec,omitempty"`
@@ -224,6 +260,18 @@ func DefaultSecuredClusterConfig() SecuredClusterConfig {
 		EarlyReadiness: new(true),
 		Spec:           make(map[string]interface{}),
 	}
+}
+
+func (s *SecuredClusterConfig) PauseReconciliationSet() bool {
+	return s.PauseReconciliation != nil
+}
+
+func (s *SecuredClusterConfig) PauseReconciliationEnabled() bool {
+	return s.PauseReconciliation != nil && *s.PauseReconciliation
+}
+
+func (s *SecuredClusterConfig) EarlyReadinessSet() bool {
+	return s.EarlyReadiness != nil
 }
 
 func (s *SecuredClusterConfig) GetWaitConfig() WaitConfig {
