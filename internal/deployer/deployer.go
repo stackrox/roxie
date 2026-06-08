@@ -227,22 +227,24 @@ func New(log *logger.Logger) (*Deployer, error) {
 		return nil, err
 	}
 
+	imageCache, err := imagecache.New(log, "", 20)
+	if err != nil {
+		return nil, err
+	}
+
 	tempDir, err := os.MkdirTemp("", "roxie-deployer-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
 	d := &Deployer{
-		logger:    log,
-		startTime: time.Now(),
-		tempDir:   tempDir,
+		logger:     log,
+		startTime:  time.Now(),
+		tempDir:    tempDir,
+		imageCache: imageCache,
 	}
 
 	d.dockerAuth = dockerauth.New(log)
-	d.imageCache, err = imagecache.New(log, "", 20)
-	if err != nil {
-		return nil, err
-	}
 	d.portForward = portforward.New(k8s.GetKubectl(), log)
 
 	if password := os.Getenv("ROX_ADMIN_PASSWORD"); password != "" {
