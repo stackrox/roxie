@@ -74,3 +74,11 @@ func (ct *ClusterType) UnmarshalYAML(unmarshal func(any) error) error {
 func (ct ClusterType) NeedsPullSecrets() bool {
 	return ct != ClusterTypeInfraOpenShift4
 }
+
+func (ct ClusterType) IsLocal() bool {
+	switch ct {
+	case ClusterTypeKind, ClusterTypeMinikube, ClusterTypeK3s, ClusterTypeCRC:
+		return true
+	}
+	return false
+}
