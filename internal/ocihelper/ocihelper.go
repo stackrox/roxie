@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
 	"github.com/stackrox/roxie/internal/logger"
@@ -49,7 +50,7 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 
 	log.Dimf("Using temporary directory: %s", tempDir)
 
-	img, err := fetchImage(ctx, log, imageRef)
+	img, err := assureImageExistsLocally(ctx, log, imageRef)
 	if err != nil {
 		return err
 	}
@@ -63,14 +64,21 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 	return nil
 }
 
-// fetchImage downloads an OCI image from a registry.
-func fetchImage(ctx context.Context, log *logger.Logger, imageRef string) (v1.Image, error) {
+func assureImageExistsLocally(ctx context.Context, log *logger.Logger, imageRef string) (v1.Image, error) {
 	log.Dimf("Fetching image %s", imageRef)
 
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
 		return nil, fmt.Errorf("invalid image reference: %w", err)
 	}
+
+	img, err := daemon.Image(ref, daemon.WithContext(ctx))
+	if err == nil {
+		log.Dimf("✓ Image %s found in local daemon", imageRef)
+		return img, nil
+	}
+
+	log.Dimf("Image not found in local daemon, pulling from registry: %v", err)
 
 	// For operator bundles, we fetch linux/amd64 by default as they contain
 	// platform-agnostic YAML files.
@@ -79,7 +87,7 @@ func fetchImage(ctx context.Context, log *logger.Logger, imageRef string) (v1.Im
 		Architecture: "amd64",
 	}
 
-	img, err := remote.Image(ref,
+	img, err = remote.Image(ref,
 		remote.WithContext(ctx),
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithPlatform(platform))
