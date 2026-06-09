@@ -18,6 +18,8 @@ import (
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/logger"
+	"github.com/stackrox/roxie/internal/manifest"
+	"github.com/stackrox/roxie/internal/roxieenv"
 	"github.com/stackrox/roxie/internal/types"
 
 	"github.com/stackrox/roxie/internal/stackroxversions"
@@ -337,8 +339,19 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		d.WaitForCentral(5 * time.Minute)
 	}
 
+	if components.IncludesCentral() && !dryRun {
+		roxieEnv := roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo())
+		m := manifest.RoxieManifest{
+			RoxieEnvironment: roxieEnv,
+			Config:           deploySettings,
+		}
+		if err := manifest.CreateManifestSecretOnCluster(ctx, log, m); err != nil {
+			log.Warningf("Failed to save roxie manifest: %v", err)
+		}
+	}
+
 	if components.IncludesCentral() && envrc == "" {
-		if err := spawnSubshell(d, log); err != nil {
+		if err := spawnSubshellForDeployerEnv(d, log); err != nil {
 			return fmt.Errorf("failed to spawn subshell: %w", err)
 		}
 	}

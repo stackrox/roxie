@@ -237,10 +237,8 @@ func (s *SecuredClusterConfig) ConfigureSpec(roxieConfig *RoxieConfig, centralCo
 		return err
 	}
 
-	if err := helpers.DeepMerge(s.Spec, map[string]interface{}{
-		"centralEndpoint": internalCentralEndpoint(centralConfig.Namespace),
-	}); err != nil {
-		return err
+	if _, exists := s.Spec["centralEndpoint"]; !exists {
+		s.Spec["centralEndpoint"] = internalCentralEndpoint(centralConfig.Namespace)
 	}
 
 	return nil
