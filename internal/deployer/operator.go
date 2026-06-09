@@ -14,10 +14,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
-	"github.com/stackrox/roxie/internal/types"
 )
 
 const (
@@ -202,7 +200,7 @@ func (d *Deployer) getOperatorBundleImage() string {
 
 // ensureKonfluxImageRewriting configures image rewriting for Konflux images
 func (d *Deployer) ensureKonfluxImageRewriting(ctx context.Context) error {
-	if !env.GetCurrentClusterType().IsOpenShift() {
+	if !d.config.Roxie.ClusterType.IsOpenShift() {
 		return errors.New("image rewriting for Konflux is only supported on OpenShift4 clusters")
 	}
 
@@ -290,7 +288,7 @@ func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
 
 // removeKonfluxImageRewriting removes the ImageContentSourcePolicy for Konflux images if it exists
 func (d *Deployer) removeKonfluxImageRewriting(ctx context.Context) error {
-	if !env.GetCurrentClusterType().IsOpenShift() {
+	if !d.config.Roxie.ClusterType.IsOpenShift() {
 		return nil
 	}
 
@@ -320,7 +318,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImages && env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4
+	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImages && d.config.Roxie.ClusterType.NeedsPullSecrets()
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dim(fmt.Sprintf("  • Namespace: %s", operatorNamespace))

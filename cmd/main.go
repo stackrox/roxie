@@ -41,6 +41,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Do not actually modify cluster")
 	rootCmd.AddCommand(newDeployCmd(&deploySettings))
 	rootCmd.AddCommand(newTeardownCmd(&deploySettings))
+	rootCmd.AddCommand(newShellCmd())
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newEnvCmd())
 	rootCmd.AddCommand(newLogsCmd())

@@ -87,6 +87,34 @@ Similarly, the deployment(s) can be torn down using:
 ./bin/roxie teardown [ <component> ]
 ```
 
+### Multi-cluster deployments
+
+roxie supports hub + spoke architectures where Central and SecuredCluster run on separate clusters.
+
+1. Deploy Central on the hub cluster:
+```bash
+./roxie deploy central -t 4.9.2
+```
+
+2. Create a config file for the spoke cluster, pointing at the Central endpoint (printed during step 1):
+```yaml
+# spoke-config.yaml
+securedCluster:
+  spec:
+    centralEndpoint: "<central-loadbalancer-ip>:443"
+```
+
+3. Switch kubectl context to the spoke cluster and deploy SecuredCluster:
+```bash
+ROX_ADMIN_PASSWORD=<admin-password> \
+ROX_CA_CERT_FILE=<path-to-ca-cert> \
+./roxie deploy secured-cluster -t 4.9.2 -c spoke-config.yaml
+```
+
+> **Tip:** If deploying from the roxie subshell, `ROX_ADMIN_PASSWORD` and `ROX_CA_CERT_FILE` are
+> already set. For automation, consider using `--envrc <file>` on the Central deploy to write the
+> environment to a file instead of spawning a subshell.
+
 ## Development
 
 Enter the dev shell:
