@@ -349,6 +349,10 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			if err != nil && !errors.Is(err, deployer.ErrLocalImagesUnsupported) {
 				return fmt.Errorf("obtaining image preloader for cluster: %w", err)
 			}
+			// ErrLocalImagesUnsupported indicates that roxie does not contain preloading
+			// support for the respective cluster type. If preloading is required (because
+			// the images do not exist on the remote registry), the user needs to take care
+			// of the preloading.
 		}
 		if preLoader == nil {
 			log.Warningf("Image preloading not supported for cluster %s.", d.GetKubeContext())
