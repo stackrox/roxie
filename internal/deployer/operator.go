@@ -19,11 +19,9 @@ import (
 )
 
 const (
-	adminPasswordSecretName        = "admin-password"
-	operatorNamespace              = "rhacs-operator-system"
-	operatorDeploymentName         = "rhacs-operator-controller-manager"
-	operatorBundleImageRepo        = "quay.io/rhacs-eng/stackrox-operator-bundle"
-	operatorBundleImageReleaseRepo = "quay.io/rhacs-eng/release-operator-bundle"
+	adminPasswordSecretName = "admin-password"
+	operatorNamespace       = "rhacs-operator-system"
+	operatorDeploymentName  = "rhacs-operator-controller-manager"
 )
 
 var requiredCRDs = []string{
@@ -44,7 +42,7 @@ func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 			return fmt.Errorf("failed to remove Konflux ImageContentSourcePolicy: %v", err)
 		}
 	}
-	bundleImage := d.getOperatorBundleImage()
+	bundleImage := OperatorBundleImage(d.config)
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
 	if err != nil {
@@ -169,7 +167,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	}
 
 	if len(missing) > 0 {
-		bundleImage := d.getOperatorBundleImage()
+		bundleImage := OperatorBundleImage(d.config)
 		d.logger.Warningf("Missing CRDs detected (%s)", strings.Join(missing, ", "))
 		d.logger.Warningf("Fetching bundle %s", bundleImage)
 
@@ -188,14 +186,6 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (d *Deployer) getOperatorBundleImage() string {
-	if d.config.Roxie.KonfluxImagesEnabled() {
-		d.logger.Infof("Using Konflux-built operator bundle image")
-		return fmt.Sprintf(operatorBundleImageReleaseRepo+":v%s", d.config.Operator.Version)
-	}
-	return fmt.Sprintf(operatorBundleImageRepo+":v%s", d.config.Operator.Version)
 }
 
 // ensureKonfluxImageRewriting configures image rewriting for Konflux images
