@@ -3,266 +3,186 @@ package clusterdefaults
 import (
 	"testing"
 
-	"github.com/stackrox/roxie/internal/logger"
+	"github.com/stackrox/roxie/internal/deployer"
+	"github.com/stackrox/roxie/internal/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 )
 
-func TestDefaultDetector_Detect(t *testing.T) {
+func TestClusterDefaults(t *testing.T) {
 	tests := []struct {
 		name        string
-		kubeContext string
-		want        ClusterType
+		clusterType types.ClusterType
+		config      deployer.Config
+		wantConfig  deployer.Config
 	}{
 		{
-			name:        "kind cluster with standard prefix",
-			kubeContext: "kind-dev-cluster",
-			want:        ClusterTypeKind,
+			name:        "kind cluster with default params",
+			clusterType: types.ClusterTypeKind,
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 		{
-			name:        "kind cluster simple name",
-			kubeContext: "kind",
-			want:        ClusterTypeKind,
+			name:        "kind cluster with already correct params",
+			clusterType: types.ClusterTypeKind,
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 		{
-			name:        "kind cluster with uppercase",
-			kubeContext: "KIND-test",
-			want:        ClusterTypeKind,
+			name:        "kind cluster with partial match",
+			clusterType: types.ClusterTypeKind,
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 		{
-			name:        "crc cluster with admin context",
-			kubeContext: "crc-admin",
-			want:        ClusterTypeCRC,
+			name:        "unknown cluster type",
+			clusterType: types.ClusterTypeUnknown,
+			wantConfig:  deployer.Config{},
 		},
 		{
-			name:        "crc cluster with api prefix",
-			kubeContext: "api-crc-testing:6443",
-			want:        ClusterTypeCRC,
+			name:        "minikube cluster",
+			clusterType: types.ClusterTypeMinikube,
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 		{
-			name:        "crc cluster with uppercase",
-			kubeContext: "CRC-admin",
-			want:        ClusterTypeCRC,
+			name:        "crc cluster",
+			clusterType: types.ClusterTypeCRC,
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 		{
-			name:        "crc cluster bare name",
-			kubeContext: "crc",
-			want:        ClusterTypeCRC,
+			name:        "gke cluster",
+			clusterType: types.ClusterTypeInfraGKE,
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureLoadBalancer),
+					PortForwarding: ptr.To(false),
+				},
+			},
 		},
 		{
-			name:        "not crc - incidental substring",
-			kubeContext: "acrc-cluster",
-			want:        ClusterTypeUnknown,
+			name:        "openshift cluster",
+			clusterType: types.ClusterTypeInfraOpenShift4,
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureLoadBalancer),
+					PortForwarding: ptr.To(false),
+				},
+			},
 		},
 		{
-			name:        "not crc - encrypted in name",
-			kubeContext: "my-encrypted-cluster",
-			want:        ClusterTypeUnknown,
+			name:        "cluster does not override existing values",
+			clusterType: types.ClusterTypeInfraGKE,
+			config: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureNone),
+					PortForwarding: ptr.To(true),
+				},
+			},
 		},
 	}
 
-	detector := &defaultDetector{}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := detector.Detect(tt.kubeContext)
-			if got != tt.want {
-				t.Errorf("Detect(%q) = %v, want %v", tt.kubeContext, got, tt.want)
+			config := tt.config
+			config.Roxie.ClusterType = tt.clusterType
+			_, err := ApplyClusterDefaults(&config)
+			require.NoError(t, err)
+
+			if tt.wantConfig.Central.Exposure == nil {
+				assert.Nil(t, config.Central.Exposure, "central exposure is not nil")
+			} else {
+				require.NotNil(t, config.Central.Exposure, "central exposure is nil")
+				assert.Equal(t, *tt.wantConfig.Central.Exposure, *config.Central.Exposure,
+					"exposure = %v, want %v", *config.Central.Exposure, *tt.wantConfig.Central.Exposure)
+			}
+
+			if tt.wantConfig.Central.PortForwarding == nil {
+				assert.Nil(t, config.Central.PortForwarding, "central port forwarding is not nil")
+			} else {
+				require.NotNil(t, config.Central.PortForwarding, "central port forwarding is nil")
+				assert.Equal(t, *tt.wantConfig.Central.PortForwarding, *config.Central.PortForwarding,
+					"portForward = %v, want %v", *config.Central.PortForwarding, *tt.wantConfig.Central.PortForwarding)
 			}
 		})
 	}
 }
 
-func TestDefaultApplicator_Apply(t *testing.T) {
+func TestResolveAutoResourceProfile(t *testing.T) {
 	tests := []struct {
-		name               string
-		clusterType        ClusterType
-		resources          string
-		exposure           string
-		portForwardEnabled bool
-		wantResources      string
-		wantExposure       string
-		wantPortForward    bool
-		wantChanged        bool
+		name        string
+		clusterType types.ClusterType
+		want        types.ResourceProfile
 	}{
 		{
-			name:               "kind cluster with default params",
-			clusterType:        ClusterTypeKind,
-			resources:          "default",
-			exposure:           "loadbalancer",
-			portForwardEnabled: false,
-			wantResources:      "small",
-			wantExposure:       "none",
-			wantPortForward:    true,
-			wantChanged:        true,
+			name:        "kind cluster",
+			clusterType: types.ClusterTypeKind,
+			want:        types.ResourceProfileSmall,
 		},
 		{
-			name:               "kind cluster with already correct params",
-			clusterType:        ClusterTypeKind,
-			resources:          "small",
-			exposure:           "none",
-			portForwardEnabled: true,
-			wantResources:      "small",
-			wantExposure:       "none",
-			wantPortForward:    true,
-			wantChanged:        false,
+			name:        "minikube cluster",
+			clusterType: types.ClusterTypeMinikube,
+			want:        types.ResourceProfileSmall,
 		},
 		{
-			name:               "kind cluster with partial match",
-			clusterType:        ClusterTypeKind,
-			resources:          "small",
-			exposure:           "loadbalancer",
-			portForwardEnabled: false,
-			wantResources:      "small",
-			wantExposure:       "none",
-			wantPortForward:    true,
-			wantChanged:        true,
+			name:        "k3s cluster",
+			clusterType: types.ClusterTypeK3s,
+			want:        types.ResourceProfileSmall,
 		},
 		{
-			name:               "unknown cluster type",
-			clusterType:        ClusterTypeUnknown,
-			resources:          "default",
-			exposure:           "loadbalancer",
-			portForwardEnabled: false,
-			wantResources:      "default",
-			wantExposure:       "loadbalancer",
-			wantPortForward:    false,
-			wantChanged:        false,
+			name:        "crc cluster",
+			clusterType: types.ClusterTypeCRC,
+			want:        types.ResourceProfileSmall,
 		},
 		{
-			name:               "minikube cluster",
-			clusterType:        ClusterTypeMinikube,
-			resources:          "default",
-			exposure:           "loadbalancer",
-			portForwardEnabled: false,
-			wantResources:      "small",
-			wantExposure:       "none",
-			wantPortForward:    true,
-			wantChanged:        true,
+			name:        "gke cluster",
+			clusterType: types.ClusterTypeInfraGKE,
+			want:        types.ResourceProfileMedium,
 		},
 		{
-			name:               "crc cluster",
-			clusterType:        ClusterTypeCRC,
-			resources:          "default",
-			exposure:           "loadbalancer",
-			portForwardEnabled: false,
-			wantResources:      "small",
-			wantExposure:       "none",
-			wantPortForward:    true,
-			wantChanged:        true,
+			name:        "openshift cluster",
+			clusterType: types.ClusterTypeInfraOpenShift4,
+			want:        types.ResourceProfileMedium,
+		},
+		{
+			name:        "unknown cluster type",
+			clusterType: types.ClusterTypeUnknown,
+			want:        types.ResourceProfileAcsDefaults,
 		},
 	}
-
-	applicator := &defaultApplicator{}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, gotExp, gotPF, gotChanged := applicator.Apply(
-				tt.clusterType,
-				tt.resources,
-				tt.exposure,
-				tt.portForwardEnabled,
-			)
-
-			if gotRes != tt.wantResources {
-				t.Errorf("Apply() resources = %v, want %v", gotRes, tt.wantResources)
-			}
-			if gotExp != tt.wantExposure {
-				t.Errorf("Apply() exposure = %v, want %v", gotExp, tt.wantExposure)
-			}
-			if gotPF != tt.wantPortForward {
-				t.Errorf("Apply() portForward = %v, want %v", gotPF, tt.wantPortForward)
-			}
-			if gotChanged != tt.wantChanged {
-				t.Errorf("Apply() changed = %v, want %v", gotChanged, tt.wantChanged)
-			}
-		})
-	}
-}
-
-func TestManager_ApplyConvenienceDefaults(t *testing.T) {
-	tests := []struct {
-		name               string
-		kubeContext        string
-		resources          string
-		exposure           string
-		portForwardEnabled bool
-		wantResources      string
-		wantExposure       string
-		wantPortForward    bool
-	}{
-		{
-			name:               "kind cluster detection and defaults",
-			kubeContext:        "kind-local",
-			resources:          "default",
-			exposure:           "loadbalancer",
-			portForwardEnabled: false,
-			wantResources:      "small",
-			wantExposure:       "none",
-			wantPortForward:    true,
-		},
-		{
-			name:               "crc cluster detection and defaults",
-			kubeContext:        "crc-admin",
-			resources:          "default",
-			exposure:           "loadbalancer",
-			portForwardEnabled: false,
-			wantResources:      "small",
-			wantExposure:       "none",
-			wantPortForward:    true,
-		},
-		{
-			name:               "gke cluster no changes",
-			kubeContext:        "gke_project_zone_cluster",
-			resources:          "default",
-			exposure:           "loadbalancer",
-			portForwardEnabled: false,
-			wantResources:      "default",
-			wantExposure:       "loadbalancer",
-			wantPortForward:    false,
-		},
-	}
-
-	log := logger.New()
-	manager := NewManager(log)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotRes, gotExp, gotPF := manager.ApplyConvenienceDefaults(
-				tt.kubeContext,
-				tt.resources,
-				tt.exposure,
-				tt.portForwardEnabled,
-			)
-
-			if gotRes != tt.wantResources {
-				t.Errorf("ApplyConvenienceDefaults() resources = %v, want %v", gotRes, tt.wantResources)
-			}
-			if gotExp != tt.wantExposure {
-				t.Errorf("ApplyConvenienceDefaults() exposure = %v, want %v", gotExp, tt.wantExposure)
-			}
-			if gotPF != tt.wantPortForward {
-				t.Errorf("ApplyConvenienceDefaults() portForward = %v, want %v", gotPF, tt.wantPortForward)
-			}
-		})
-	}
-}
-
-func TestClusterType_String(t *testing.T) {
-	tests := []struct {
-		clusterType ClusterType
-		want        string
-	}{
-		{ClusterTypeKind, "kind"},
-		{ClusterTypeMinikube, "minikube"},
-		{ClusterTypeK3s, "k3s"},
-		{ClusterTypeCRC, "crc"},
-		{ClusterTypeUnknown, "unknown"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			if got := tt.clusterType.String(); got != tt.want {
-				t.Errorf("ClusterType.String() = %v, want %v", got, tt.want)
-			}
+			got := ResolveAutoResourceProfile(tt.clusterType)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

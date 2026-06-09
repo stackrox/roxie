@@ -14,7 +14,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
 )
@@ -35,8 +34,8 @@ var requiredCRDs = []string{
 
 // deployOperatorNonOLM deploys the RHACS operator without OLM
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
-	d.logger.Infof("Operator tag: %s", d.operatorTag)
-	if d.useKonflux {
+	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
+	if d.config.Roxie.KonfluxImages {
 		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
 			return fmt.Errorf("failed to configure Konflux image rewriting: %w", err)
 		}
@@ -91,7 +90,8 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 	return bundleDir, nil
 }
 
-// identifyCRDFileNames identifies CRD files in the bundle directory
+// identifyCRDFileNames identifies CRD files in the bundle directory.
+// Returns list of CRD files found in the bundle.
 func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 	var crdFiles []string
 
@@ -108,24 +108,22 @@ func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 			return nil
 		}
 
-		// TODO(ROX-34499): The following detection logic does not seem particularly robust. We should
-		// probably parse the YAML and check api group and kind fields.
-		name := strings.ToLower(info.Name())
-		if strings.Contains(name, "customresourcedefinition") ||
-			strings.Contains(name, "platform.stackrox.io") ||
-			strings.Contains(name, "config.stackrox.io") {
-			if strings.Contains(name, "clusterserviceversion") {
-				return nil
-			}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			d.logger.Warningf("Failed to read file %q from extracted bundle: %v", path, err)
+			return nil
+		}
 
-			content, err := os.ReadFile(path)
-			if err != nil {
-				return nil
-			}
+		var meta struct {
+			Kind string `yaml:"kind"`
+		}
+		if err := yaml.Unmarshal(content, &meta); err != nil {
+			d.logger.Warningf("Failed to unmarshal file %q from extracted bundle: %v", path, err)
+			return nil
+		}
 
-			if strings.Contains(string(content), "kind: CustomResourceDefinition") {
-				crdFiles = append(crdFiles, path)
-			}
+		if meta.Kind == "CustomResourceDefinition" {
+			crdFiles = append(crdFiles, path)
 		}
 
 		return nil
@@ -193,16 +191,16 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 }
 
 func (d *Deployer) getOperatorBundleImage() string {
-	if d.useKonflux {
+	if d.config.Roxie.KonfluxImages {
 		d.logger.Infof("Using Konflux-built operator bundle image")
-		return fmt.Sprintf(operatorBundleImageReleaseRepo+":v%s", d.operatorTag)
+		return fmt.Sprintf(operatorBundleImageReleaseRepo+":v%s", d.config.Operator.Version)
 	}
-	return fmt.Sprintf(operatorBundleImageRepo+":v%s", d.operatorTag)
+	return fmt.Sprintf(operatorBundleImageRepo+":v%s", d.config.Operator.Version)
 }
 
 // ensureKonfluxImageRewriting configures image rewriting for Konflux images
 func (d *Deployer) ensureKonfluxImageRewriting(ctx context.Context) error {
-	if env.GetCurrentClusterType() != env.InfraOpenShift4 {
+	if !d.config.Roxie.ClusterType.IsOpenShift() {
 		return errors.New("image rewriting for Konflux is only supported on OpenShift4 clusters")
 	}
 
@@ -290,7 +288,7 @@ func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
 
 // removeKonfluxImageRewriting removes the ImageContentSourcePolicy for Konflux images if it exists
 func (d *Deployer) removeKonfluxImageRewriting(ctx context.Context) error {
-	if env.GetCurrentClusterType() != env.InfraOpenShift4 {
+	if !d.config.Roxie.ClusterType.IsOpenShift() {
 		return nil
 	}
 
@@ -320,12 +318,14 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
+	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImages && d.config.Roxie.ClusterType.NeedsPullSecrets()
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dim(fmt.Sprintf("  • Namespace: %s", operatorNamespace))
 	d.logger.Dim(fmt.Sprintf("  • ServiceAccount: %s", serviceAccountName))
+	d.logger.Dim(fmt.Sprintf("  • Setting up pull secrets: %v", d.useOperatorPullSecrets))
 
-	if err := d.createOperatorNamespace(ctx); err != nil {
+	if err := d.prepareNamespace(ctx, operatorNamespace, d.useOperatorPullSecrets); err != nil {
 		return err
 	}
 
@@ -393,24 +393,6 @@ func (d *Deployer) parseCSVDeploymentSpec(csvFile string) (map[string]interface{
 	return deploymentSpec, nil
 }
 
-// createOperatorNamespace creates the operator namespace
-func (d *Deployer) createOperatorNamespace(ctx context.Context) error {
-	nsYAML := fmt.Sprintf(`apiVersion: v1
-kind: Namespace
-metadata:
-  name: %s
-  labels:
-    name: %s
-    app.kubernetes.io/managed-by: roxie
-`, operatorNamespace, operatorNamespace)
-
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args:  []string{"apply", "-f", "-"},
-		Stdin: strings.NewReader(nsYAML),
-	})
-	return err
-}
-
 // createServiceAccount creates a service account
 func (d *Deployer) createServiceAccount(ctx context.Context, namespace, name string) error {
 	sa := map[string]interface{}{
@@ -421,6 +403,12 @@ func (d *Deployer) createServiceAccount(ctx context.Context, namespace, name str
 			"namespace": namespace,
 			"labels":    map[string]string{"app": "rhacs-operator"},
 		},
+	}
+
+	if d.useOperatorPullSecrets {
+		sa["imagePullSecrets"] = []map[string]string{
+			{"name": "stackrox"},
+		}
 	}
 
 	yamlData, err := yaml.Marshal(sa)
@@ -643,7 +631,10 @@ func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 
 // teardownOperator removes the operator if it exists, detecting the deployment mode automatically.
 func (d *Deployer) teardownOperator(ctx context.Context) error {
-	operatorExists, operatorMode := d.detectOperatorDeploymentMode(ctx)
+	operatorExists, operatorMode, err := d.detectOperatorDeploymentMode(ctx)
+	if err != nil {
+		return fmt.Errorf("detecting operator deployment mode: %w", err)
+	}
 	if !operatorExists {
 		d.logger.Dim("No operator deployment found, skipping operator teardown")
 		return nil

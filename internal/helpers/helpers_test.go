@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestMergeMaps(t *testing.T) {
@@ -23,7 +25,8 @@ func TestMergeMaps(t *testing.T) {
 		"f": "value_f",
 	}
 
-	result := MergeMaps(base, overlay)
+	result, err := MergeMaps(base, overlay)
+	require.NoError(t, err, "MergeMaps failed")
 
 	// Check that base values are preserved
 	if result["a"] != "value_a" {
@@ -67,7 +70,8 @@ func TestMergeMapsMultipleOverlays(t *testing.T) {
 		"key": "overlay2",
 	}
 
-	result := MergeMaps(base, overlay1, overlay2)
+	result, err := MergeMaps(base, overlay1, overlay2)
+	require.NoError(t, err, "MergeMaps failed")
 
 	if result["key"] != "overlay2" {
 		t.Errorf("Expected last overlay to win, got '%v'", result["key"])

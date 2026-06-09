@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	catalogSourceName  = "stackrox-operator-index"
-	subscriptionName   = "stackrox-operator-subscription"
-	operatorGroupName  = "all-namespaces-operator-group"
-	operatorChannel    = "latest"
-	operatorIndexImage = "quay.io/rhacs-eng/stackrox-operator-index"
+	catalogSourceName          = "stackrox-operator-index"
+	subscriptionName           = "stackrox-operator-subscription"
+	operatorGroupName          = "all-namespaces-operator-group"
+	operatorChannel            = "latest"
+	operatorIndexImage         = "quay.io/rhacs-eng/stackrox-operator-index"
+	namespacedSubscriptionName = operatorNamespace + "/" + subscriptionName
 )
 
 // OperatorDeploymentMode represents how the operator is deployed
@@ -31,7 +32,7 @@ const (
 // deployOperatorViaOLM deploys the RHACS operator using OLM.
 func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying operator via OLM...")
-	d.logger.Infof("Operator tag: %s", d.operatorTag)
+	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
 
 	if err := d.checkOLMInstalled(ctx); err != nil {
 		return err
@@ -40,7 +41,7 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	indexImage := d.getOperatorIndexImage()
 	d.logger.Infof("Index image: %s", indexImage)
 
-	if err := d.createOperatorNamespace(ctx); err != nil {
+	if err := d.prepareNamespace(ctx, operatorNamespace, false); err != nil {
 		return err
 	}
 
@@ -65,33 +66,53 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	}
 
 	if err := d.waitForOperatorReady(ctx, operatorNamespace, operatorDeploymentName, 300); err != nil {
-		return fmt.Errorf("failed waiting for operator: %w", err)
+		return fmt.Errorf("failed waiting for operator in namespace %s to become ready: %w", operatorNamespace, err)
 	}
 
 	d.logger.Success("🎉 Operator deployed successfully via OLM!")
 	return nil
 }
 
-// checkOLMInstalled checks if OLM is installed in the cluster.
+// checkOLMInstalled checks if OLM is installed in the cluster by verifying
+// the API server is ready to serve the required OLM resource types.
 func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
-	// Check for OLM CRDs
-	requiredCRDs := []string{
+	requiredResources := []string{
 		"catalogsources.operators.coreos.com",
 		"subscriptions.operators.coreos.com",
 		"installplans.operators.coreos.com",
 		"clusterserviceversions.operators.coreos.com",
 	}
 
-	for _, crd := range requiredCRDs {
-		// TODO(ROX-34499): actually this is not the right way to check whether it's safe to create a resource of a given kind.
-		// A CRD can be present, but still being loaded or end up not accepted by the API server.
-		// Instead we should use the `kubectl api-resources` subcommand which exposes the status we're looking for.
-		_, err := d.runKubectl(ctx, k8s.KubectlOptions{
-			Args: []string{"get", "crd", crd},
-		})
-		if err != nil {
-			return fmt.Errorf("OLM not installed: CRD %s not found. Please install OLM first", crd)
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		Args: []string{"api-resources", "--api-group=operators.coreos.com", "-o", "name"},
+	})
+	if err != nil {
+		if result.Stderr != "" {
+			d.logger.Error("kubectl stderr:")
+			for stderrLine := range strings.SplitSeq(result.Stderr, "\n") {
+				d.logger.Errorf("stderr: %s", stderrLine)
+			}
 		}
+		return fmt.Errorf("failed to query api-group operators.coreos.com: %w", err)
+	}
+
+	available := make(map[string]bool)
+	for line := range strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n") {
+		name := strings.TrimSpace(line)
+		available[name] = true
+	}
+
+	var missingResources []string
+	for _, resource := range requiredResources {
+		if !available[resource] {
+			missingResources = append(missingResources, resource)
+		}
+	}
+	if len(missingResources) > 0 {
+		for _, resource := range missingResources {
+			d.logger.Errorf("OLM resource not served by the API server: %s", resource)
+		}
+		return fmt.Errorf("OLM is not properly installed, %d required resource(s) missing", len(missingResources))
 	}
 
 	d.logger.Success("✓ OLM detected in cluster")
@@ -100,19 +121,12 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 
 // getOperatorIndexImage returns the operator index image reference.
 func (d *Deployer) getOperatorIndexImage() string {
-	return fmt.Sprintf(operatorIndexImage+":v%s", d.operatorTag)
+	return fmt.Sprintf(operatorIndexImage+":v%s", d.config.Operator.Version)
 }
 
 // createCatalogSource creates the CatalogSource for the operator.
 func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) error {
 	d.logger.Info("Creating CatalogSource...")
-
-	// Check if CatalogSource CRD supports securityContextConfig (OCP 4.14+).
-	hasSecurityContextConfig, err := d.catalogSourceSupportsSecurityContextConfig(ctx)
-	if err != nil {
-		d.logger.Warning("Could not check CatalogSource CRD capabilities, proceeding without securityContextConfig")
-		hasSecurityContextConfig = false
-	}
 
 	catalogSource := map[string]interface{}{
 		"apiVersion": "operators.coreos.com/v1alpha1",
@@ -125,15 +139,10 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 			"sourceType":  "grpc",
 			"image":       indexImage,
 			"displayName": "StackRox Operator Index",
+			"grpcPodConfig": map[string]interface{}{
+				"securityContextConfig": "restricted",
+			},
 		},
-	}
-
-	// TODO(ROX-34499): Add security context config if supported.
-	if hasSecurityContextConfig {
-		spec := catalogSource["spec"].(map[string]interface{})
-		spec["grpcPodConfig"] = map[string]interface{}{
-			"securityContextConfig": "restricted",
-		}
 	}
 
 	yamlData, err := yaml.Marshal(catalogSource)
@@ -142,7 +151,9 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 	}
 
 	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
-		Args:  []string{"apply", "-f", "-"},
+		// Apply with --validate=ignore because securityContextConfig may not
+		// be in the CatalogSource CRD schema.
+		Args:  []string{"apply", "--validate=ignore", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
@@ -151,20 +162,6 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 
 	d.logger.Success("✓ CatalogSource created")
 	return nil
-}
-
-// catalogSourceSupportsSecurityContextConfig checks if the CatalogSource CRD supports securityContextConfig.
-func (d *Deployer) catalogSourceSupportsSecurityContextConfig(ctx context.Context) (bool, error) {
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{"get", "crd", "catalogsources.operators.coreos.com", "-o", "yaml"},
-	})
-	if err != nil {
-		return false, err
-	}
-
-	// TODO(ROX-34499): this is overly optimistic and would incorrectly succeed if an api version
-	// that contains this had "serving: false"
-	return strings.Contains(result.Stdout, "securityContextConfig"), nil
 }
 
 // createOperatorGroup creates the OperatorGroup.
@@ -201,7 +198,7 @@ func (d *Deployer) createOperatorGroup(ctx context.Context) error {
 func (d *Deployer) createSubscription(ctx context.Context) error {
 	d.logger.Info("Creating Subscription...")
 
-	startingCSV := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
+	startingCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 
 	subscription := map[string]interface{}{
 		"apiVersion": "operators.coreos.com/v1alpha1",
@@ -230,7 +227,7 @@ func (d *Deployer) createSubscription(ctx context.Context) error {
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create Subscription: %w", err)
+		return fmt.Errorf("failed to create Subscription %s: %w", namespacedSubscriptionName, err)
 	}
 
 	d.logger.Success("✓ Subscription created")
@@ -257,23 +254,21 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	}
 
 	if time.Since(start) >= timeout {
-		// TODO(ROX-34499): some more info on what was wrong would be useful: a dump of the
-		// subscription or at least its name so that the user can investigate
-		return errors.New("timeout waiting for InstallPlan to be created")
+		return fmt.Errorf("timeout waiting for InstallPlan to be created for Subscription %s", namespacedSubscriptionName)
 	}
 
 	// Sanity check:Verify currentCSV matches expected version.
-	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
+	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.currentCSV}"},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to get current CSV from subscription: %w", err)
+		return fmt.Errorf("failed to get current CSV from Subscription %s: %w", namespacedSubscriptionName, err)
 	}
 
 	currentCSV := strings.TrimSpace(result.Stdout)
 	if currentCSV != expectedCSV {
-		return fmt.Errorf("subscription progressing to unexpected CSV '%s', expected '%s'", currentCSV, expectedCSV)
+		return fmt.Errorf("detected Subscription %s progressing to unexpected CSV '%s', expected '%s'", namespacedSubscriptionName, currentCSV, expectedCSV)
 	}
 
 	// Get InstallPlan name.
@@ -281,7 +276,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.installPlanRef.name}"},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to get InstallPlan name: %w", err)
+		return fmt.Errorf("failed to get InstallPlan name from Subscription %s: %w", namespacedSubscriptionName, err)
 	}
 
 	installPlanName := strings.TrimSpace(result.Stdout)
@@ -296,7 +291,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 		Args: []string{"patch", "installplan", installPlanName, "-n", operatorNamespace, "--type", "merge", "-p", `{"spec":{"approved":true}}`},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to approve InstallPlan: %w", err)
+		return fmt.Errorf("failed to approve InstallPlan %s for Subscription %s: %w", installPlanName, namespacedSubscriptionName, err)
 	}
 
 	d.logger.Success("✓ InstallPlan approved")
@@ -305,7 +300,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 
 // waitForCSVSuccess waits for the CSV to reach Succeeded phase.
 func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
-	csvName := fmt.Sprintf("rhacs-operator.v%s", d.operatorTag)
+	csvName := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 	d.logger.Infof("⏳ Waiting for CSV %s to succeed...", csvName)
 
 	start := time.Now()
@@ -329,41 +324,39 @@ func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 		time.Sleep(5 * time.Second)
 	}
 
-	// TODO(ROX-34499): same as above
-	return fmt.Errorf("timeout waiting for CSV to succeed")
+	return fmt.Errorf("timeout waiting for CSV %s to succeed", csvName)
 }
 
 // detectOperatorDeploymentMode detects how the operator is currently deployed.
 // Returns (operatorExists bool, isOLM OperatorDeploymentMode)
-func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, OperatorDeploymentMode) {
+func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, OperatorDeploymentMode, error) {
+	const olmOwnerLabel = "olm.owner"
+
 	// First, check if a Subscription exists (OLM-specific resource)
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace},
 	})
 	if err == nil {
-		return true, OperatorModeOLM
+		return true, OperatorModeOLM, nil
 	}
 
-	// If no subscription, check if operator deployment exists.
-	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace},
-	})
-	if err == nil {
-		// Deployment exists - check if it has OLM owner labels.
-		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-			Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace, "-o", "jsonpath={.metadata.labels}"},
-		})
-		// TODO(ROX-34499): This is not very robust. Better retrieve a specific label in the `get`
-		// command?
-		if err == nil && strings.Contains(result.Stdout, "olm.owner") {
-			return true, OperatorModeOLM
-		}
-		// Deployment exists without OLM labels = non-OLM deployment.
-		return true, OperatorModeNonOLM
+	// If no subscription, check if operator deployment exists/if it has the expected OLM label.
+	labelValue, err := k8s.RetrieveClusterResourceLabel(ctx, d.logger, operatorNamespace, "deployment", operatorDeploymentName, olmOwnerLabel)
+	if k8s.IsResourceNotFound(err) {
+		// No operator deployment found.
+		return false, OperatorModeNonOLM, nil
+	}
+	if err != nil {
+		return false, OperatorModeNonOLM, err
 	}
 
-	// No operator found.
-	return false, OperatorModeNonOLM
+	if labelValue == "" {
+		// Deployment exists without OLM labels -> non-OLM deployment.
+		return true, OperatorModeNonOLM, nil
+	}
+
+	// Label set -> OLM deployment.
+	return true, OperatorModeOLM, nil
 }
 
 // teardownOperatorOLM removes the operator when installed via OLM.
