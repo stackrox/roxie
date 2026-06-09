@@ -27,7 +27,7 @@ func TestExtractManifestsFromImage_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	t.Logf("Extracting manifests from %s", bundleImage)
-	err = ExtractManifestsFromImage(ctx, log, bundleImage, destDir)
+	err = ExtractManifestsFromImage(ctx, log, bundleImage, destDir, "")
 	if err != nil {
 		t.Fatalf("ExtractManifestsFromImage failed: %v", err)
 	}
