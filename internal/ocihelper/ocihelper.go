@@ -13,6 +13,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	dockerclient "github.com/moby/moby/client"
 
 	"github.com/stackrox/roxie/internal/logger"
 )
@@ -41,7 +42,7 @@ func VerifyImageExistence(ctx context.Context, log *logger.Logger, imageRef stri
 
 // ExtractManifestsFromImage extracts the /manifests/ directory from an operator bundle image.
 // Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
-func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef, destDir string) error {
+func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef, destDir, containerRuntimeSocket string) error {
 	tempDir, err := os.MkdirTemp("", "oci-image-")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
@@ -50,7 +51,7 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 
 	log.Dimf("Using temporary directory: %s", tempDir)
 
-	img, err := assureImageExistsLocally(ctx, log, imageRef)
+	img, err := assureImageExistsLocally(ctx, log, imageRef, containerRuntimeSocket)
 	if err != nil {
 		return err
 	}
@@ -64,7 +65,7 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 	return nil
 }
 
-func assureImageExistsLocally(ctx context.Context, log *logger.Logger, imageRef string) (v1.Image, error) {
+func assureImageExistsLocally(ctx context.Context, log *logger.Logger, imageRef, containerRuntimeSocket string) (v1.Image, error) {
 	log.Dimf("Fetching image %s", imageRef)
 
 	ref, err := name.ParseReference(imageRef)
@@ -72,7 +73,17 @@ func assureImageExistsLocally(ctx context.Context, log *logger.Logger, imageRef 
 		return nil, fmt.Errorf("invalid image reference: %w", err)
 	}
 
-	img, err := daemon.Image(ref, daemon.WithContext(ctx))
+	daemonOpts := []daemon.Option{daemon.WithContext(ctx)}
+	if containerRuntimeSocket != "" {
+		client, err := dockerclient.New(dockerclient.WithHost(containerRuntimeSocket))
+		if err == nil {
+			daemonOpts = append(daemonOpts, daemon.WithClient(client))
+		} else {
+			log.Dimf("Failed to create moby client for %s: %v", containerRuntimeSocket, err)
+		}
+	}
+
+	img, err := daemon.Image(ref, daemonOpts...)
 	if err == nil {
 		log.Dimf("✓ Image %s found in local daemon", imageRef)
 		return img, nil
