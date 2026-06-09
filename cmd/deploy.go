@@ -412,6 +412,9 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		deploySettings.Roxie.ClusterType = clusterType
 	}
 	clusterType := deploySettings.Roxie.ClusterType
+	centralDeployLocally := components.IncludesCentral() && clusterType.IsLocal()
+	sensorDeployLocally := components.IncludesSensor() && clusterType.IsLocal()
+
 	defaults, err := clusterdefaults.ApplyClusterDefaults(deploySettings)
 	if err != nil {
 		return err
@@ -426,15 +429,18 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		profile := clusterdefaults.ResolveAutoResourceProfile(clusterType)
 		log.Dimf("Selecting resource profile %v for Central", profile)
 		deploySettings.Central.ResourceProfile = profile
-	} else if components.IncludesCentral() && deploySettings.Roxie.ClusterType.IsLocal() {
-		log.Warning("You are deploying Central to a local cluster, it is recommended to use --resources=auto.")
 	}
+	if centralDeployLocally && deploySettings.Central.ResourceProfile == types.ResourceProfileAcsDefaults {
+		log.Warning("You are deploying Central to a local cluster, it is recommended to specify a resource profile (or --resources=auto)")
+	}
+
 	if deploySettings.SecuredCluster.ResourceProfile == types.ResourceProfileAuto {
 		profile := clusterdefaults.ResolveAutoResourceProfile(clusterType)
 		log.Dimf("Selecting resource profile %v for SecuredCluster", profile)
 		deploySettings.SecuredCluster.ResourceProfile = profile
-	} else if components.IncludesSensor() && deploySettings.Roxie.ClusterType.IsLocal() {
-		log.Warning("You are deploying SecuredCluster to a local cluster, it is recommended to use --resources=auto.")
+	}
+	if sensorDeployLocally && deploySettings.SecuredCluster.ResourceProfile == types.ResourceProfileAcsDefaults {
+		log.Warning("You are deploying SecuredCluster to a local cluster, it is recommended to specify a resource profile (or --resources=auto)")
 	}
 
 	// We need to do this regardless of whether the operator is deployed or not, because
