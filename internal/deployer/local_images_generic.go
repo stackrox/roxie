@@ -1,6 +1,7 @@
 package deployer
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -23,6 +24,10 @@ func newGenericImageSender(log *logger.Logger, args ...string) genericImageSende
 }
 
 func (g *genericImageSender) SendImage(ctx context.Context, imageTag string) error {
+	if len(g.args) == 0 {
+		return errors.New("genericImageSender: no command configured")
+	}
+
 	args := make([]string, len(g.args))
 	for i, arg := range g.args {
 		if arg == "<image>" {
