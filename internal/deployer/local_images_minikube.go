@@ -31,7 +31,8 @@ func (k *minikubeImagePreLoader) Name() string {
 }
 
 func (k *minikubeImagePreLoader) GetImages(ctx context.Context) ([]string, error) {
-	output, err := exec.CommandContext(ctx, minikubeGetImagesCommand[0], minikubeGetImagesCommand[1:]...).Output()
+	cmd := exec.CommandContext(ctx, minikubeGetImagesCommand[0], minikubeGetImagesCommand[1:]...)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		k.log.Warningf("Command %q failed: %v", strings.Join(minikubeGetImagesCommand, " "), err)
 		for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
