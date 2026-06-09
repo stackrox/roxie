@@ -32,7 +32,7 @@ func runEnv(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Kube config:                %s\n", os.Getenv("KUBECONFIG"))
 	fmt.Printf("Running in roxie container: %v\n", env.RunningInRoxieContainer)
 	fmt.Printf("Current Context:            %s\n", env.GetCurrentContext())
-	fmt.Printf("Cluster Type:               %s\n", env.GetCurrentClusterType().String())
+	fmt.Printf("Cluster Type:               %s\n", env.GetAutoDetectedClusterType().String())
 
 	return nil
 }

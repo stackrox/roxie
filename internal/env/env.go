@@ -26,7 +26,7 @@ var (
 
 var (
 	// currentClusterType holds the detected cluster type for the current kubectl context
-	// This is lazily populated on first access via GetCurrentClusterType()
+	// This is lazily populated on first access via GetAutoDetectedClusterType()
 	currentClusterType types.ClusterType
 
 	// currentContext holds the name of the current kubectl context
@@ -78,8 +78,8 @@ func ensureInitialized(log *logger.Logger) error {
 	return nil
 }
 
-// GetCurrentClusterType returns the current cluster type, initializing if needed
-func GetCurrentClusterType() types.ClusterType {
+// GetAutoDetectedClusterType returns the current cluster type, initializing if needed
+func GetAutoDetectedClusterType() types.ClusterType {
 	return currentClusterType
 }
 
