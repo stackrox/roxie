@@ -22,6 +22,27 @@ roxie has been authored with significant AI contributions.
 - Handles Quay image pull secrets automatically.
 - Verifies image existence before attempting deployment.
 
+## Installation
+
+### Download from GitHub releases
+
+```bash
+curl -fsSL --retry 5 --retry-all-errors -o /usr/local/bin/roxie \
+    https://github.com/stackrox/roxie/releases/download/v0.4.0/roxie-linux-amd64
+chmod +x /usr/local/bin/roxie
+```
+
+### Copy from container image in a Dockerfile
+
+```dockerfile
+ARG ROXIE_VERSION=0.4.0
+ARG ROXIE_CHECKSUM=sha256:5fe1d6d4d9c0e33385d8ca9de4baa14b4893cc5f27ddb6a3bddfe5021017fbf5
+FROM quay.io/rhacs-eng/roxie:v${ROXIE_VERSION}@${ROXIE_CHECKSUM} AS roxie-installer
+
+FROM <your-base-image>
+COPY --from=roxie-installer /usr/local/bin/roxie /usr/bin/roxie
+```
+
 ## Quick start
 
 ### Option 1: Deploying using image (Recommended for non-developers)
