@@ -136,6 +136,7 @@ func TestNewDeployCmd_Flags(t *testing.T) {
 				require.NotNil(t, cfg.Central.Exposure, "Central.Exposure should be set")
 				assert.Equal(t, types.ExposureLoadBalancer, *cfg.Central.Exposure, "Central.Exposure mismatch")
 				assert.True(t, cfg.Central.EarlyReadinessEnabled(), "Central.EarlyReadiness mismatch")
+				assert.True(t, cfg.SecuredCluster.EarlyReadinessEnabled(), "SecuredCluster.EarlyReadiness mismatch")
 				assert.Equal(t, types.ResourceProfileSmall, cfg.Central.ResourceProfile, "Central.ResourceProfile mismatch")
 			},
 		},
