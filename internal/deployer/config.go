@@ -86,8 +86,12 @@ type CentralConfig struct {
 	Exposure            *types.Exposure        `yaml:"exposure,omitempty"`
 	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
 	PortForwarding      *bool                  `yaml:"portForwarding,omitempty"`
-	EarlyReadiness      bool                   `yaml:"earlyReadiness,omitempty"`
+	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
 	Spec                map[string]interface{} `yaml:"spec,omitempty"`
+}
+
+func (c *CentralConfig) EarlyReadinessEnabled() bool {
+	return c.EarlyReadiness != nil && *c.EarlyReadiness
 }
 
 // DefaultCentralConfig returns a CentralConfig with sensible defaults.
@@ -95,7 +99,7 @@ func DefaultCentralConfig() CentralConfig {
 	return CentralConfig{
 		DeployTimeout:  DefaultCentralWaitTimeout,
 		Namespace:      "acs-central",
-		EarlyReadiness: true,
+		EarlyReadiness: new(true),
 		Spec: map[string]interface{}{
 			"central": map[string]interface{}{
 				"telemetry": map[string]interface{}{
@@ -112,12 +116,12 @@ func (c *CentralConfig) GetWaitConfig() WaitConfig {
 	// With earlyReadiness we just wait for the Available condition of that component's core
 	// Deployment to be True.
 	waitFor := "central/" + centralCrName
-	if c.EarlyReadiness {
+	if c.EarlyReadinessEnabled() {
 		waitFor = "deployment/central"
 	}
 	return WaitConfig{
 		Namespace:      c.Namespace,
-		EarlyReadiness: c.EarlyReadiness,
+		EarlyReadiness: c.EarlyReadinessEnabled(),
 		WaitFor:        waitFor,
 		Timeout:        c.DeployTimeout,
 	}
@@ -204,8 +208,12 @@ type SecuredClusterConfig struct {
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
 	PauseReconciliation bool                   `yaml:"pauseReconciliation,omitempty"`
 	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
-	EarlyReadiness      bool                   `yaml:"earlyReadiness,omitempty"`
+	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
 	Spec                map[string]interface{} `yaml:"spec,omitempty"`
+}
+
+func (s *SecuredClusterConfig) EarlyReadinessEnabled() bool {
+	return s.EarlyReadiness != nil && *s.EarlyReadiness
 }
 
 // DefaultSecuredClusterConfig returns a SecuredClusterConfig with sensible defaults.
@@ -213,19 +221,19 @@ func DefaultSecuredClusterConfig() SecuredClusterConfig {
 	return SecuredClusterConfig{
 		DeployTimeout:  DefaultSecuredClusterWaitTimeout,
 		Namespace:      "acs-sensor",
-		EarlyReadiness: true,
+		EarlyReadiness: new(true),
 		Spec:           make(map[string]interface{}),
 	}
 }
 
 func (s *SecuredClusterConfig) GetWaitConfig() WaitConfig {
 	waitFor := "securedcluster/" + securedClusterCrName
-	if s.EarlyReadiness {
+	if s.EarlyReadinessEnabled() {
 		waitFor = "deployment/sensor"
 	}
 	return WaitConfig{
 		Namespace:      s.Namespace,
-		EarlyReadiness: s.EarlyReadiness,
+		EarlyReadiness: s.EarlyReadinessEnabled(),
 		WaitFor:        waitFor,
 		Timeout:        s.DeployTimeout,
 	}

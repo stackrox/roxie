@@ -94,16 +94,16 @@ func TestNewDeployCmd_Flags(t *testing.T) {
 			name: "early-readiness",
 			args: []string{"--early-readiness"},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.True(t, cfg.Central.EarlyReadiness, "Central.EarlyReadiness mismatch")
-				assert.True(t, cfg.SecuredCluster.EarlyReadiness, "SecuredCluster.EarlyReadiness mismatch")
+				assert.True(t, cfg.Central.EarlyReadinessEnabled(), "Central.EarlyReadiness mismatch")
+				assert.True(t, cfg.SecuredCluster.EarlyReadinessEnabled(), "SecuredCluster.EarlyReadiness mismatch")
 			},
 		},
 		{
 			name: "disable early-readiness",
 			args: []string{"--early-readiness=false"},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.False(t, cfg.Central.EarlyReadiness, "Central.EarlyReadiness mismatch")
-				assert.False(t, cfg.SecuredCluster.EarlyReadiness, "SecuredCluster.EarlyReadiness mismatch")
+				assert.False(t, cfg.Central.EarlyReadinessEnabled(), "Central.EarlyReadiness mismatch")
+				assert.False(t, cfg.SecuredCluster.EarlyReadinessEnabled(), "SecuredCluster.EarlyReadiness mismatch")
 			},
 		},
 		{
@@ -135,7 +135,7 @@ func TestNewDeployCmd_Flags(t *testing.T) {
 				assert.Equal(t, "4.7.0", cfg.Roxie.Version, "Roxie.Version mismatch")
 				require.NotNil(t, cfg.Central.Exposure, "Central.Exposure should be set")
 				assert.Equal(t, types.ExposureLoadBalancer, *cfg.Central.Exposure, "Central.Exposure mismatch")
-				assert.True(t, cfg.Central.EarlyReadiness, "Central.EarlyReadiness mismatch")
+				assert.True(t, cfg.Central.EarlyReadinessEnabled(), "Central.EarlyReadiness mismatch")
 				assert.Equal(t, types.ResourceProfileSmall, cfg.Central.ResourceProfile, "Central.ResourceProfile mismatch")
 			},
 		},
@@ -158,6 +158,18 @@ securedCluster:
 						}),
 					"SecuredCluster.Spec mismatch",
 				)
+			},
+		},
+
+		{
+			name: "config file can disable early-readiness",
+			config: `
+central:
+  earlyReadiness: false
+`,
+			args: []string{"--config", configFilePath},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				assert.False(t, cfg.Central.EarlyReadinessEnabled(), "Central.EarlyReadiness should be false")
 			},
 		},
 
