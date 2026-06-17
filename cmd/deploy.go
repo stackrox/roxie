@@ -228,8 +228,8 @@ Examples:
 	registerFlag(cmd, settings, "early-readiness", "Only wait for essential workloads (central/sensor) to be ready",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Central.EarlyReadiness = val
-			config.SecuredCluster.EarlyReadiness = val
+			config.Central.EarlyReadiness = new(val)
+			config.SecuredCluster.EarlyReadiness = new(val)
 			return nil
 		}),
 	)
@@ -282,7 +282,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !deploySettings.Central.EarlyReadiness || !deploySettings.SecuredCluster.EarlyReadiness {
+	if !deploySettings.Central.EarlyReadinessEnabled() || !deploySettings.SecuredCluster.EarlyReadinessEnabled() {
 		// Explanation on the versions involved here:
 		// Deploying StackRox begins with picking a "main image tag" -- this is a version identifier, which cannot be reliably parsed as a semver.
 		// But there is a derived version from that -- the operator version -- which can be parsed as a semver.
