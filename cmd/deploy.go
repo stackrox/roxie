@@ -267,8 +267,10 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	deploySettings := deployer.DefaultConfig()
 
 	// Apply user config on top (overriding defaults).
-	if err := tryApplyUserDefaults(globalLogger, &deploySettings); err != nil {
-		return fmt.Errorf("applying user config: %w", err)
+	if !skipUserConfig {
+		if err := tryApplyUserDefaults(globalLogger, &deploySettings); err != nil {
+			return fmt.Errorf("applying user config: %w", err)
+		}
 	}
 
 	// Apply changes from arg parsing.

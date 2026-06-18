@@ -20,6 +20,8 @@ var (
 	envrc   string
 	dryRun  bool
 
+	skipUserConfig bool
+
 	globalLogger = logger.New()
 
 	// We need this set up before command line flags are parsed.
@@ -75,6 +77,8 @@ Red Hat Advanced Cluster Security (ACS) on any Kubernetes/OpenShift cluster.`,
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output (show CRs)")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Do not actually modify cluster")
+	rootCmd.PersistentFlags().BoolVar(&skipUserConfig, "skip-user-config", false,
+		fmt.Sprintf("Skips reading of user's configuration (%s)", paths.UserConfigPathString()))
 	rootCmd.AddCommand(newDeployCmd(&deploySettingsFromArgs))
 	rootCmd.AddCommand(newTeardownCmd(&deploySettingsFromArgs))
 	rootCmd.AddCommand(newShellCmd())

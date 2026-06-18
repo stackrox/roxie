@@ -16,6 +16,14 @@ func UserConfigPath() (string, error) {
 	return filepath.Join(dir, "config.yaml"), nil
 }
 
+func UserConfigPathString() string {
+	path, err := UserConfigPath()
+	if err != nil {
+		return "(UNAVAILABLE)"
+	}
+	return path
+}
+
 func configDir() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
