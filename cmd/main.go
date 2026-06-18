@@ -39,9 +39,6 @@ func main() {
 // If a user config file exists, apply those user defaults on top the
 // current config. This essentially means, that the user config can
 // override values, which are already initialized in NewConfig().
-// Note: the user config should only contain reasonable fields, which
-// are not already handled by roxies smart defaulting like cluster-dependent
-// resource profiles.
 func tryApplyUserDefaults(log *logger.Logger, config *deployer.Config) error {
 	path, err := paths.UserConfigPath()
 	if err != nil {
