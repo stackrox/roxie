@@ -238,14 +238,14 @@ func New(log *logger.Logger) (*Deployer, error) {
 	}
 
 	d := &Deployer{
-		logger:     log,
-		startTime:  time.Now(),
-		tempDir:    tempDir,
-		imageCache: imageCache,
+		logger:      log,
+		startTime:   time.Now(),
+		tempDir:     tempDir,
+		imageCache:  imageCache,
+		dockerAuth:  dockerauth.New(log),
+		portForward: portforward.New(k8s.GetKubectl(), log),
+		kubeContext: env.GetCurrentContext(),
 	}
-
-	d.dockerAuth = dockerauth.New(log)
-	d.portForward = portforward.New(k8s.GetKubectl(), log)
 
 	if password := os.Getenv("ROX_ADMIN_PASSWORD"); password != "" {
 		d.centralPassword = password
@@ -266,8 +266,6 @@ func New(log *logger.Logger) (*Deployer, error) {
 			d.portForwardPID = pid
 		}
 	}
-
-	d.kubeContext = env.GetCurrentContext()
 
 	log.Success("🚀 ACS Deployer initialized")
 
