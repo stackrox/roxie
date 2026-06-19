@@ -348,20 +348,21 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			preLoader = deployer.NewCustomImagePreloader(ctx, log, imagePreLoadCommand)
 		} else {
 			preLoader, err = d.GetPreLoaderForCluster()
-			if err != nil && !errors.Is(err, deployer.ErrLocalImagesUnsupported) {
-				return fmt.Errorf("obtaining image preloader for cluster: %w", err)
+			if err != nil {
+				// ErrLocalImagesUnsupported indicates that roxie does not contain preloading
+				// support for the respective cluster type. If preloading is required (because
+				// the images do not exist on the remote registry), the user needs to take care
+				// of the preloading.
+				if errors.Is(err, deployer.ErrLocalImagesUnsupported) {
+					log.Warningf("Image preloading not supported for cluster %s.", d.GetKubeContext())
+					log.Warningf("Use --image-preload-command for specifying custom image preloading mechanism.")
+				} else {
+					return fmt.Errorf("obtaining image preloader for cluster: %w", err)
+				}
 			}
-			// ErrLocalImagesUnsupported indicates that roxie does not contain preloading
-			// support for the respective cluster type. If preloading is required (because
-			// the images do not exist on the remote registry), the user needs to take care
-			// of the preloading.
 		}
-		if preLoader == nil {
-			log.Warningf("Image preloading not supported for cluster %s.", d.GetKubeContext())
-			log.Warningf("Use --image-preload-command for specifying custom image preloading mechanism.")
-		} else {
+		if preLoader != nil {
 			log.Dimf("Using image pre-loader %q", preLoader.Name())
-
 			if err := d.TryTransferLocalImages(ctx, preLoader); err != nil {
 				// Best effort, keep running.
 				log.Warningf("Transferring images to local cluster failed: %v", err)
