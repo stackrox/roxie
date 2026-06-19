@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/stackrox/roxie/internal/logger"
 
@@ -39,7 +40,7 @@ func ListLocalImages(ctx context.Context, host string) ([]string, error) {
 }
 
 // ExecInContainer runs a command inside a container and returns its stdout.
-func ExecInContainer(ctx context.Context, host, containerName string, cmd []string) ([]byte, error) {
+func ExecInContainer(ctx context.Context, log *logger.Logger, host, containerName string, cmd []string) ([]byte, error) {
 	cli, err := client.NewClientWithOpts(client.WithHost(host), client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("creating container runtime client: %w", err)
@@ -71,7 +72,10 @@ func ExecInContainer(ctx context.Context, host, containerName string, cmd []stri
 		return nil, fmt.Errorf("inspecting exec in container %s: %w", containerName, err)
 	}
 	if inspect.ExitCode != 0 {
-		return nil, fmt.Errorf("command %v in container %s exited with code %d: %s", cmd, containerName, inspect.ExitCode, stderr.String())
+		for line := range strings.SplitSeq(strings.TrimSpace(stderr.String()), "\n") {
+			log.Dimf("| %s", line)
+		}
+		return nil, fmt.Errorf("command %v in container %s exited with code %d", cmd, containerName, inspect.ExitCode)
 	}
 
 	return stdout.Bytes(), nil

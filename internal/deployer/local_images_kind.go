@@ -33,7 +33,7 @@ func (k *kindImagePreLoader) GetImages(ctx context.Context) ([]string, error) {
 	}
 
 	nodeName := k.kindClusterName + "-control-plane"
-	output, err := containerrt.ExecInContainer(ctx, k.containerRuntimeSocket, nodeName,
+	output, err := containerrt.ExecInContainer(ctx, k.log, k.containerRuntimeSocket, nodeName,
 		[]string{"crictl", "images", "-o", "json"})
 	if err != nil {
 		return nil, fmt.Errorf("listing images in kind node %s: %w", nodeName, err)
