@@ -342,7 +342,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	// If we are deploying to a local cluster and the images exist locally, then we transfer them
 	// to the local cluster.
-	if deploySettings.Roxie.ClusterType.IsLocal() && !deploySettings.Roxie.KonfluxImages {
+	if deploySettings.Roxie.ClusterType.IsLocal() && !deploySettings.Roxie.KonfluxImagesEnabled() {
 		var preLoader deployer.ImagePreLoader
 		if imagePreLoadCommand != "" {
 			preLoader = deployer.NewCustomImagePreloader(ctx, log, imagePreLoadCommand)

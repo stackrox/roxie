@@ -9,7 +9,7 @@ const (
 func imagesForConfig(config Config) []string {
 	images := make([]string, 0)
 	prefix := ""
-	if config.Roxie.KonfluxImages {
+	if config.Roxie.KonfluxImagesEnabled() {
 		prefix = "release-"
 	}
 
@@ -17,7 +17,7 @@ func imagesForConfig(config Config) []string {
 	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "central-db", config.Roxie.Version))
 	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4-db", config.Roxie.Version))
 	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4", config.Roxie.Version))
-	if !config.Roxie.KonfluxImages {
+	if !config.Roxie.KonfluxImagesEnabled() {
 		prefix = "stackrox-"
 	}
 	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "operator", config.Operator.Version))
@@ -27,7 +27,7 @@ func imagesForConfig(config Config) []string {
 }
 
 func OperatorBundleImage(config Config) string {
-	if config.Roxie.KonfluxImages {
+	if config.Roxie.KonfluxImagesEnabled() {
 		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, config.Operator.Version)
 	}
 	return fmt.Sprintf("%s/stackrox-operator-bundle:v%s", imageRegistry, config.Operator.Version)
