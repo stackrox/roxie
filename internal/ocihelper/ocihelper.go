@@ -13,7 +13,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	dockerclient "github.com/moby/moby/client"
+	mobyclient "github.com/moby/moby/client"
 
 	"github.com/stackrox/roxie/internal/logger"
 )
@@ -75,7 +75,7 @@ func assureImageExistsLocally(ctx context.Context, log *logger.Logger, imageRef,
 
 	daemonOpts := []daemon.Option{daemon.WithContext(ctx)}
 	if containerRuntimeSocket != "" {
-		client, err := dockerclient.New(dockerclient.WithHost(containerRuntimeSocket))
+		client, err := mobyclient.New(mobyclient.WithHost(containerRuntimeSocket))
 		if err == nil {
 			daemonOpts = append(daemonOpts, daemon.WithClient(client))
 		} else {
