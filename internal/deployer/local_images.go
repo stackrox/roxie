@@ -12,7 +12,7 @@ import (
 
 var (
 	ErrLocalImagesUnsupported          = errors.New("cluster does not support deploying with local images")
-	ErrLocalImageRetrievalNotSupported = errors.New("image pre-loader does not support retrieval of load images")
+	ErrLocalImageRetrievalNotSupported = errors.New("image pre-loader does not support retrieval of images available on the cluster")
 )
 
 // ImagePreLoader transfers container images into a local cluster's image store.
