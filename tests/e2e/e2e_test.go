@@ -57,7 +57,7 @@ func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
 	verifySecuredClusterInstalled(t, "stackrox")
 
 	t.Log("=== Tearing down both components in single namespace ===")
-	args = []string{roxieBinary, "teardown", "--single-namespace"}
+	args = []string{roxieBinary, "teardown", "--skip-user-config", "--single-namespace"}
 	runCommand(t, teardownTimeout, nil, args...)
 
 	verifyCentralNotInstalled(t, "stackrox")

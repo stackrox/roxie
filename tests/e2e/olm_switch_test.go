@@ -107,7 +107,7 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 
 	// Cleanup
 	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "central"}
+	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
 	verifyCentralNotInstalled(t, "acs-central")
@@ -157,7 +157,7 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 
 	// Cleanup
 	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "central"}
+	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
 	verifyCentralNotInstalled(t, "acs-central")
@@ -221,7 +221,7 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 
 	// Cleanup
 	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "central"}
+	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
 	verifyCentralNotInstalled(t, "acs-central")
@@ -277,7 +277,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Cleanup
 	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "both"}
+	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "both"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
 	verifyCentralNotInstalled(t, "acs-central")

@@ -29,7 +29,7 @@ const (
 )
 
 var (
-	commonDeployArgs = []string{"--resources=small"}
+	commonDeployArgs = []string{"--resources=small", "--skip-user-config"}
 
 	roxieBinary = "roxie"
 )
@@ -41,7 +41,7 @@ func teardownAllDeployments() error {
 	defer cancel()
 
 	// Teardown standard deployments
-	cmd := exec.CommandContext(ctx, roxieBinary, "teardown")
+	cmd := exec.CommandContext(ctx, roxieBinary, "teardown", "--skip-user-config")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -51,7 +51,7 @@ func teardownAllDeployments() error {
 	// Teardown single-namespace deployments
 	ctx, cancel = context.WithTimeout(context.Background(), teardownTimeout)
 	defer cancel()
-	cmd = exec.CommandContext(ctx, roxieBinary, "teardown", "--single-namespace")
+	cmd = exec.CommandContext(ctx, roxieBinary, "teardown", "--skip-user-config", "--single-namespace")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

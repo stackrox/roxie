@@ -25,10 +25,9 @@ import (
 	"github.com/stackrox/roxie/internal/stackroxversions"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/utils/ptr"
 )
 
-var (
+const (
 	sharedNamespace = "stackrox"
 )
 
@@ -55,7 +54,7 @@ Examples:
 	registerFlag(cmd, settings, "olm", "Deploy operator via OLM (requires OLM installed)",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Operator.DeployViaOlm = val
+			config.Operator.DeployViaOlm = new(val)
 			return nil
 		}),
 	)
@@ -63,7 +62,7 @@ Examples:
 	registerFlag(cmd, settings, "konflux", "Use Konflux images",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Roxie.KonfluxImages = val
+			config.Roxie.KonfluxImages = new(val)
 			return nil
 		}),
 	)
@@ -71,7 +70,7 @@ Examples:
 	registerFlag(cmd, settings, "deploy-operator", "Whether to deploy and manage the operator",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Operator.SkipDeployment = !val
+			config.Operator.SkipDeployment = new(!val)
 			return nil
 		}),
 	)
@@ -79,7 +78,7 @@ Examples:
 	registerFlag(cmd, settings, "port-forwarding", "Enable localhost port-forward for Central",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Central.PortForwarding = ptr.To(val)
+			config.Central.PortForwarding = new(val)
 			return nil
 		}),
 	)
@@ -87,8 +86,8 @@ Examples:
 	registerFlag(cmd, settings, "pause-reconciliation", "Pause reconciliation after deployment",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Central.PauseReconciliation = val
-			config.SecuredCluster.PauseReconciliation = val
+			config.Central.PauseReconciliation = new(val)
+			config.SecuredCluster.PauseReconciliation = new(val)
 			return nil
 		}),
 	)
@@ -120,7 +119,7 @@ Examples:
 			if err := yaml.Unmarshal([]byte(val), &exposure); err != nil {
 				return err
 			}
-			config.Central.Exposure = ptr.To(exposure)
+			config.Central.Exposure = new(exposure)
 			return nil
 		}),
 	)
@@ -246,7 +245,7 @@ Examples:
 }
 
 func runDeploy(cmd *cobra.Command, args []string) error {
-	log := logger.New()
+	log := globalLogger
 	if !dryRun {
 		if err := env.Initialize(log); err != nil {
 			return err
@@ -262,6 +261,21 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	components, err := component.FromArgs(args)
 	if err != nil {
 		return err
+	}
+
+	// Start with default configuration.
+	deploySettings := deployer.DefaultConfig()
+
+	// Apply user config on top (overriding defaults).
+	if !skipUserConfig {
+		if err := tryApplyUserDefaults(globalLogger, &deploySettings); err != nil {
+			return fmt.Errorf("applying user config: %w", err)
+		}
+	}
+
+	// Apply changes from arg parsing.
+	if err := mergo.Merge(&deploySettings, &deploySettingsFromArgs, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+		return fmt.Errorf("applying config patches from command line argument: %w", err)
 	}
 
 	if deploySettings.Roxie.Version != "" {
@@ -411,7 +425,7 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 
 	if !deploySettings.Central.PortForwardingSet() && !deploySettings.Central.ExposureEnabled() {
 		log.Info("Enabling port-forwarding due to no exposure")
-		deploySettings.Central.PortForwarding = ptr.To(true)
+		deploySettings.Central.PortForwarding = new(true)
 	}
 
 	return nil
@@ -448,12 +462,12 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		}
 	}
 
-	if deploySettings.Operator.SkipDeployment && deploySettings.Operator.DeployViaOlm {
+	if deploySettings.Operator.SkipDeploymentEnabled() && deploySettings.Operator.DeployViaOlmEnabled() {
 		return errors.New("skipping operator deployment while also requesting deploying via OLM at the same time does not make sense")
 	}
 
-	if deploySettings.Roxie.KonfluxImages {
-		if deploySettings.Operator.DeployViaOlm {
+	if deploySettings.Roxie.KonfluxImagesEnabled() {
+		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
 		}
 		if !clusterType.IsOpenShift() {

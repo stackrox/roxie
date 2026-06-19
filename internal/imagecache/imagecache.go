@@ -10,6 +10,7 @@ import (
 
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/ocihelper"
+	"github.com/stackrox/roxie/internal/paths"
 )
 
 // ImageCache manages cache of verified pullable Docker images
@@ -27,14 +28,13 @@ type CacheData struct {
 }
 
 // New creates a new ImageCache instance
-func New(log *logger.Logger, cacheFile string, maxEntries int) *ImageCache {
+func New(log *logger.Logger, cacheFile string, maxEntries int) (*ImageCache, error) {
 	if cacheFile == "" {
-		home, err := os.UserHomeDir()
+		cacheDir, err := paths.CacheDir()
 		if err != nil {
-			home = "."
+			return nil, err
 		}
-		// TODO(#91): how about using something XDG-compliant like ~/.cache/roxie/images?
-		cacheFile = filepath.Join(home, ".roxie.image_cache")
+		cacheFile = filepath.Join(cacheDir, "image_cache")
 	}
 
 	if maxEntries <= 0 {
@@ -48,7 +48,7 @@ func New(log *logger.Logger, cacheFile string, maxEntries int) *ImageCache {
 	}
 
 	ic.cache = ic.loadCache()
-	return ic
+	return ic, nil
 }
 
 // loadCache loads image cache from file
