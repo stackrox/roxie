@@ -52,7 +52,9 @@ Examples:
 
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
 	cmd.Flags().StringVar(&imagePreLoadCommand, "image-preload-command", "",
-		"Use custom command for pre-loading images to local cluster. Image can be referenced as $IMAGE.")
+		`Use custom command for pre-loading images to local cluster. Image can be referenced as $IMAGE.
+Pre-loading support for Kind and Minikube clusters is built-in. In case this is not sufficient
+this flag can be used to tell roxie how to pre-load images for the current cluster.`)
 
 	registerFlag(cmd, settings, "olm", "Deploy operator via OLM (requires OLM installed)",
 		withNoOptDefVal("true"),
