@@ -11,6 +11,10 @@ import (
 	"github.com/stackrox/roxie/internal/logger"
 )
 
+const (
+	imageSubstitutionKeyword = "<image>"
+)
+
 type genericImageSender struct {
 	log  *logger.Logger
 	args []string
@@ -30,7 +34,7 @@ func (g *genericImageSender) SendImage(ctx context.Context, imageTag string) err
 
 	args := make([]string, len(g.args))
 	for i, arg := range g.args {
-		if arg == "<image>" {
+		if arg == imageSubstitutionKeyword {
 			args[i] = imageTag
 		} else {
 			args[i] = g.args[i]
