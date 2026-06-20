@@ -21,7 +21,7 @@ func imagesForConfig(config Config) []string {
 		prefix = "stackrox-"
 	}
 	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "operator", config.Operator.Version))
-	images = append(images, fmt.Sprintf("%s/%s%s:v%s", imageRegistry, prefix, "operator-bundle", config.Operator.Version))
+	images = append(images, OperatorBundleImage(config))
 
 	return images
 }
