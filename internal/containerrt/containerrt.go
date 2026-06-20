@@ -10,26 +10,24 @@ import (
 
 	"github.com/stackrox/roxie/internal/logger"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/client"
 )
 
 func ListLocalImages(ctx context.Context, host string) ([]string, error) {
-	cli, err := client.NewClientWithOpts(client.WithHost(host), client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.WithHost(host))
 	if err != nil {
 		return nil, fmt.Errorf("creating container runtime client: %w", err)
 	}
 	defer cli.Close()
 
-	images, err := cli.ImageList(ctx, image.ListOptions{})
+	result, err := cli.ImageList(ctx, client.ImageListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("listing images: %w", err)
 	}
 
 	var tags []string
-	for _, img := range images {
+	for _, img := range result.Items {
 		for _, tag := range img.RepoTags {
 			if tag != "" {
 				tags = append(tags, tag)
@@ -41,13 +39,13 @@ func ListLocalImages(ctx context.Context, host string) ([]string, error) {
 
 // ExecInContainer runs a command inside a container and returns its stdout.
 func ExecInContainer(ctx context.Context, log *logger.Logger, host, containerName string, cmd []string) ([]byte, error) {
-	cli, err := client.NewClientWithOpts(client.WithHost(host), client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.WithHost(host))
 	if err != nil {
 		return nil, fmt.Errorf("creating container runtime client: %w", err)
 	}
 	defer cli.Close()
 
-	execResp, err := cli.ContainerExecCreate(ctx, containerName, container.ExecOptions{
+	execResp, err := cli.ExecCreate(ctx, containerName, client.ExecCreateOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -56,7 +54,7 @@ func ExecInContainer(ctx context.Context, log *logger.Logger, host, containerNam
 		return nil, fmt.Errorf("creating exec in container %s: %w", containerName, err)
 	}
 
-	attach, err := cli.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+	attach, err := cli.ExecAttach(ctx, execResp.ID, client.ExecAttachOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("attaching to exec in container %s: %w", containerName, err)
 	}
@@ -67,7 +65,7 @@ func ExecInContainer(ctx context.Context, log *logger.Logger, host, containerNam
 		return nil, fmt.Errorf("reading exec output from container %s: %w", containerName, err)
 	}
 
-	inspect, err := cli.ContainerExecInspect(ctx, execResp.ID)
+	inspect, err := cli.ExecInspect(ctx, execResp.ID, client.ExecInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("inspecting exec in container %s: %w", containerName, err)
 	}
