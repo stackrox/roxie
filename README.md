@@ -98,7 +98,7 @@ podman run --rm -it --privileged \
     -v $KUBECONFIG:/kubeconfig:U \
     quay.io/rhacs-eng/roxie:latest deploy -t 4.11.0 --resources=auto
 ```
-Specify the `MAIN_IMAGE_TAG` as desired.
+Specify the main image tag (`--tag` or `-t`) as desired.
 
 Deploying to a GKE cluster requires passing of some more arguments:
 ```
