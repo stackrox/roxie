@@ -33,6 +33,13 @@ const (
 func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying operator via OLM...")
 	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
+	if len(d.config.Operator.EnvVars) > 0 {
+		d.logger.Infof("Custom operator env vars: %d", len(d.config.Operator.EnvVars))
+		for _, envVar := range operatorEnvVarsToSortedList(d.config.Operator.EnvVars) {
+			ev := envVar.(map[string]interface{})
+			d.logger.Dim(fmt.Sprintf("  %s=%s", ev["name"], ev["value"]))
+		}
+	}
 
 	if err := d.checkOLMInstalled(ctx); err != nil {
 		return err
@@ -200,6 +207,21 @@ func (d *Deployer) createSubscription(ctx context.Context) error {
 
 	startingCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 
+	subscriptionSpec := map[string]interface{}{
+		"channel":             operatorChannel,
+		"name":                "rhacs-operator",
+		"source":              catalogSourceName,
+		"sourceNamespace":     operatorNamespace,
+		"installPlanApproval": "Manual",
+		"startingCSV":         startingCSV,
+	}
+
+	if len(d.config.Operator.EnvVars) > 0 {
+		subscriptionSpec["config"] = map[string]interface{}{
+			"env": operatorEnvVarsToSortedList(d.config.Operator.EnvVars),
+		}
+	}
+
 	subscription := map[string]interface{}{
 		"apiVersion": "operators.coreos.com/v1alpha1",
 		"kind":       "Subscription",
@@ -207,14 +229,7 @@ func (d *Deployer) createSubscription(ctx context.Context) error {
 			"name":      subscriptionName,
 			"namespace": operatorNamespace,
 		},
-		"spec": map[string]interface{}{
-			"channel":             operatorChannel,
-			"name":                "rhacs-operator",
-			"source":              catalogSourceName,
-			"sourceNamespace":     operatorNamespace,
-			"installPlanApproval": "Manual",
-			"startingCSV":         startingCSV,
-		},
+		"spec": subscriptionSpec,
 	}
 
 	yamlData, err := yaml.Marshal(subscription)

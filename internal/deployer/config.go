@@ -76,9 +76,10 @@ func NewRoxieConfig() RoxieConfig {
 
 // OperatorConfig controls how the ACS operator is deployed.
 type OperatorConfig struct {
-	SkipDeployment *bool  `yaml:"skipDeployment,omitempty"`
-	DeployViaOlm   *bool  `yaml:"deployViaOlm,omitempty"`
-	Version        string `yaml:"version,omitempty"`
+	SkipDeployment *bool             `yaml:"skipDeployment,omitempty"`
+	DeployViaOlm   *bool             `yaml:"deployViaOlm,omitempty"`
+	Version        string            `yaml:"version,omitempty"`
+	EnvVars        map[string]string `yaml:"envVars,omitempty"`
 }
 
 func (c *OperatorConfig) SkipDeploymentSet() bool {

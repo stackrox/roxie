@@ -197,6 +197,22 @@ Examples:
 		}),
 	)
 
+	registerFlag(cmd, settings, "operator-env", "Operator environment variables (e.g., RELATED_IMAGE_MAIN=quay.io/...)",
+		withApplyFn("env-var", func(config *deployer.Config, envExpr string) error {
+			envVars, err := deployer.ParseOperatorEnvVars([]string{envExpr})
+			if err != nil {
+				return fmt.Errorf("parsing operator env vars: %w", err)
+			}
+			if config.Operator.EnvVars == nil {
+				config.Operator.EnvVars = make(map[string]string)
+			}
+			for k, v := range envVars {
+				config.Operator.EnvVars[k] = v
+			}
+			return nil
+		}),
+	)
+
 	registerFlag(cmd, settings, "features", "Feature flag settings (e.g., +ROX_FOO,-ROX_BAR,ROX_BAZ=true)",
 		withApplyFn("feature-flags", func(config *deployer.Config, featureFlagExpr string) error {
 			featureFlags, err := deployer.ParseFeatureFlags([]string{featureFlagExpr})
