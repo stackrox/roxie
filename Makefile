@@ -5,6 +5,7 @@
 
 # Go configuration
 GOCMD := go
+GOPATH ?= $(shell $(GOCMD) env GOPATH)
 GOBUILD := $(GOCMD) build
 GOTEST := $(GOCMD) test
 GOVET := $(GOCMD) vet
@@ -16,6 +17,7 @@ PKG_LIST := $(shell $(GOCMD) list ./... | grep -v /vendor/)
 # Build output
 BUILD_DIR := .
 BINARY := $(BUILD_DIR)/$(BINARY_NAME)
+INSTALLED_BINARY := $(GOPATH)/bin/$(BINARY_NAME)
 
 # Convention is that the git tags are of the form
 #      v<major>.<minor>.<patch>-<build-number>-<commit-hash>[-dirty]
@@ -70,7 +72,10 @@ build-all: fmt vet build ## Format, vet, and build
 .PHONY: install
 install: ## Install roxie to $GOPATH/bin
 	@echo "📦 Installing roxie..."
-	$(GOCMD) install -ldflags "$(LDFLAGS)" $(CMD_PATH)
+	# We cannot use 'go install', because the installed binary would be named 'cmd', given the
+	# current source tree layout.
+	mkdir -p $$(dirname $(INSTALLED_BINARY))
+	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(INSTALLED_BINARY) ./cmd
 
 # Development targets
 .PHONY: fmt
