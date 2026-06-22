@@ -11,7 +11,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	mobyclient "github.com/moby/moby/client"
 
 	"github.com/stackrox/roxie/internal/logger"
 )
@@ -40,7 +42,7 @@ func VerifyImageExistence(ctx context.Context, log *logger.Logger, imageRef stri
 
 // ExtractManifestsFromImage extracts the /manifests/ directory from an operator bundle image.
 // Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
-func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef, destDir string) error {
+func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef, destDir, containerRuntimeSocket string) error {
 	tempDir, err := os.MkdirTemp("", "oci-image-")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
@@ -49,7 +51,7 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 
 	log.Dimf("Using temporary directory: %s", tempDir)
 
-	img, err := fetchImage(ctx, log, imageRef)
+	img, err := assureImageExistsLocally(ctx, log, imageRef, containerRuntimeSocket)
 	if err != nil {
 		return err
 	}
@@ -63,14 +65,31 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 	return nil
 }
 
-// fetchImage downloads an OCI image from a registry.
-func fetchImage(ctx context.Context, log *logger.Logger, imageRef string) (v1.Image, error) {
+func assureImageExistsLocally(ctx context.Context, log *logger.Logger, imageRef, containerRuntimeSocket string) (v1.Image, error) {
 	log.Dimf("Fetching image %s", imageRef)
 
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
 		return nil, fmt.Errorf("invalid image reference: %w", err)
 	}
+
+	daemonOpts := []daemon.Option{daemon.WithContext(ctx)}
+	if containerRuntimeSocket != "" {
+		client, err := mobyclient.New(mobyclient.WithHost(containerRuntimeSocket))
+		if err == nil {
+			daemonOpts = append(daemonOpts, daemon.WithClient(client))
+		} else {
+			log.Dimf("Failed to create moby client for %s: %v", containerRuntimeSocket, err)
+		}
+	}
+
+	img, err := daemon.Image(ref, daemonOpts...)
+	if err == nil {
+		log.Dimf("✓ Image %s found in local daemon", imageRef)
+		return img, nil
+	}
+
+	log.Dimf("Image not found in local daemon, pulling from registry: %v", err)
 
 	// For operator bundles, we fetch linux/amd64 by default as they contain
 	// platform-agnostic YAML files.
@@ -79,7 +98,7 @@ func fetchImage(ctx context.Context, log *logger.Logger, imageRef string) (v1.Im
 		Architecture: "amd64",
 	}
 
-	img, err := remote.Image(ref,
+	img, err = remote.Image(ref,
 		remote.WithContext(ctx),
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 		remote.WithPlatform(platform))

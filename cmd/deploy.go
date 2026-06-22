@@ -27,8 +27,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-const (
-	sharedNamespace = "stackrox"
+var (
+	sharedNamespace     = "stackrox"
+	imagePreLoadCommand string
 )
 
 func newDeployCmd(settings *deployer.Config) *cobra.Command {
@@ -50,6 +51,10 @@ Examples:
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to spawn after Central deployment")
 
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
+	cmd.Flags().StringVar(&imagePreLoadCommand, "image-preload-command", "",
+		`Use custom command for pre-loading images to local cluster. Image can be referenced as $IMAGE.
+Pre-loading support for Kind and Minikube clusters is built-in. In case this is not sufficient
+this flag can be used to tell roxie how to pre-load images for the current cluster.`)
 
 	registerFlag(cmd, settings, "olm", "Deploy operator via OLM (requires OLM installed)",
 		withNoOptDefVal("true"),
@@ -335,6 +340,36 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
+	// If we are deploying to a local cluster and the images exist locally, then we transfer them
+	// to the local cluster.
+	if deploySettings.Roxie.ClusterType.IsLocal() && !deploySettings.Roxie.KonfluxImagesEnabled() {
+		var preLoader deployer.ImagePreLoader
+		if imagePreLoadCommand != "" {
+			preLoader = deployer.NewCustomImagePreloader(ctx, log, imagePreLoadCommand)
+		} else {
+			preLoader, err = d.GetPreLoaderForCluster()
+			if err != nil {
+				// ErrLocalImagesUnsupported indicates that roxie does not contain preloading
+				// support for the respective cluster type. If preloading is required (because
+				// the images do not exist on the remote registry), the user needs to take care
+				// of the preloading.
+				if errors.Is(err, deployer.ErrLocalImagesUnsupported) {
+					log.Warningf("Image preloading not supported for cluster %s.", d.GetKubeContext())
+					log.Warningf("Use --image-preload-command for specifying custom image preloading mechanism.")
+				} else {
+					return fmt.Errorf("obtaining image preloader for cluster: %w", err)
+				}
+			}
+		}
+		if preLoader != nil {
+			log.Dimf("Using image pre-loader %q", preLoader.Name())
+			if err := d.TryTransferLocalImages(ctx, preLoader); err != nil {
+				// Best effort, keep running.
+				log.Warningf("Transferring images to local cluster failed: %v", err)
+			}
+		}
+	}
+
 	if components.IncludesCentral() {
 		d.PrintCentralDeploymentSummary()
 	}
@@ -380,6 +415,9 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		deploySettings.Roxie.ClusterType = clusterType
 	}
 	clusterType := deploySettings.Roxie.ClusterType
+	centralDeployLocally := components.IncludesCentral() && clusterType.IsLocal()
+	sensorDeployLocally := components.IncludesSensor() && clusterType.IsLocal()
+
 	defaults, err := clusterdefaults.ApplyClusterDefaults(deploySettings)
 	if err != nil {
 		return err
@@ -395,10 +433,17 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		log.Dimf("Selecting resource profile %v for Central", profile)
 		deploySettings.Central.ResourceProfile = profile
 	}
+	if centralDeployLocally && deploySettings.Central.ResourceProfile == types.ResourceProfileAcsDefaults {
+		log.Warning("You are deploying Central to a local cluster, it is recommended to specify a resource profile (or --resources=auto)")
+	}
+
 	if deploySettings.SecuredCluster.ResourceProfile == types.ResourceProfileAuto {
 		profile := clusterdefaults.ResolveAutoResourceProfile(clusterType)
 		log.Dimf("Selecting resource profile %v for SecuredCluster", profile)
 		deploySettings.SecuredCluster.ResourceProfile = profile
+	}
+	if sensorDeployLocally && deploySettings.SecuredCluster.ResourceProfile == types.ResourceProfileAcsDefaults {
+		log.Warning("You are deploying SecuredCluster to a local cluster, it is recommended to specify a resource profile (or --resources=auto)")
 	}
 
 	// We need to do this regardless of whether the operator is deployed or not, because

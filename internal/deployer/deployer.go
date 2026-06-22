@@ -15,6 +15,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/stackrox/roxie/internal/component"
+	"github.com/stackrox/roxie/internal/containerrt"
 	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/imagecache"
@@ -46,7 +47,8 @@ type Deployer struct {
 	dockerCreds *dockerauth.Credentials
 	envrcFile   string
 
-	kubeContext string
+	kubeContext            string
+	containerRuntimeSocket string
 
 	config Config
 
@@ -238,13 +240,14 @@ func New(log *logger.Logger) (*Deployer, error) {
 	}
 
 	d := &Deployer{
-		logger:      log,
-		startTime:   time.Now(),
-		tempDir:     tempDir,
-		imageCache:  imageCache,
-		dockerAuth:  dockerauth.New(log),
-		portForward: portforward.New(k8s.GetKubectl(), log),
-		kubeContext: env.GetCurrentContext(),
+		logger:                 log,
+		startTime:              time.Now(),
+		tempDir:                tempDir,
+		imageCache:             imageCache,
+		dockerAuth:             dockerauth.New(log),
+		portForward:            portforward.New(k8s.GetKubectl(), log),
+		kubeContext:            env.GetCurrentContext(),
+		containerRuntimeSocket: containerrt.ResolveSocket(log),
 	}
 
 	if password := os.Getenv("ROX_ADMIN_PASSWORD"); password != "" {
@@ -984,4 +987,12 @@ func (d *Deployer) GetCentralDeploymentInfo() types.CentralDeploymentInfo {
 		Exposure:    d.config.Central.GetExposure(),
 		CACertFile:  d.roxCACertFile,
 	}
+}
+
+func (d *Deployer) GetKubeContext() string {
+	return d.kubeContext
+}
+
+func (d *Deployer) GetContainerRuntimeSocket() string {
+	return d.containerRuntimeSocket
 }
