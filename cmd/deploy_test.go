@@ -244,6 +244,31 @@ central:
 	}
 }
 
+func TestNewDeployCmd_SetRejectsSpec(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "bare spec key",
+			args: []string{"--set", "spec.central.image=foo"},
+		},
+		{
+			name: "spec key in multi-assignment",
+			args: []string{"--set", "central.deployTimeout=4m,spec.central.image=foo"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := deployer.NewConfig()
+			cmd := newDeployCmd(&cfg)
+			err := cmd.ParseFlags(tt.args)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "spec")
+		})
+	}
+}
+
 func TestApplyUserDefaults(t *testing.T) {
 	log := logger.New()
 

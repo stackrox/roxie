@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strings"
 	"time"
 
 	"dario.cat/mergo"
@@ -142,16 +141,12 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 
 	registerFlag(cmd, settings, "set", "Set expressions, e.g. securedCluster.spec.clusterName=sensor",
 		withApplyFn("set-expression", func(config *deployer.Config, expr string) error {
-			key, _, found := strings.Cut(expr, "=")
-			if !found {
-				return fmt.Errorf("invalid set expression '%s': expected format 'key.path=value'", expr)
-			}
-			if strings.HasPrefix(key, "spec.") {
-				return errors.New("set expression begins with 'spec.' -- it must be prefixed with 'central.' or 'securedCluster.'")
-			}
 			unstructuredPatch, err := strvals.Parse(expr)
 			if err != nil {
 				return fmt.Errorf("parsing set expression %q: %w", expr, err)
+			}
+			if _, forbidden := unstructuredPatch["spec"]; forbidden {
+				return errors.New("set expression must not set top-level 'spec'; prefix with 'central.' or 'securedCluster.'")
 			}
 			var patch deployer.Config
 			if err := helpers.MapToStruct(unstructuredPatch, &patch); err != nil {
