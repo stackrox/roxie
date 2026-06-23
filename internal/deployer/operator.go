@@ -539,8 +539,12 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 			podSpec["serviceAccountName"] = deploymentSpec["service_account"]
 
 			if len(d.config.Operator.EnvVars) > 0 {
-				if containers, ok := podSpec["containers"].([]interface{}); ok {
-					d.injectEnvVarsIntoManagerContainer(containers)
+				containers, ok := podSpec["containers"].([]interface{})
+				if !ok {
+					return errors.New("no containers found in deployment pod spec")
+				}
+				if err := d.injectEnvVarsIntoManagerContainer(containers); err != nil {
+					return fmt.Errorf("failed to inject operator env vars: %w", err)
 				}
 			}
 		}
@@ -565,7 +569,7 @@ const managerContainerName = "manager"
 
 // injectEnvVarsIntoManagerContainer merges configured operator env vars into
 // the manager container, overriding any existing env vars with the same name.
-func (d *Deployer) injectEnvVarsIntoManagerContainer(containers []interface{}) {
+func (d *Deployer) injectEnvVarsIntoManagerContainer(containers []interface{}) error {
 	for _, c := range containers {
 		container, ok := c.(map[string]interface{})
 		if !ok {
@@ -595,8 +599,9 @@ func (d *Deployer) injectEnvVarsIntoManagerContainer(containers []interface{}) {
 		}
 
 		container["env"] = envList
-		return
+		return nil
 	}
+	return fmt.Errorf("container %q not found in deployment", managerContainerName)
 }
 
 func (d *Deployer) applyBundleServiceResources(ctx context.Context, bundleDir, namespace string) error {
