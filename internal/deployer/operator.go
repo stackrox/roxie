@@ -321,14 +321,14 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsPullSecrets()
 
 	d.logger.Info("📋 Operator deployment plan:")
-	d.logger.Dim(fmt.Sprintf("  • Namespace: %s", operatorNamespace))
-	d.logger.Dim(fmt.Sprintf("  • ServiceAccount: %s", serviceAccountName))
-	d.logger.Dim(fmt.Sprintf("  • Setting up pull secrets: %v", d.useOperatorPullSecrets))
+	d.logger.Dimf("  • Namespace: %s", operatorNamespace)
+	d.logger.Dimf("  • ServiceAccount: %s", serviceAccountName)
+	d.logger.Dimf("  • Setting up pull secrets: %v", d.useOperatorPullSecrets)
 	if len(d.config.Operator.EnvVars) > 0 {
-		d.logger.Dim(fmt.Sprintf("  • Custom operator env vars: %d", len(d.config.Operator.EnvVars)))
-		for _, envVar := range operatorEnvVarsToSortedList(d.config.Operator.EnvVars) {
+		d.logger.Dimf("  • Custom operator env vars: %d", len(d.config.Operator.EnvVars))
+		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
 			ev := envVar.(map[string]interface{})
-			d.logger.Dim(fmt.Sprintf("    %s=%s", ev["name"], ev["value"]))
+			d.logger.Dimf("    %s=%s", ev["name"], ev["value"])
 		}
 	}
 
@@ -585,7 +585,7 @@ func (d *Deployer) injectEnvVarsIntoManagerContainer(containers []interface{}) {
 			}
 		}
 
-		for _, envVar := range operatorEnvVarsToSortedList(d.config.Operator.EnvVars) {
+		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
 			name := envVar.(map[string]interface{})["name"].(string)
 			if idx, found := existing[name]; found {
 				envList[idx] = envVar

@@ -6,37 +6,22 @@ import (
 	"strings"
 )
 
-// ParseOperatorEnvVars parses a slice of operator environment variable strings.
-// Each string can contain one or more comma-separated KEY=VALUE pairs.
+// ParseOperatorEnvVar parses a single KEY=VALUE environment variable string.
 // Values may contain '=' characters (only the first '=' is used as the separator).
-func ParseOperatorEnvVars(envExprs []string) (map[string]string, error) {
-	result := make(map[string]string)
-
-	for _, expr := range envExprs {
-		for _, part := range strings.Split(expr, ",") {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-
-			key, value, found := strings.Cut(part, "=")
-			if !found {
-				return nil, fmt.Errorf("invalid operator env var %q: expected KEY=VALUE format", part)
-			}
-			key = strings.TrimSpace(key)
-			if key == "" {
-				return nil, fmt.Errorf("invalid operator env var %q: empty key", part)
-			}
-			result[key] = value
-		}
+func ParseOperatorEnvVar(envExpr string) (string, string, error) {
+	key, value, found := strings.Cut(envExpr, "=")
+	if !found {
+		return "", "", fmt.Errorf("invalid operator env var %q: expected KEY=VALUE format", envExpr)
 	}
-
-	return result, nil
+	if key == "" {
+		return "", "", fmt.Errorf("invalid operator env var %q: empty key", envExpr)
+	}
+	return key, value, nil
 }
 
-// operatorEnvVarsToSortedList converts a map of env vars to a sorted list of
+// envVarsToSortedList converts a map of env vars to a sorted list of
 // {name, value} maps suitable for use in Kubernetes container or OLM Subscription specs.
-func operatorEnvVarsToSortedList(envVars map[string]string) []interface{} {
+func envVarsToSortedList(envVars map[string]string) []interface{} {
 	result := make([]interface{}, 0, len(envVars))
 	for name, value := range envVars {
 		result = append(result, map[string]interface{}{

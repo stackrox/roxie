@@ -35,9 +35,9 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
 	if len(d.config.Operator.EnvVars) > 0 {
 		d.logger.Infof("Custom operator env vars: %d", len(d.config.Operator.EnvVars))
-		for _, envVar := range operatorEnvVarsToSortedList(d.config.Operator.EnvVars) {
+		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
 			ev := envVar.(map[string]interface{})
-			d.logger.Dim(fmt.Sprintf("  %s=%s", ev["name"], ev["value"]))
+			d.logger.Dimf("  %s=%s", ev["name"], ev["value"])
 		}
 	}
 
@@ -218,7 +218,7 @@ func (d *Deployer) createSubscription(ctx context.Context) error {
 
 	if len(d.config.Operator.EnvVars) > 0 {
 		subscriptionSpec["config"] = map[string]interface{}{
-			"env": operatorEnvVarsToSortedList(d.config.Operator.EnvVars),
+			"env": envVarsToSortedList(d.config.Operator.EnvVars),
 		}
 	}
 
