@@ -20,11 +20,10 @@ import (
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
 	"github.com/stackrox/roxie/internal/roxieenv"
-	"github.com/stackrox/roxie/internal/types"
-
 	"github.com/stackrox/roxie/internal/stackroxversions"
+	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"helm.sh/helm/v3/pkg/strvals"
 )
 
 var (
@@ -143,28 +142,16 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 
 	registerFlag(cmd, settings, "set", "Set expressions, e.g. securedCluster.spec.clusterName=sensor",
 		withApplyFn("set-expression", func(config *deployer.Config, expr string) error {
-			key, yamlValue, found := strings.Cut(expr, "=")
+			key, _, found := strings.Cut(expr, "=")
 			if !found {
 				return fmt.Errorf("invalid set expression '%s': expected format 'key.path=value'", expr)
 			}
-			var val interface{}
-			if err := yaml.Unmarshal([]byte(yamlValue), &val); err != nil {
-				return fmt.Errorf("failed to unmarshal value '%s' for key '%s': %w", yamlValue, key, err)
-			}
-			// SetNestedField requires JSON-compatible types: float64 for numbers, not int.
-			switch v := val.(type) {
-			case int:
-				val = float64(v)
-			case int64:
-				val = float64(v)
-			}
-			pathElements := strings.Split(key, ".")
-			if len(pathElements) > 0 && pathElements[0] == "spec" {
+			if strings.HasPrefix(key, "spec.") {
 				return errors.New("set expression begins with 'spec.' -- it must be prefixed with 'central.' or 'securedCluster.'")
 			}
-			unstructuredPatch := make(map[string]interface{})
-			if err := unstructured.SetNestedField(unstructuredPatch, val, pathElements...); err != nil {
-				return err
+			unstructuredPatch, err := strvals.Parse(expr)
+			if err != nil {
+				return fmt.Errorf("parsing set expression %q: %w", expr, err)
 			}
 			var patch deployer.Config
 			if err := helpers.MapToStruct(unstructuredPatch, &patch); err != nil {

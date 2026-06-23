@@ -208,6 +208,27 @@ central:
 				)
 			},
 		},
+		{
+			name: "set expressions support array index notation",
+			args: []string{
+				"--set", "central.spec.central.defaultTLSSecret[0].name=frontend-cert",
+			},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				assert.Equal(t,
+					map[string]interface{}{
+						"central": map[string]interface{}{
+							"defaultTLSSecret": []interface{}{
+								map[string]interface{}{
+									"name": "frontend-cert",
+								},
+							},
+						},
+					},
+					cfg.Central.Spec,
+					"Central.Spec mismatch",
+				)
+			},
+		},
 	}
 
 	for _, tt := range tests {
