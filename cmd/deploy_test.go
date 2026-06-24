@@ -208,6 +208,27 @@ central:
 				)
 			},
 		},
+		{
+			name: "set expressions support array index notation",
+			args: []string{
+				"--set", "central.spec.central.defaultTLSSecret[0].name=frontend-cert",
+			},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				assert.Equal(t,
+					map[string]interface{}{
+						"central": map[string]interface{}{
+							"defaultTLSSecret": []interface{}{
+								map[string]interface{}{
+									"name": "frontend-cert",
+								},
+							},
+						},
+					},
+					cfg.Central.Spec,
+					"Central.Spec mismatch",
+				)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -219,6 +240,31 @@ central:
 			cmd := newDeployCmd(&cfg)
 			require.NoError(t, cmd.ParseFlags(tt.args))
 			tt.assert(t, cfg)
+		})
+	}
+}
+
+func TestNewDeployCmd_SetRejectsSpec(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "bare spec key",
+			args: []string{"--set", "spec.central.image=foo"},
+		},
+		{
+			name: "spec key in multi-assignment",
+			args: []string{"--set", "central.deployTimeout=4m,spec.central.image=foo"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := deployer.NewConfig()
+			cmd := newDeployCmd(&cfg)
+			err := cmd.ParseFlags(tt.args)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "spec")
 		})
 	}
 }
