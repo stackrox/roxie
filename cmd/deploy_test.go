@@ -153,12 +153,12 @@ func TestNewDeployCmd_Flags(t *testing.T) {
 			},
 		},
 		{
-			name: "operator-env comma separated",
-			args: []string{"--operator-env", "FOO=bar,BAZ=qux"},
+			name: "operator-env containing commas",
+			args: []string{"--operator-env", "FOO=bar,BAZ=qux,quux"},
 			assert: func(t *testing.T, cfg deployer.Config) {
 				require.NotNil(t, cfg.Operator.EnvVars, "Operator.EnvVars should be set")
-				assert.Equal(t, "bar", cfg.Operator.EnvVars["FOO"])
-				assert.Equal(t, "qux", cfg.Operator.EnvVars["BAZ"])
+				assert.Equal(t, "bar,BAZ=qux,quux", cfg.Operator.EnvVars["FOO"])
+				assert.NotContains(t, cfg.Operator.EnvVars, "BAZ")
 			},
 		},
 		{

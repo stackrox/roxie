@@ -10,6 +10,7 @@ import (
 // Values may contain '=' characters (only the first '=' is used as the separator).
 func ParseOperatorEnvVar(envExpr string) (string, string, error) {
 	key, value, found := strings.Cut(envExpr, "=")
+	key = strings.TrimSpace(key)
 	if !found {
 		return "", "", fmt.Errorf("invalid operator env var %q: expected KEY=VALUE format", envExpr)
 	}

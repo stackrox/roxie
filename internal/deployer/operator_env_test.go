@@ -34,6 +34,12 @@ func TestParseOperatorEnvVar(t *testing.T) {
 			expectedVal: "",
 		},
 		{
+			name:        "key with spaces",
+			input:       " MY_VAR =foo",
+			expectedKey: "MY_VAR",
+			expectedVal: "foo",
+		},
+		{
 			name:        "value with spaces",
 			input:       "MY_VAR= hello world ",
 			expectedKey: "MY_VAR",
@@ -55,6 +61,11 @@ func TestParseOperatorEnvVar(t *testing.T) {
 			input:       "=value",
 			expectError: true,
 		},
+		{
+			name:        "whitespace key",
+			input:       " =value",
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -70,7 +81,6 @@ func TestParseOperatorEnvVar(t *testing.T) {
 		})
 	}
 }
-
 
 func TestEnvVarsToSortedList(t *testing.T) {
 	input := map[string]string{
