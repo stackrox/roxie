@@ -311,9 +311,16 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsPullSecrets()
 
 	d.logger.Info("📋 Operator deployment plan:")
-	d.logger.Dim(fmt.Sprintf("  • Namespace: %s", operatorNamespace))
-	d.logger.Dim(fmt.Sprintf("  • ServiceAccount: %s", serviceAccountName))
-	d.logger.Dim(fmt.Sprintf("  • Setting up pull secrets: %v", d.useOperatorPullSecrets))
+	d.logger.Dimf("  • Namespace: %s", operatorNamespace)
+	d.logger.Dimf("  • ServiceAccount: %s", serviceAccountName)
+	d.logger.Dimf("  • Setting up pull secrets: %v", d.useOperatorPullSecrets)
+	if len(d.config.Operator.EnvVars) > 0 {
+		d.logger.Dimf("  • Custom operator env vars: %d", len(d.config.Operator.EnvVars))
+		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
+			ev := envVar.(map[string]interface{})
+			d.logger.Dimf("    %s=%s", ev["name"], ev["value"])
+		}
+	}
 
 	if err := d.prepareNamespace(ctx, operatorNamespace, d.useOperatorPullSecrets); err != nil {
 		return err
@@ -520,6 +527,16 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 	if template, ok := spec["template"].(map[string]interface{}); ok {
 		if podSpec, ok := template["spec"].(map[string]interface{}); ok {
 			podSpec["serviceAccountName"] = deploymentSpec["service_account"]
+
+			if len(d.config.Operator.EnvVars) > 0 {
+				containers, ok := podSpec["containers"].([]interface{})
+				if !ok {
+					return errors.New("no containers found in deployment pod spec")
+				}
+				if err := d.injectEnvVarsIntoManagerContainer(containers); err != nil {
+					return fmt.Errorf("failed to inject operator env vars: %w", err)
+				}
+			}
 		}
 	}
 
@@ -536,6 +553,45 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 		return fmt.Errorf("failed to create Deployment '%s/%s': %w", namespace, deploymentName, err)
 	}
 	return nil
+}
+
+const managerContainerName = "manager"
+
+// injectEnvVarsIntoManagerContainer merges configured operator env vars into
+// the manager container, overriding any existing env vars with the same name.
+func (d *Deployer) injectEnvVarsIntoManagerContainer(containers []interface{}) error {
+	for _, c := range containers {
+		container, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if container["name"] != managerContainerName {
+			continue
+		}
+
+		existing := make(map[string]int)
+		envList, _ := container["env"].([]interface{})
+		for i, item := range envList {
+			if envVar, ok := item.(map[string]interface{}); ok {
+				if name, ok := envVar["name"].(string); ok {
+					existing[name] = i
+				}
+			}
+		}
+
+		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
+			name := envVar.(map[string]interface{})["name"].(string)
+			if idx, found := existing[name]; found {
+				envList[idx] = envVar
+			} else {
+				envList = append(envList, envVar)
+			}
+		}
+
+		container["env"] = envList
+		return nil
+	}
+	return fmt.Errorf("container %q not found in deployment", managerContainerName)
 }
 
 func (d *Deployer) applyBundleServiceResources(ctx context.Context, bundleDir, namespace string) error {

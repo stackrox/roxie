@@ -184,6 +184,20 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 		}),
 	)
 
+	registerFlag(cmd, settings, "operator-env", "Operator environment variables (e.g., RELATED_IMAGE_MAIN=quay.io/...)",
+		withApplyFn("env-var", func(config *deployer.Config, envExpr string) error {
+			key, value, err := deployer.ParseOperatorEnvVar(envExpr)
+			if err != nil {
+				return fmt.Errorf("parsing operator env var: %w", err)
+			}
+			if config.Operator.EnvVars == nil {
+				config.Operator.EnvVars = make(map[string]string)
+			}
+			config.Operator.EnvVars[key] = value
+			return nil
+		}),
+	)
+
 	registerFlag(cmd, settings, "features", "Feature flag settings (e.g., +ROX_FOO,-ROX_BAR,ROX_BAZ=true)",
 		withApplyFn("feature-flags", func(config *deployer.Config, featureFlagExpr string) error {
 			featureFlags, err := deployer.ParseFeatureFlags([]string{featureFlagExpr})
