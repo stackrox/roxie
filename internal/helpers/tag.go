@@ -2,10 +2,13 @@ package helpers
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/logger"
@@ -53,9 +56,14 @@ func LookupLatestTag(ctx context.Context, log *logger.Logger) (string, error) {
 	// Verify we have a pullable main image.
 	for _, tag := range tags {
 		mainImage := fmt.Sprintf("%s/main:%s", constants.DefaultRegistry, tag)
-		if err := ocihelper.VerifyImageExistence(ctx, log, mainImage); err == nil {
-			return tag, nil
+		if err := ocihelper.VerifyImageExistence(ctx, log, mainImage); err != nil {
+			var te *transport.Error
+			if errors.As(err, &te) && te.StatusCode == http.StatusNotFound {
+				continue
+			}
+			return "", fmt.Errorf("verifying image %s: %w", mainImage, err)
 		}
+		return tag, nil
 	}
 
 	return "", fmt.Errorf("failed to verify main image existence for tags %s", strings.Join(tags, ", "))
