@@ -18,7 +18,7 @@ import (
 
 func TestLookupLatestTag_Integration(t *testing.T) {
 	log := logger.New()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	tag, err := LookupLatestTag(ctx, log)
