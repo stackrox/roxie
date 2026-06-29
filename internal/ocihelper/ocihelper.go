@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -28,10 +29,10 @@ func VerifyImageExistence(ctx context.Context, log *logger.Logger, imageRef stri
 		return fmt.Errorf("invalid image reference: %w", err)
 	}
 
-	// Use HEAD request to verify image exists without downloading
 	_, err = remote.Head(ref,
 		remote.WithContext(ctx),
-		remote.WithAuthFromKeychain(authn.DefaultKeychain))
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithRetryStatusCodes(http.StatusTooManyRequests, http.StatusServiceUnavailable))
 	if err != nil {
 		return fmt.Errorf("image inspection failed: %w", err)
 	}
