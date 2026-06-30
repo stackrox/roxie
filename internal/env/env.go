@@ -315,20 +315,23 @@ func fetchAPIResources() ([]string, error) {
 }
 
 func IsInStackroxRepository() bool {
-	// TODO(#91): This assumes that:
-	// - origin is the name of the upstream remote (not true if someone cloned their fork)
-	// - the git transport was used
-	// How about instead looking for "# StackRox Kubernetes Security Platform" in README?
-	cmd := exec.Command("git", "remote", "get-url", "origin")
-	outputBytes, err := cmd.Output()
+	out, err := exec.Command("git", "remote", "-v").Output()
 	if err != nil {
 		return false
 	}
-	outputLines := strings.Split(string(outputBytes), "\n")
-	if len(outputLines) == 0 {
-		return false
+	for _, line := range strings.Split(string(out), "\n") {
+		if fields := strings.Fields(line); len(fields) >= 2 && isStackRoxRepositoryRemote(fields[1]) {
+			return true
+		}
 	}
-	return outputLines[0] == "git@github.com:stackrox/stackrox.git"
+	return false
+}
+
+func isStackRoxRepositoryRemote(remote string) bool {
+	remote = strings.TrimSuffix(remote, ".git")
+	return remote == "git@github.com:stackrox/stackrox" ||
+		remote == "https://github.com/stackrox/stackrox" ||
+		remote == "ssh://git@github.com/stackrox/stackrox"
 }
 
 func GetStackroxRepositoryTag() (string, error) {
