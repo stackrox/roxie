@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/logger"
 )
 
@@ -61,14 +62,14 @@ func (d *DockerAuth) GetAndVerifyCredentials() (*Credentials, error) {
 	var username, password string
 
 	// Try environment variables first.
-	username = os.Getenv("REGISTRY_USERNAME")
-	password = os.Getenv("REGISTRY_PASSWORD")
+	username = os.Getenv(constants.EnvRegistryUsername)
+	password = os.Getenv(constants.EnvRegistryPassword)
 
 	if username != "" && password == "" {
-		return nil, errors.New("REGISTRY_USERNAME set but REGISTRY_PASSWORD is empty")
+		return nil, fmt.Errorf("%s set but %s is empty", constants.EnvRegistryUsername, constants.EnvRegistryPassword)
 	}
 	if username == "" && password != "" {
-		return nil, errors.New("REGISTRY_PASSWORD set but REGISTRY_USERNAME is empty")
+		return nil, fmt.Errorf("%s set but %s is empty", constants.EnvRegistryPassword, constants.EnvRegistryUsername)
 	}
 
 	if username == "" {
