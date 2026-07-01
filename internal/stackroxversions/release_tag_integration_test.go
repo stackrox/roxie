@@ -21,6 +21,6 @@ func TestLookupLatestReleaseTags_Integration(t *testing.T) {
 
 	t.Log("Latest release tags")
 	for i, tag := range tags {
-		t.Logf("%v.: %s", i, tag)
+		t.Logf("%v. %s", i+1, tag)
 	}
 }
