@@ -12,7 +12,7 @@ import (
 )
 
 func TestLookupLatestReleaseTags_Integration(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	tags, err := LookupLatestReleaseTagsViaGitHub(ctx, 3)
