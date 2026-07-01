@@ -15,6 +15,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/stackrox/roxie/internal/component"
+	"github.com/stackrox/roxie/internal/containerrt"
 	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/imagecache"
@@ -46,7 +47,8 @@ type Deployer struct {
 	dockerCreds *dockerauth.Credentials
 	envrcFile   string
 
-	kubeContext string
+	kubeContext            string
+	containerRuntimeSocket string
 
 	config Config
 
@@ -227,20 +229,26 @@ func New(log *logger.Logger) (*Deployer, error) {
 		return nil, err
 	}
 
+	imageCache, err := imagecache.New(log, "", 20)
+	if err != nil {
+		return nil, err
+	}
+
 	tempDir, err := os.MkdirTemp("", "roxie-deployer-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
 	d := &Deployer{
-		logger:    log,
-		startTime: time.Now(),
-		tempDir:   tempDir,
+		logger:                 log,
+		startTime:              time.Now(),
+		tempDir:                tempDir,
+		imageCache:             imageCache,
+		dockerAuth:             dockerauth.New(log),
+		portForward:            portforward.New(k8s.GetKubectl(), log),
+		kubeContext:            env.GetCurrentContext(),
+		containerRuntimeSocket: containerrt.ResolveSocket(log),
 	}
-
-	d.dockerAuth = dockerauth.New(log)
-	d.imageCache = imagecache.New(log, "", 20)
-	d.portForward = portforward.New(k8s.GetKubectl(), log)
 
 	if password := os.Getenv("ROX_ADMIN_PASSWORD"); password != "" {
 		d.centralPassword = password
@@ -261,8 +269,6 @@ func New(log *logger.Logger) (*Deployer, error) {
 			d.portForwardPID = pid
 		}
 	}
-
-	d.kubeContext = env.GetCurrentContext()
 
 	log.Success("🚀 ACS Deployer initialized")
 
@@ -724,7 +730,7 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
 func (d *Deployer) PrintCentralDeploymentSummary() {
 	component := "Central"
 	mainImageTag := d.config.Roxie.Version
-	olm := d.config.Operator.DeployViaOlm
+	olm := d.config.Operator.DeployViaOlmEnabled()
 	exposure := d.config.Central.GetExposure()
 	portForwarding := d.config.Central.PortForwardingEnabled()
 	log := d.logger
@@ -905,7 +911,7 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	component := "Secured Cluster"
 	mainImageTag := d.config.Roxie.Version
-	olm := d.config.Operator.DeployViaOlm
+	olm := d.config.Operator.DeployViaOlmEnabled()
 	log := d.logger
 	kubeContext := d.kubeContext
 
@@ -981,4 +987,12 @@ func (d *Deployer) GetCentralDeploymentInfo() types.CentralDeploymentInfo {
 		Exposure:    d.config.Central.GetExposure(),
 		CACertFile:  d.roxCACertFile,
 	}
+}
+
+func (d *Deployer) GetKubeContext() string {
+	return d.kubeContext
+}
+
+func (d *Deployer) GetContainerRuntimeSocket() string {
+	return d.containerRuntimeSocket
 }

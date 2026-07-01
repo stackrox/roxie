@@ -14,16 +14,15 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
 )
 
 const (
-	adminPasswordSecretName        = "admin-password"
-	operatorNamespace              = "rhacs-operator-system"
-	operatorDeploymentName         = "rhacs-operator-controller-manager"
-	operatorBundleImageRepo        = "quay.io/rhacs-eng/stackrox-operator-bundle"
-	operatorBundleImageReleaseRepo = "quay.io/rhacs-eng/release-operator-bundle"
+	adminPasswordSecretName = "admin-password"
+	operatorNamespace       = "rhacs-operator-system"
+	operatorDeploymentName  = "rhacs-operator-controller-manager"
 )
 
 var requiredCRDs = []string{
@@ -35,7 +34,7 @@ var requiredCRDs = []string{
 // deployOperatorNonOLM deploys the RHACS operator without OLM
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
-	if d.config.Roxie.KonfluxImages {
+	if d.config.Roxie.KonfluxImagesEnabled() {
 		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
 			return fmt.Errorf("failed to configure Konflux image rewriting: %w", err)
 		}
@@ -44,7 +43,7 @@ func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 			return fmt.Errorf("failed to remove Konflux ImageContentSourcePolicy: %v", err)
 		}
 	}
-	bundleImage := d.getOperatorBundleImage()
+	bundleImage := OperatorBundleImage(d.config)
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
 	if err != nil {
@@ -81,7 +80,7 @@ func (d *Deployer) downloadAndExtractOperatorBundle(ctx context.Context, bundleI
 	d.logger.Info("Pulling and extracting operator bundle image...")
 
 	// The bundle images only contain platform-agnostic YAML files.
-	if err := ocihelper.ExtractManifestsFromImage(ctx, d.logger, bundleImage, bundleDir); err != nil {
+	if err := ocihelper.ExtractManifestsFromImage(ctx, d.logger, bundleImage, bundleDir, d.containerRuntimeSocket); err != nil {
 		os.RemoveAll(bundleDir)
 		return "", fmt.Errorf("failed to copy bundle contents: %w", err)
 	}
@@ -169,7 +168,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	}
 
 	if len(missing) > 0 {
-		bundleImage := d.getOperatorBundleImage()
+		bundleImage := OperatorBundleImage(d.config)
 		d.logger.Warningf("Missing CRDs detected (%s)", strings.Join(missing, ", "))
 		d.logger.Warningf("Fetching bundle %s", bundleImage)
 
@@ -190,14 +189,6 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	return nil
 }
 
-func (d *Deployer) getOperatorBundleImage() string {
-	if d.config.Roxie.KonfluxImages {
-		d.logger.Infof("Using Konflux-built operator bundle image")
-		return fmt.Sprintf(operatorBundleImageReleaseRepo+":v%s", d.config.Operator.Version)
-	}
-	return fmt.Sprintf(operatorBundleImageRepo+":v%s", d.config.Operator.Version)
-}
-
 // ensureKonfluxImageRewriting configures image rewriting for Konflux images
 func (d *Deployer) ensureKonfluxImageRewriting(ctx context.Context) error {
 	if !d.config.Roxie.ClusterType.IsOpenShift() {
@@ -213,7 +204,7 @@ func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
 	// Define repository digest mirrors as Go data structures
 	rewrite := func(from, to string) map[string]interface{} {
 		source := fmt.Sprintf("registry.redhat.io/advanced-cluster-security/%s", from)
-		mirror := fmt.Sprintf("quay.io/rhacs-eng/%s", to)
+		mirror := fmt.Sprintf("%s/%s", constants.DefaultRegistry, to)
 		if d.verbose {
 			d.logger.Dimf("Image rewriting rule: %s -> %s", source, mirror)
 		}
@@ -318,12 +309,19 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImages && d.config.Roxie.ClusterType.NeedsPullSecrets()
+	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsPullSecrets()
 
 	d.logger.Info("📋 Operator deployment plan:")
-	d.logger.Dim(fmt.Sprintf("  • Namespace: %s", operatorNamespace))
-	d.logger.Dim(fmt.Sprintf("  • ServiceAccount: %s", serviceAccountName))
-	d.logger.Dim(fmt.Sprintf("  • Setting up pull secrets: %v", d.useOperatorPullSecrets))
+	d.logger.Dimf("  • Namespace: %s", operatorNamespace)
+	d.logger.Dimf("  • ServiceAccount: %s", serviceAccountName)
+	d.logger.Dimf("  • Setting up pull secrets: %v", d.useOperatorPullSecrets)
+	if len(d.config.Operator.EnvVars) > 0 {
+		d.logger.Dimf("  • Custom operator env vars: %d", len(d.config.Operator.EnvVars))
+		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
+			ev := envVar.(map[string]interface{})
+			d.logger.Dimf("    %s=%s", ev["name"], ev["value"])
+		}
+	}
 
 	if err := d.prepareNamespace(ctx, operatorNamespace, d.useOperatorPullSecrets); err != nil {
 		return err
@@ -530,6 +528,16 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 	if template, ok := spec["template"].(map[string]interface{}); ok {
 		if podSpec, ok := template["spec"].(map[string]interface{}); ok {
 			podSpec["serviceAccountName"] = deploymentSpec["service_account"]
+
+			if len(d.config.Operator.EnvVars) > 0 {
+				containers, ok := podSpec["containers"].([]interface{})
+				if !ok {
+					return errors.New("no containers found in deployment pod spec")
+				}
+				if err := d.injectEnvVarsIntoManagerContainer(containers); err != nil {
+					return fmt.Errorf("failed to inject operator env vars: %w", err)
+				}
+			}
 		}
 	}
 
@@ -546,6 +554,45 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 		return fmt.Errorf("failed to create Deployment '%s/%s': %w", namespace, deploymentName, err)
 	}
 	return nil
+}
+
+const managerContainerName = "manager"
+
+// injectEnvVarsIntoManagerContainer merges configured operator env vars into
+// the manager container, overriding any existing env vars with the same name.
+func (d *Deployer) injectEnvVarsIntoManagerContainer(containers []interface{}) error {
+	for _, c := range containers {
+		container, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if container["name"] != managerContainerName {
+			continue
+		}
+
+		existing := make(map[string]int)
+		envList, _ := container["env"].([]interface{})
+		for i, item := range envList {
+			if envVar, ok := item.(map[string]interface{}); ok {
+				if name, ok := envVar["name"].(string); ok {
+					existing[name] = i
+				}
+			}
+		}
+
+		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
+			name := envVar.(map[string]interface{})["name"].(string)
+			if idx, found := existing[name]; found {
+				envList[idx] = envVar
+			} else {
+				envList = append(envList, envVar)
+			}
+		}
+
+		container["env"] = envList
+		return nil
+	}
+	return fmt.Errorf("container %q not found in deployment", managerContainerName)
 }
 
 func (d *Deployer) applyBundleServiceResources(ctx context.Context, bundleDir, namespace string) error {

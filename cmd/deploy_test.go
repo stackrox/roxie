@@ -7,10 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/stackrox/roxie/internal/deployer"
+	"github.com/stackrox/roxie/internal/logger"
+	"github.com/stackrox/roxie/internal/paths"
 	"github.com/stackrox/roxie/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestNewDeployCmd_Flags(t *testing.T) {
@@ -110,22 +114,22 @@ func TestNewDeployCmd_Flags(t *testing.T) {
 			name: "pause-reconciliation",
 			args: []string{"--pause-reconciliation"},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.True(t, cfg.Central.PauseReconciliation, "Central.PauseReconciliation mismatch")
-				assert.True(t, cfg.SecuredCluster.PauseReconciliation, "SecuredCluster.PauseReconciliation mismatch")
+				assert.True(t, cfg.Central.PauseReconciliationEnabled(), "Central.PauseReconciliation mismatch")
+				assert.True(t, cfg.SecuredCluster.PauseReconciliationEnabled(), "SecuredCluster.PauseReconciliation mismatch")
 			},
 		},
 		{
 			name: "olm",
 			args: []string{"--olm"},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.True(t, cfg.Operator.DeployViaOlm, "Operator.DeployViaOlm mismatch")
+				assert.True(t, cfg.Operator.DeployViaOlmEnabled(), "Operator.DeployViaOlm mismatch")
 			},
 		},
 		{
 			name: "disable deploy-operator",
 			args: []string{"--deploy-operator=false"},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.True(t, cfg.Operator.SkipDeployment, "Operator.SkipDeployment mismatch")
+				assert.True(t, cfg.Operator.SkipDeploymentEnabled(), "Operator.SkipDeployment mismatch")
 			},
 		},
 		{
@@ -138,6 +142,32 @@ func TestNewDeployCmd_Flags(t *testing.T) {
 				assert.True(t, cfg.Central.EarlyReadinessEnabled(), "Central.EarlyReadiness mismatch")
 				assert.True(t, cfg.SecuredCluster.EarlyReadinessEnabled(), "SecuredCluster.EarlyReadiness mismatch")
 				assert.Equal(t, types.ResourceProfileSmall, cfg.Central.ResourceProfile, "Central.ResourceProfile mismatch")
+			},
+		},
+		{
+			name: "operator-env single",
+			args: []string{"--operator-env", "RELATED_IMAGE_MAIN=quay.io/main:4.7.0"},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Operator.EnvVars, "Operator.EnvVars should be set")
+				assert.Equal(t, "quay.io/main:4.7.0", cfg.Operator.EnvVars["RELATED_IMAGE_MAIN"])
+			},
+		},
+		{
+			name: "operator-env containing commas",
+			args: []string{"--operator-env", "FOO=bar,BAZ=qux,quux"},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Operator.EnvVars, "Operator.EnvVars should be set")
+				assert.Equal(t, "bar,BAZ=qux,quux", cfg.Operator.EnvVars["FOO"])
+				assert.NotContains(t, cfg.Operator.EnvVars, "BAZ")
+			},
+		},
+		{
+			name: "operator-env multiple flags",
+			args: []string{"--operator-env", "FOO=bar", "--operator-env", "BAZ=qux"},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Operator.EnvVars, "Operator.EnvVars should be set")
+				assert.Equal(t, "bar", cfg.Operator.EnvVars["FOO"])
+				assert.Equal(t, "qux", cfg.Operator.EnvVars["BAZ"])
 			},
 		},
 		{
@@ -159,6 +189,22 @@ securedCluster:
 						}),
 					"SecuredCluster.Spec mismatch",
 				)
+			},
+		},
+
+		{
+			name: "config file with operator env vars",
+			config: `
+operator:
+  envVars:
+    RELATED_IMAGE_MAIN: quay.io/rhacs-eng/main:4.7.0
+    RELATED_IMAGE_SCANNER: quay.io/rhacs-eng/scanner:4.7.0
+`,
+			args: []string{"--config", configFilePath},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Operator.EnvVars, "Operator.EnvVars should be set")
+				assert.Equal(t, "quay.io/rhacs-eng/main:4.7.0", cfg.Operator.EnvVars["RELATED_IMAGE_MAIN"])
+				assert.Equal(t, "quay.io/rhacs-eng/scanner:4.7.0", cfg.Operator.EnvVars["RELATED_IMAGE_SCANNER"])
 			},
 		},
 
@@ -204,6 +250,27 @@ central:
 				)
 			},
 		},
+		{
+			name: "set expressions support array index notation",
+			args: []string{
+				"--set", "central.spec.central.defaultTLSSecret[0].name=frontend-cert",
+			},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				assert.Equal(t,
+					map[string]interface{}{
+						"central": map[string]interface{}{
+							"defaultTLSSecret": []interface{}{
+								map[string]interface{}{
+									"name": "frontend-cert",
+								},
+							},
+						},
+					},
+					cfg.Central.Spec,
+					"Central.Spec mismatch",
+				)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -217,4 +284,143 @@ central:
 			tt.assert(t, cfg)
 		})
 	}
+}
+
+func TestNewDeployCmd_SetRejectsSpec(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "bare spec key",
+			args: []string{"--set", "spec.central.image=foo"},
+		},
+		{
+			name: "spec key in multi-assignment",
+			args: []string{"--set", "central.deployTimeout=4m,spec.central.image=foo"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := deployer.NewConfig()
+			cmd := newDeployCmd(&cfg)
+			err := cmd.ParseFlags(tt.args)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "spec")
+		})
+	}
+}
+
+func TestApplyUserDefaults(t *testing.T) {
+	log := logger.New()
+
+	tests := []struct {
+		name     string
+		config   deployer.Config
+		user     deployer.Config
+		expected deployer.Config
+	}{
+		{
+			name: "empty user config leaves config unchanged",
+			config: deployer.Config{
+				Roxie: deployer.RoxieConfig{Version: "4.5.0"},
+				Central: deployer.CentralConfig{
+					Namespace: "custom-namespace",
+				},
+			},
+			expected: deployer.Config{
+				Roxie: deployer.RoxieConfig{Version: "4.5.0"},
+				Central: deployer.CentralConfig{
+					Namespace: "custom-namespace",
+				},
+			},
+		},
+		{
+			name:   "fills empty fields from user defaults",
+			config: deployer.Config{},
+			user: deployer.Config{
+				Roxie:    deployer.RoxieConfig{Version: "4.5.0"},
+				Operator: deployer.OperatorConfig{DeployViaOlm: new(true)},
+			},
+			expected: deployer.Config{
+				Roxie:    deployer.RoxieConfig{Version: "4.5.0"},
+				Operator: deployer.OperatorConfig{DeployViaOlm: new(true)},
+			},
+		},
+		{
+			name: "user config overrides any config fields including config defaults",
+			config: deployer.Config{
+				Roxie: deployer.RoxieConfig{
+					Version: "4.9.2",
+				},
+				Central: deployer.CentralConfig{
+					EarlyReadiness: new(true),
+				},
+			},
+			user: deployer.Config{
+				Roxie: deployer.RoxieConfig{
+					Version: "4.5.0",
+				},
+				Operator: deployer.OperatorConfig{
+					DeployViaOlm: new(true),
+				},
+				Central: deployer.CentralConfig{
+					Namespace:      "custom-namespace",
+					EarlyReadiness: new(false),
+				},
+			},
+			expected: deployer.Config{
+				Roxie: deployer.RoxieConfig{
+					Version: "4.5.0",
+				},
+				Operator: deployer.OperatorConfig{
+					DeployViaOlm: new(true),
+				},
+				Central: deployer.CentralConfig{
+					Namespace:      "custom-namespace",
+					EarlyReadiness: new(false),
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			t.Setenv("XDG_CONFIG_HOME", tmpDir)
+			t.Setenv("HOME", tmpDir) // For non-Unix systems.
+
+			if !reflect.DeepEqual(tt.user, deployer.Config{}) {
+				configPath, err := paths.UserConfigPath()
+				require.NoError(t, err)
+				require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
+				data, err := yaml.Marshal(tt.user)
+				require.NoError(t, err)
+				require.NoError(t, os.WriteFile(configPath, data, 0o644))
+			}
+
+			cfg := deployer.NewConfig()
+			require.NoError(t, mergo.Merge(&cfg, &tt.config, mergo.WithOverride, mergo.WithoutDereference))
+			require.NoError(t, tryApplyUserDefaults(log, &cfg))
+
+			expected := deployer.NewConfig()
+			require.NoError(t, mergo.Merge(&expected, &tt.expected, mergo.WithOverride, mergo.WithoutDereference))
+
+			assert.True(t, reflect.DeepEqual(expected, cfg), "expected %+v, got %+v", expected, cfg)
+		})
+	}
+
+	t.Run("returns error on invalid yaml", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", tmpDir)
+		t.Setenv("HOME", tmpDir) // For non-Unix systems.
+
+		configPath, err := paths.UserConfigPath()
+		require.NoError(t, err)
+		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
+		require.NoError(t, os.WriteFile(configPath, []byte(`invalid: [yaml`), 0o644))
+
+		cfg := deployer.NewConfig()
+		assert.Error(t, tryApplyUserDefaults(log, &cfg))
+	})
 }

@@ -24,7 +24,39 @@ roxie has been authored with significant AI contributions.
 
 ## Installation
 
-### Download from GitHub releases
+Look up the latest release from https://github.com/stackrox/roxie/releases.
+
+### Install from GitHub releases into local dev environment
+
+For example, installing into `$HOME/bin`:
+```bash
+curl -fsSL -o "${HOME}/bin/roxie" \
+    https://github.com/stackrox/roxie/releases/download/v0.4.0/roxie-linux-amd64
+chmod +x "${HOME}/bin/roxie"
+```
+
+On macOS you likely also need
+```bash
+xattr -d com.apple.quarantine "${HOME}/bin/roxie"
+```
+
+### Installing from source into local dev environment
+
+Built using:
+```bash
+git clone git@github.com:stackrox/roxie.git
+cd roxie
+make install
+```
+
+This will install `roxie` into `${GOPATH}/bin`. If that is not desired you can also
+build and copy manually:
+```bash
+make build
+cp roxie /your/custom/bin
+```
+
+### Install from GitHub releases as part of CI workflow
 
 ```bash
 curl -fsSL --retry 5 --retry-all-errors -o /usr/local/bin/roxie \
@@ -32,7 +64,10 @@ curl -fsSL --retry 5 --retry-all-errors -o /usr/local/bin/roxie \
 chmod +x /usr/local/bin/roxie
 ```
 
-### Copy from container image in a Dockerfile
+### Install in container image
+
+roxie can also be installed by extracting from a published roxie container image, for example
+during container building:
 
 ```dockerfile
 ARG ROXIE_VERSION=0.4.0
@@ -61,47 +96,35 @@ Example for deploying Central and SecuredCluster to an Infra OpenShift 4 cluster
 ```bash
 podman run --rm -it --privileged \
     -v $KUBECONFIG:/kubeconfig:U \
-    -e MAIN_IMAGE_TAG=4.9.2 \
-    quay.io/rhacs-eng/roxie:latest deploy --resources=auto
+    quay.io/rhacs-eng/roxie:latest deploy -t 4.11.0 --resources=auto
 ```
-Specify the `MAIN_IMAGE_TAG` as desired.
+Specify the main image tag (`--tag` or `-t`) as desired.
 
 Deploying to a GKE cluster requires passing of some more arguments:
 ```
 podman run --rm -it --privileged \
     -v ~/.config/gcloud:/.config/gcloud:U \
     -v $KUBECONFIG:/kubeconfig:U \
-    -e MAIN_IMAGE_TAG=4.9.2 \
     -e REGISTRY_USERNAME=$REGISTRY_USERNAME \
     -e REGISTRY_PASSWORD=$REGISTRY_PASSWORD \
-    quay.io/rhacs-eng/roxie:latest deploy --resources=auto
+    quay.io/rhacs-eng/roxie:latest deploy -t 4.11.0 --resources=auto
 ```
 Note that in this case we also need to pass the gcloud configuration for the authentication towards
 the cluster to succeed.
 
-### Option 2: Deploying using local build
+### Option 2: Deploying using native executable
 
 Prerequisites:
 - `kubectl` configured to point at your target cluster
-- The `roxctl` CLI
-- The `roxie` branch forked and cloned to your local machine
-
-Built using:
-```bash
-make build
-```
-
-Get help:
-```bash
-./roxie --help
-```
+- `roxctl` CLI is installed
+- `roxie` CLI is installed
 
 Deploy using:
 ```bash
-MAIN_IMAGE_TAG=4.9.2 ./roxie deploy [ <component> ]
+./roxie deploy -t 4.11.0 [ <component> ]
 ```
 where `component` can be `central` or `sensor`. If not specified, both components will be deployed.
-Specify the `MAIN_IMAGE_TAG` as desired.
+Specify the tag to deploy as desired.
 
 Similarly, the deployment(s) can be torn down using:
 ```bash
@@ -114,7 +137,7 @@ roxie supports hub + spoke architectures where Central and SecuredCluster run on
 
 1. Deploy Central on the hub cluster:
 ```bash
-./roxie deploy central -t 4.9.2
+./roxie deploy central -t 4.11.0
 ```
 
 2. Create a config file for the spoke cluster, pointing at the Central endpoint (printed during step 1):
@@ -129,7 +152,7 @@ securedCluster:
 ```bash
 ROX_ADMIN_PASSWORD=<admin-password> \
 ROX_CA_CERT_FILE=<path-to-ca-cert> \
-./roxie deploy secured-cluster -t 4.9.2 -c spoke-config.yaml
+./roxie deploy secured-cluster -t 4.11.0 -c spoke-config.yaml
 ```
 
 > **Tip:** If deploying from the roxie subshell, `ROX_ADMIN_PASSWORD` and `ROX_CA_CERT_FILE` are
