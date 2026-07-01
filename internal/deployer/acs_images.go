@@ -1,9 +1,9 @@
 package deployer
 
-import "fmt"
+import (
+	"fmt"
 
-const (
-	imageRegistry = "quay.io/rhacs-eng"
+	"github.com/stackrox/roxie/internal/constants"
 )
 
 func imagesForConfig(config Config) []string {
@@ -13,6 +13,7 @@ func imagesForConfig(config Config) []string {
 		prefix = "release-"
 	}
 
+	imageRegistry := constants.DefaultRegistry
 	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "main", config.Roxie.Version))
 	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "central-db", config.Roxie.Version))
 	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4-db", config.Roxie.Version))
@@ -27,6 +28,7 @@ func imagesForConfig(config Config) []string {
 }
 
 func OperatorBundleImage(config Config) string {
+	imageRegistry := constants.DefaultRegistry
 	if config.Roxie.KonfluxImagesEnabled() {
 		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, config.Operator.Version)
 	}

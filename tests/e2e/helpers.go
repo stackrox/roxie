@@ -21,11 +21,8 @@ import (
 )
 
 const (
-	// TODO(#91): We should come up with some auto-updating of this on ACS releases.
-	// Don't think we should directly inject nightlies here.
-	defaultMainImageTag = "4.10.1"
-	deployTimeout       = 30 * time.Minute
-	teardownTimeout     = 10 * time.Minute
+	deployTimeout   = 30 * time.Minute
+	teardownTimeout = 10 * time.Minute
 )
 
 var (
