@@ -259,6 +259,38 @@ func (d *Deployer) createAdminPasswordSecret(ctx context.Context) error {
 
 func getCentralResourcesOperator(resourcesProfile types.ResourceProfile) map[string]interface{} {
 	switch resourcesProfile {
+	case types.ResourceProfileTiny:
+		return map[string]interface{}{
+			"spec": map[string]interface{}{
+				"central": map[string]interface{}{
+					"resources": centralResourcesTiny,
+					"db": map[string]interface{}{
+						"resources": centralDbResourcesTiny,
+						"persistence": map[string]interface{}{
+							"persistentVolumeClaim": map[string]interface{}{
+								"size": centralDbPVCSizeTiny,
+							},
+						},
+					},
+				},
+				"scanner": map[string]interface{}{
+					"scannerComponent": "Disabled",
+				},
+				"scannerV4": map[string]interface{}{
+					"db": map[string]interface{}{
+						"resources": centralScannerV4DbResourcesTiny,
+					},
+					"indexer": map[string]interface{}{
+						"resources": centralScannerV4IndexerResourcesTiny,
+						"scaling":   noScaling,
+					},
+					"matcher": map[string]interface{}{
+						"resources": centralScannerV4MatcherResourcesTiny,
+						"scaling":   noScaling,
+					},
+				},
+			},
+		}
 	case types.ResourceProfileSmall:
 		return map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -705,9 +737,44 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 
 func getSecuredClusterResourcesOperator(resourceProfile types.ResourceProfile) map[string]interface{} {
 	switch resourceProfile {
+	case types.ResourceProfileTiny:
+		return map[string]interface{}{
+			"spec": map[string]interface{}{
+				"admissionControl": map[string]interface{}{
+					"replicas": 1,
+				},
+				"sensor": map[string]interface{}{
+					"resources": securedClusterSensorResourcesTiny,
+				},
+				"scanner": map[string]interface{}{
+					"scannerComponent": "Disabled",
+				},
+				"scannerV4": map[string]interface{}{
+					"scannerComponent": "Disabled",
+				},
+				// The "tiny" resource profile also patches the resources down for some containers, which do not
+				// have first-class configurability exposed in the CR.
+				"overlays": []map[string]interface{}{
+					{
+						"apiVersion": "apps/v1",
+						"kind":       "Deployment",
+						"name":       "sensor",
+						"patches": []map[string]interface{}{
+							{
+								"path":  "spec.template.spec.initContainers[name:crs].resources.requests",
+								"value": `{"cpu":"80m", "memory": "150m"}`,
+							},
+						},
+					},
+				},
+			},
+		}
 	case types.ResourceProfileSmall:
 		return map[string]interface{}{
 			"spec": map[string]interface{}{
+				"admissionControl": map[string]interface{}{
+					"replicas": 1,
+				},
 				"sensor": map[string]interface{}{
 					"resources": securedClusterSensorResourcesSmall,
 				},

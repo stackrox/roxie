@@ -1,0 +1,76 @@
+name: E2E Tests (kind)
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        required: true
+        type: string
+
+env:
+  REGISTRY: quay.io
+  IMAGE_NAME: rhacs-eng/roxie
+
+jobs:
+  e2e-tests-kind:
+    runs-on: ubuntu-latest
+    env:
+      SKIP_OLM_TESTS: "true"
+      # TODO: Once the config-file-first approach lands, this will be changed from an
+      # environment variable to configuring a YAML configuration file, which will be
+      # used by the e2e tests.
+      ROXIE_RESOURCE_PROFILE: "tiny"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Log in to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Extract roxie binary from image
+        run: |
+          docker create --name roxie-extract "${{ inputs.image }}"
+          docker cp roxie-extract:/usr/local/bin/roxie "$GITHUB_WORKSPACE/roxie"
+          docker rm roxie-extract
+
+      - name: Install roxie binary
+        run: |
+          cp "${GITHUB_WORKSPACE}/roxie" /usr/local/bin/roxie
+          chmod +x /usr/local/bin/roxie
+          roxie version
+
+      - name: Install roxctl
+        env:
+          ROXCTL_VERSION: "4.10.0"
+          ROXCTL_SHA256: "5db647b14569465866c0162522e83393ebf02f671f4556b1b3ed551b9f8433bc"
+        run: |
+          curl -fsSLo /usr/local/bin/roxctl \
+            "https://mirror.openshift.com/pub/rhacs/assets/${ROXCTL_VERSION}/bin/Linux/roxctl"
+          echo "${ROXCTL_SHA256}  /usr/local/bin/roxctl" | sha256sum -c -
+          chmod +x /usr/local/bin/roxctl
+          roxctl version
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: roxie-e2e
+
+      - name: Run e2e tests
+        env:
+          REGISTRY_USERNAME: ${{ secrets.QUAY_RHACS_ENG_RO_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.QUAY_RHACS_ENG_RO_PASSWORD }}
+        run: |
+          make run-test-e2e

@@ -147,6 +147,48 @@ func TestLoadYAMLFileInvalidYAML(t *testing.T) {
 	}
 }
 
+func TestDeepMergeAppendsSlices(t *testing.T) {
+	base := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"imagePullSecrets": []interface{}{
+				map[string]interface{}{"name": "secret-a"},
+			},
+			"keep": "this",
+		},
+	}
+
+	overlay := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"imagePullSecrets": []interface{}{
+				map[string]interface{}{"name": "secret-b"},
+			},
+		},
+	}
+
+	err := DeepMerge(base, overlay)
+	require.NoError(t, err)
+
+	spec := base["spec"].(map[string]interface{})
+	require.Equal(t, "this", spec["keep"])
+
+	secrets := spec["imagePullSecrets"].([]interface{})
+	require.Len(t, secrets, 2)
+	require.Equal(t, map[string]interface{}{"name": "secret-a"}, secrets[0])
+	require.Equal(t, map[string]interface{}{"name": "secret-b"}, secrets[1])
+}
+
+func TestDeepMergeSliceTypeMismatch(t *testing.T) {
+	base := map[string]interface{}{
+		"items": []interface{}{"a"},
+	}
+	overlay := map[string]interface{}{
+		"items": "not-a-slice",
+	}
+
+	err := DeepMerge(base, overlay)
+	require.ErrorContains(t, err, "incompatible types")
+}
+
 func TestDeepCopy(t *testing.T) {
 	original := map[string]interface{}{
 		"a": "value",

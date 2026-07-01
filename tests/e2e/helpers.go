@@ -26,10 +26,18 @@ const (
 )
 
 var (
-	commonDeployArgs = []string{"--resources=small", "--skip-user-config"}
+	commonDeployArgs = deployArgsFromEnv()
 
 	roxieBinary = "roxie"
 )
+
+func deployArgsFromEnv() []string {
+	profile := os.Getenv("ROXIE_RESOURCE_PROFILE")
+	if profile == "" {
+		profile = "small"
+	}
+	return []string{"--verbose", "--resources=" + profile, "--skip-user-config"}
+}
 
 func teardownAllDeployments() error {
 	fmt.Println("=== Tearing down all deployments before running tests ===")

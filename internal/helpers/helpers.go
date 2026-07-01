@@ -108,16 +108,16 @@ func deepCopySlice(s []interface{}) []interface{} {
 	return result
 }
 
-// deepMerge recursively merges overlay into base
+// DeepMerge recursively merges overlay into base.
 func DeepMerge(base, overlay map[string]interface{}) error {
 	for k, v := range overlay {
 		if IsNil(v) {
 			continue
 		}
 		if baseVal, ok := base[k]; ok {
-			// Both are maps - merge recursively
 			if baseMap, baseIsMap := baseVal.(map[string]interface{}); baseIsMap {
 				if overlayMap, overlayIsMap := v.(map[string]interface{}); overlayIsMap {
+					// Both are maps - merge recursively.
 					if err := DeepMerge(baseMap, overlayMap); err != nil {
 						return err
 					}
@@ -126,11 +126,39 @@ func DeepMerge(base, overlay map[string]interface{}) error {
 					return fmt.Errorf("incompatible types in maps to merge (map vs. %T)", v)
 				}
 			}
+			if _, ok := v.(map[string]interface{}); ok {
+				return fmt.Errorf("incompatible types for key %q: %T vs. map", k, baseVal)
+			}
+
+			if baseSlice, ok := toSlice(baseVal); ok {
+				if overlaySlice, ok := toSlice(v); ok {
+					base[k] = append(baseSlice, overlaySlice...)
+					continue
+				}
+				return fmt.Errorf("incompatible types for key %q: slice vs. %T", k, v)
+			}
+			if _, ok := toSlice(v); ok {
+				return fmt.Errorf("incompatible types for key %q: %T vs. slice", k, baseVal)
+			}
 		}
-		// Override with overlay value
+
 		base[k] = v
 	}
 	return nil
+}
+
+func toSlice(v interface{}) ([]interface{}, bool) {
+	if s, ok := v.([]interface{}); ok {
+		return s, true
+	}
+	if s, ok := v.([]map[string]interface{}); ok {
+		out := make([]interface{}, len(s))
+		for i, e := range s {
+			out[i] = e
+		}
+		return out, true
+	}
+	return nil, false
 }
 
 func MapToStruct(m map[string]interface{}, out interface{}) error {

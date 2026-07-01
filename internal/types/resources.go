@@ -11,6 +11,7 @@ type ResourceProfile int
 const (
 	ResourceProfileAcsDefaults ResourceProfile = iota
 	ResourceProfileAuto
+	ResourceProfileTiny
 	ResourceProfileSmall
 	ResourceProfileMedium
 	ResourceProfileCI
@@ -20,6 +21,7 @@ var (
 	resourceProfileNames = map[ResourceProfile]string{
 		ResourceProfileAcsDefaults: "acs-defaults",
 		ResourceProfileAuto:        "auto",
+		ResourceProfileTiny:        "tiny",
 		ResourceProfileSmall:       "small",
 		ResourceProfileMedium:      "medium",
 		ResourceProfileCI:          "ci",
