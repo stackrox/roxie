@@ -36,11 +36,6 @@ func RunCommandWithOutput(title string, name string, args []string, opts ...Comm
 // CommandOption is a function that modifies an exec.Cmd
 type CommandOption func(*exec.Cmd)
 
-// GetContainerTool returns the container tool to use (podman)
-func GetContainerTool() string {
-	return "podman"
-}
-
 // LoadYAMLFile loads a YAML file and unmarshals it into a map
 // Returns an empty map if path is empty or file doesn't exist
 func LoadYAMLFile(path string) (map[string]interface{}, error) {

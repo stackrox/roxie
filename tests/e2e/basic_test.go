@@ -46,7 +46,7 @@ func TestDeployBothSimple(t *testing.T) {
 
 	// Cleanup
 	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "both"}
+	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "both"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
 	t.Log("Verifying components are removed")
@@ -90,7 +90,7 @@ func TestDetachedPortForwarding(t *testing.T) {
 	testCentralAPI(t, endpoint, caCertFile)
 
 	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "central"}
+	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
 	runCommand(t, teardownTimeout, env, teardownArgs...)
 
 	// Verify port-forward cleanup by checking the port is free. We can't use

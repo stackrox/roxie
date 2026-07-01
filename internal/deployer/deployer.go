@@ -15,12 +15,14 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/stackrox/roxie/internal/component"
+	"github.com/stackrox/roxie/internal/containerrt"
 	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/imagecache"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/portforward"
+	"github.com/stackrox/roxie/internal/roxieenv"
 	"github.com/stackrox/roxie/internal/types"
 )
 
@@ -45,8 +47,8 @@ type Deployer struct {
 	dockerCreds *dockerauth.Credentials
 	envrcFile   string
 
-	kubeContext          string
-	clusterResourceKinds map[string]struct{}
+	kubeContext            string
+	containerRuntimeSocket string
 
 	config Config
 
@@ -227,20 +229,26 @@ func New(log *logger.Logger) (*Deployer, error) {
 		return nil, err
 	}
 
+	imageCache, err := imagecache.New(log, "", 20)
+	if err != nil {
+		return nil, err
+	}
+
 	tempDir, err := os.MkdirTemp("", "roxie-deployer-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
 	d := &Deployer{
-		logger:    log,
-		startTime: time.Now(),
-		tempDir:   tempDir,
+		logger:                 log,
+		startTime:              time.Now(),
+		tempDir:                tempDir,
+		imageCache:             imageCache,
+		dockerAuth:             dockerauth.New(log),
+		portForward:            portforward.New(k8s.GetKubectl(), log),
+		kubeContext:            env.GetCurrentContext(),
+		containerRuntimeSocket: containerrt.ResolveSocket(log),
 	}
-
-	d.dockerAuth = dockerauth.New(log)
-	d.imageCache = imagecache.New(log, "", 20)
-	d.portForward = portforward.New(k8s.GetKubectl(), log)
 
 	if password := os.Getenv("ROX_ADMIN_PASSWORD"); password != "" {
 		d.centralPassword = password
@@ -262,40 +270,9 @@ func New(log *logger.Logger) (*Deployer, error) {
 		}
 	}
 
-	d.kubeContext = env.GetCurrentContext()
-
-	if d.kubeContext != "" {
-		clusterResourceKinds, err := d.getClusterResourceKinds()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get cluster resource kinds: %w", err)
-		}
-		d.clusterResourceKinds = clusterResourceKinds
-	}
-
 	log.Success("🚀 ACS Deployer initialized")
 
 	return d, nil
-}
-
-func (d *Deployer) getClusterResourceKinds() (map[string]struct{}, error) {
-	result, err := d.runKubectl(context.Background(), k8s.KubectlOptions{
-		Args: []string{"api-resources", "-o", "name"},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster resource kinds: %w", err)
-	}
-	kinds := make(map[string]struct{})
-	lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
-	for _, line := range lines {
-		fields := strings.SplitN(line, ".", 2)
-		if len(fields) == 0 || fields[0] == "" {
-			continue
-		}
-		kind := fields[0]
-		kinds[kind] = struct{}{}
-	}
-
-	return kinds, nil
 }
 
 // Cleanup cleans up any temporary resources created by the deployer, such as temporary files.
@@ -328,7 +305,7 @@ func (d *Deployer) stopDetachedPortForward() {
 // Deploy deploys the specified components to the cluster.
 func (d *Deployer) Deploy(ctx context.Context, components component.Component) error {
 	// Prepare and verify credentials early to fail fast.
-	if env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4 {
+	if d.config.Roxie.ClusterType.NeedsPullSecrets() {
 		if err := d.prepareCredentials(); err != nil {
 			return fmt.Errorf("failed to prepare credentials: %w", err)
 		}
@@ -736,12 +713,10 @@ func (d *Deployer) cleanupTempDir(path string, description string) {
 
 func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
 	var content strings.Builder
-	fmt.Fprintf(&content, "export API_ENDPOINT=%q\n", d.centralEndpoint)
-	fmt.Fprintf(&content, "export ROX_ENDPOINT=%q\n", d.centralEndpoint)
-	fmt.Fprintf(&content, "export ROX_BASE_URL='https://%s'\n", d.centralEndpoint)
-	fmt.Fprintf(&content, "export ROX_USERNAME=%q\n", AdminUsername)
-	fmt.Fprintf(&content, "export ROX_ADMIN_PASSWORD=%q\n", d.centralPassword)
-	fmt.Fprintf(&content, "export ROX_CA_CERT_FILE=%q\n", d.roxCACertFile)
+	for name, val := range roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo()).Export() {
+		fmt.Fprintf(&content, "export %s=%q\n", name, val)
+	}
+
 	if d.portForwardPID != 0 {
 		fmt.Fprintf(&content, "export ROXIE_PORT_FORWARD_PID=%d\n", d.portForwardPID)
 	}
@@ -757,7 +732,7 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
 func (d *Deployer) PrintCentralDeploymentSummary() {
 	component := "Central"
 	mainImageTag := d.config.Roxie.Version
-	olm := d.config.Operator.DeployViaOlm
+	olm := d.config.Operator.DeployViaOlmEnabled()
 	exposure := d.config.Central.GetExposure()
 	portForwarding := d.config.Central.PortForwardingEnabled()
 	log := d.logger
@@ -810,7 +785,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
-	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()))
+	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
@@ -938,7 +913,7 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	component := "Secured Cluster"
 	mainImageTag := d.config.Roxie.Version
-	olm := d.config.Operator.DeployViaOlm
+	olm := d.config.Operator.DeployViaOlmEnabled()
 	log := d.logger
 	kubeContext := d.kubeContext
 
@@ -989,7 +964,7 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
-	log.Info(cyan.Sprint("│") + createRow("Cluster Type", env.GetCurrentClusterType().String()))
+	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
 	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
@@ -997,25 +972,29 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 		log.Info(cyan.Sprint("│") + createRow("OLM", "Yes"))
 	}
 
+	if ep, ok := d.config.SecuredCluster.Spec["centralEndpoint"].(string); ok && ep != internalCentralEndpoint(d.config.Central.Namespace) {
+		log.Info(cyan.Sprint("│") + createRow("Central Endpoint", ep))
+	}
+
 	log.Info(cyan.Sprint("└" + strings.Repeat("─", boxWidth) + "┘"))
 	log.Info("")
 }
 
-type CentralDeploymentInfo struct {
-	Endpoint       string
-	Password       string
-	KubeContext    string
-	Exposure       types.Exposure
-	CACertFile     string
-	HAProxyStarted bool
-}
-
-func (d *Deployer) GetCentralDeploymentInfo() CentralDeploymentInfo {
-	return CentralDeploymentInfo{
+func (d *Deployer) GetCentralDeploymentInfo() types.CentralDeploymentInfo {
+	return types.CentralDeploymentInfo{
 		Endpoint:    d.centralEndpoint,
+		Username:    AdminUsername,
 		Password:    d.centralPassword,
 		KubeContext: d.kubeContext,
 		Exposure:    d.config.Central.GetExposure(),
 		CACertFile:  d.roxCACertFile,
 	}
+}
+
+func (d *Deployer) GetKubeContext() string {
+	return d.kubeContext
+}
+
+func (d *Deployer) GetContainerRuntimeSocket() string {
+	return d.containerRuntimeSocket
 }

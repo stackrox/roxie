@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/env"
-	"github.com/stackrox/roxie/internal/logger"
 )
 
 func newEnvCmd() *cobra.Command {
@@ -22,7 +21,7 @@ func newEnvCmd() *cobra.Command {
 }
 
 func runEnv(cmd *cobra.Command, args []string) error {
-	log := logger.New()
+	log := globalLogger
 	if err := env.Initialize(log); err != nil {
 		return err
 	}
@@ -32,7 +31,7 @@ func runEnv(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Kube config:                %s\n", os.Getenv("KUBECONFIG"))
 	fmt.Printf("Running in roxie container: %v\n", env.RunningInRoxieContainer)
 	fmt.Printf("Current Context:            %s\n", env.GetCurrentContext())
-	fmt.Printf("Cluster Type:               %s\n", env.GetCurrentClusterType().String())
+	fmt.Printf("Cluster Type:               %s\n", env.GetAutoDetectedClusterType().String())
 
 	return nil
 }

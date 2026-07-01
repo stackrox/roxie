@@ -21,11 +21,8 @@ import (
 )
 
 const (
-	// TODO(#91): We should come up with some auto-updating of this on ACS releases.
-	// Don't think we should directly inject nightlies here.
-	defaultMainImageTag = "4.10.1"
-	deployTimeout       = 30 * time.Minute
-	teardownTimeout     = 10 * time.Minute
+	deployTimeout   = 30 * time.Minute
+	teardownTimeout = 10 * time.Minute
 )
 
 var (
@@ -39,7 +36,7 @@ func deployArgsFromEnv() []string {
 	if profile == "" {
 		profile = "small"
 	}
-	return []string{"--verbose", "--resources=" + profile}
+	return []string{"--verbose", "--resources=" + profile, "--skip-user-config"}
 }
 
 func teardownAllDeployments() error {
@@ -49,7 +46,7 @@ func teardownAllDeployments() error {
 	defer cancel()
 
 	// Teardown standard deployments
-	cmd := exec.CommandContext(ctx, roxieBinary, "teardown")
+	cmd := exec.CommandContext(ctx, roxieBinary, "teardown", "--skip-user-config")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -59,7 +56,7 @@ func teardownAllDeployments() error {
 	// Teardown single-namespace deployments
 	ctx, cancel = context.WithTimeout(context.Background(), teardownTimeout)
 	defer cancel()
-	cmd = exec.CommandContext(ctx, roxieBinary, "teardown", "--single-namespace")
+	cmd = exec.CommandContext(ctx, roxieBinary, "teardown", "--skip-user-config", "--single-namespace")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

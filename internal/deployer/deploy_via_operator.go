@@ -46,7 +46,7 @@ func (d *Deployer) deployOperatorOnly(ctx context.Context) error {
 // ensureOperatorDeployed ensures the operator is deployed with the correct version and mode
 func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	// Skip operator deployment/checks if flag is set to false
-	if d.config.Operator.SkipDeployment {
+	if d.config.Operator.SkipDeploymentEnabled() {
 		d.logger.Info("ℹ️  Skipping operator deployment checks (--deploy-operator=false)")
 		d.logger.Info("   Assuming operator is already running...")
 		return nil
@@ -66,12 +66,12 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 
 	if !operatorExists {
 		needsDeployment = true
-	} else if d.config.Operator.DeployViaOlm && currentMode == OperatorModeNonOLM {
+	} else if d.config.Operator.DeployViaOlmEnabled() && currentMode == OperatorModeNonOLM {
 		// Switching from non-OLM to OLM
 		d.logger.Info("🔄 Switching operator from non-OLM to OLM mode...")
 		needsTeardown = true
 		needsDeployment = true
-	} else if !d.config.Operator.DeployViaOlm && currentMode == OperatorModeOLM {
+	} else if !d.config.Operator.DeployViaOlmEnabled() && currentMode == OperatorModeOLM {
 		// Switching from OLM to non-OLM
 		d.logger.Info("🔄 Switching operator from OLM to non-OLM mode...")
 		needsTeardown = true
@@ -101,7 +101,7 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	}
 
 	if needsDeployment {
-		if d.config.Operator.DeployViaOlm {
+		if d.config.Operator.DeployViaOlmEnabled() {
 			if err := d.deployOperatorViaOLM(ctx); err != nil {
 				return fmt.Errorf("failed to deploy operator via OLM: %w", err)
 			}
@@ -119,7 +119,7 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying Central via Operator...")
 
-	needPullSecrets := env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4
+	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
 	if err := d.prepareNamespace(ctx, d.config.Central.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}
@@ -141,7 +141,7 @@ func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 		return fmt.Errorf("failed waiting for Central: %w", err)
 	}
 
-	if d.config.Central.PauseReconciliation {
+	if d.config.Central.PauseReconciliationEnabled() {
 		d.logger.Infof("Adding pause-reconcile annotation to Central")
 		err := d.addPauseReconcileAnnotation(ctx, "Central", centralCrName, d.config.Central.Namespace)
 		if err != nil {
@@ -687,7 +687,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying SecuredCluster via Operator...")
 
-	needPullSecrets := env.GetCurrentClusterType() != types.ClusterTypeInfraOpenShift4
+	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
 	if err := d.prepareNamespace(ctx, d.config.SecuredCluster.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}
@@ -723,7 +723,7 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 		return fmt.Errorf("failed waiting for SecuredCluster: %w", err)
 	}
 
-	if d.config.SecuredCluster.PauseReconciliation {
+	if d.config.SecuredCluster.PauseReconciliationEnabled() {
 		d.logger.Infof("Adding pause-reconcile annotation to SecuredCluster")
 		err := d.addPauseReconcileAnnotation(ctx, "SecuredCluster", securedClusterCrName, d.config.SecuredCluster.Namespace)
 		if err != nil {
