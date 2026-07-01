@@ -22,7 +22,7 @@ import (
 
 func TestLookupLatestTag_Integration(t *testing.T) {
 	log := logger.New()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
 	tag, err := LookupLatestTag(ctx, log)
@@ -41,7 +41,7 @@ func TestLookupLatestTag_Integration(t *testing.T) {
 
 func TestVerifyImageExistence_NotFound_Integration(t *testing.T) {
 	log := logger.New()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	madeUpImage := fmt.Sprintf("%s/main:99.99.99", constants.DefaultRegistry)
