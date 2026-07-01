@@ -184,6 +184,20 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 		}),
 	)
 
+	registerFlag(cmd, settings, "operator-env", "Operator environment variables (e.g., RELATED_IMAGE_MAIN=quay.io/...)",
+		withApplyFn("env-var", func(config *deployer.Config, envExpr string) error {
+			key, value, err := deployer.ParseOperatorEnvVar(envExpr)
+			if err != nil {
+				return fmt.Errorf("parsing operator env var: %w", err)
+			}
+			if config.Operator.EnvVars == nil {
+				config.Operator.EnvVars = make(map[string]string)
+			}
+			config.Operator.EnvVars[key] = value
+			return nil
+		}),
+	)
+
 	registerFlag(cmd, settings, "features", "Feature flag settings (e.g., +ROX_FOO,-ROX_BAR,ROX_BAZ=true)",
 		withApplyFn("feature-flags", func(config *deployer.Config, featureFlagExpr string) error {
 			featureFlags, err := deployer.ParseFeatureFlags([]string{featureFlagExpr})
@@ -265,10 +279,13 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("applying config patches from command line argument: %w", err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
 	} else {
-		mainImageTag, err := helpers.LookupMainImageTag(log)
+		mainImageTag, err := helpers.LookupMainImageTag(ctx, log)
 		if err != nil {
 			return fmt.Errorf("looking up main image tag: %w", err)
 		}
@@ -318,9 +335,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		log.Info("Exiting because of enabled dry run mode.")
 		return nil
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
 
 	// If we are deploying to a local cluster and the images exist locally, then we transfer them
 	// to the local cluster.

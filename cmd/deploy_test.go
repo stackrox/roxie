@@ -145,6 +145,32 @@ func TestNewDeployCmd_Flags(t *testing.T) {
 			},
 		},
 		{
+			name: "operator-env single",
+			args: []string{"--operator-env", "RELATED_IMAGE_MAIN=quay.io/main:4.7.0"},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Operator.EnvVars, "Operator.EnvVars should be set")
+				assert.Equal(t, "quay.io/main:4.7.0", cfg.Operator.EnvVars["RELATED_IMAGE_MAIN"])
+			},
+		},
+		{
+			name: "operator-env containing commas",
+			args: []string{"--operator-env", "FOO=bar,BAZ=qux,quux"},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Operator.EnvVars, "Operator.EnvVars should be set")
+				assert.Equal(t, "bar,BAZ=qux,quux", cfg.Operator.EnvVars["FOO"])
+				assert.NotContains(t, cfg.Operator.EnvVars, "BAZ")
+			},
+		},
+		{
+			name: "operator-env multiple flags",
+			args: []string{"--operator-env", "FOO=bar", "--operator-env", "BAZ=qux"},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Operator.EnvVars, "Operator.EnvVars should be set")
+				assert.Equal(t, "bar", cfg.Operator.EnvVars["FOO"])
+				assert.Equal(t, "qux", cfg.Operator.EnvVars["BAZ"])
+			},
+		},
+		{
 			name: "config file can be used",
 			config: `
 roxie:
@@ -163,6 +189,22 @@ securedCluster:
 						}),
 					"SecuredCluster.Spec mismatch",
 				)
+			},
+		},
+
+		{
+			name: "config file with operator env vars",
+			config: `
+operator:
+  envVars:
+    RELATED_IMAGE_MAIN: quay.io/rhacs-eng/main:4.7.0
+    RELATED_IMAGE_SCANNER: quay.io/rhacs-eng/scanner:4.7.0
+`,
+			args: []string{"--config", configFilePath},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Operator.EnvVars, "Operator.EnvVars should be set")
+				assert.Equal(t, "quay.io/rhacs-eng/main:4.7.0", cfg.Operator.EnvVars["RELATED_IMAGE_MAIN"])
+				assert.Equal(t, "quay.io/rhacs-eng/scanner:4.7.0", cfg.Operator.EnvVars["RELATED_IMAGE_SCANNER"])
 			},
 		},
 
