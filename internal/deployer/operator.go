@@ -14,6 +14,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
 )
@@ -203,7 +204,7 @@ func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
 	// Define repository digest mirrors as Go data structures
 	rewrite := func(from, to string) map[string]interface{} {
 		source := fmt.Sprintf("registry.redhat.io/advanced-cluster-security/%s", from)
-		mirror := fmt.Sprintf("quay.io/rhacs-eng/%s", to)
+		mirror := fmt.Sprintf("%s/%s", constants.DefaultRegistry, to)
 		if d.verbose {
 			d.logger.Dimf("Image rewriting rule: %s -> %s", source, mirror)
 		}

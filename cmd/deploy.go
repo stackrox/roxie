@@ -279,10 +279,13 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("applying config patches from command line argument: %w", err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
 	} else {
-		mainImageTag, err := helpers.LookupMainImageTag(log)
+		mainImageTag, err := helpers.LookupMainImageTag(ctx, log)
 		if err != nil {
 			return fmt.Errorf("looking up main image tag: %w", err)
 		}
@@ -332,9 +335,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		log.Info("Exiting because of enabled dry run mode.")
 		return nil
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
 
 	// If we are deploying to a local cluster and the images exist locally, then we transfer them
 	// to the local cluster.

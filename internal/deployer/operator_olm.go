@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/k8s"
 	"gopkg.in/yaml.v3"
 )
@@ -17,7 +18,7 @@ const (
 	subscriptionName           = "stackrox-operator-subscription"
 	operatorGroupName          = "all-namespaces-operator-group"
 	operatorChannel            = "latest"
-	operatorIndexImage         = "quay.io/rhacs-eng/stackrox-operator-index"
+	operatorIndexImage         = constants.DefaultRegistry + "/stackrox-operator-index"
 	namespacedSubscriptionName = operatorNamespace + "/" + subscriptionName
 )
 

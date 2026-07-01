@@ -5,10 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/daemon"
@@ -28,10 +28,10 @@ func VerifyImageExistence(ctx context.Context, log *logger.Logger, imageRef stri
 		return fmt.Errorf("invalid image reference: %w", err)
 	}
 
-	// Use HEAD request to verify image exists without downloading
 	_, err = remote.Head(ref,
 		remote.WithContext(ctx),
-		remote.WithAuthFromKeychain(authn.DefaultKeychain))
+		remote.WithAuthFromKeychain(Keychain),
+		remote.WithRetryStatusCodes(http.StatusTooManyRequests, http.StatusServiceUnavailable))
 	if err != nil {
 		return fmt.Errorf("image inspection failed: %w", err)
 	}
@@ -100,7 +100,7 @@ func assureImageExistsLocally(ctx context.Context, log *logger.Logger, imageRef,
 
 	img, err = remote.Image(ref,
 		remote.WithContext(ctx),
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		remote.WithAuthFromKeychain(Keychain),
 		remote.WithPlatform(platform))
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch image: %w", err)
