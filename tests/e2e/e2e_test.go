@@ -3,9 +3,14 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
+	"time"
+
+	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/logger"
 )
 
 func TestMain(m *testing.M) {
@@ -15,9 +20,14 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	// Set default MAIN_IMAGE_TAG if not set
+	// Use the most recent released ACS version if MAIN_IMAGE_TAG is not set.
 	if os.Getenv("MAIN_IMAGE_TAG") == "" {
-		os.Setenv("MAIN_IMAGE_TAG", defaultMainImageTag)
+		mainImageTag, err := lookupLatestTag()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to lookup latest tag: %v\n", err)
+			os.Exit(1)
+		}
+		os.Setenv("MAIN_IMAGE_TAG", mainImageTag)
 	}
 
 	// Verify kubectl context
@@ -36,6 +46,17 @@ func TestMain(m *testing.M) {
 
 	// Run tests
 	os.Exit(m.Run())
+}
+
+func lookupLatestTag() (string, error) {
+	log := logger.New()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	tag, err := helpers.LookupLatestTag(ctx, log)
+	if err != nil {
+		return "", err
+	}
+	return tag, nil
 }
 
 func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
@@ -57,7 +78,7 @@ func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
 	verifySecuredClusterInstalled(t, "stackrox")
 
 	t.Log("=== Tearing down both components in single namespace ===")
-	args = []string{roxieBinary, "teardown", "--single-namespace"}
+	args = []string{roxieBinary, "teardown", "--skip-user-config", "--single-namespace"}
 	runCommand(t, teardownTimeout, nil, args...)
 
 	verifyCentralNotInstalled(t, "stackrox")

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strings"
 	"time"
 
 	"dario.cat/mergo"
@@ -20,16 +19,15 @@ import (
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
 	"github.com/stackrox/roxie/internal/roxieenv"
-	"github.com/stackrox/roxie/internal/types"
-
 	"github.com/stackrox/roxie/internal/stackroxversions"
+	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/utils/ptr"
+	"helm.sh/helm/v3/pkg/strvals"
 )
 
 var (
-	sharedNamespace = "stackrox"
+	sharedNamespace     = "stackrox"
+	imagePreLoadCommand string
 )
 
 func newDeployCmd(settings *deployer.Config) *cobra.Command {
@@ -51,11 +49,15 @@ Examples:
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to spawn after Central deployment")
 
 	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
+	cmd.Flags().StringVar(&imagePreLoadCommand, "image-preload-command", "",
+		`Use custom command for pre-loading images to local cluster. Image can be referenced as $IMAGE.
+Pre-loading support for Kind and Minikube clusters is built-in. In case this is not sufficient
+this flag can be used to tell roxie how to pre-load images for the current cluster.`)
 
 	registerFlag(cmd, settings, "olm", "Deploy operator via OLM (requires OLM installed)",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Operator.DeployViaOlm = val
+			config.Operator.DeployViaOlm = new(val)
 			return nil
 		}),
 	)
@@ -63,7 +65,7 @@ Examples:
 	registerFlag(cmd, settings, "konflux", "Use Konflux images",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Roxie.KonfluxImages = val
+			config.Roxie.KonfluxImages = new(val)
 			return nil
 		}),
 	)
@@ -71,7 +73,7 @@ Examples:
 	registerFlag(cmd, settings, "deploy-operator", "Whether to deploy and manage the operator",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Operator.SkipDeployment = !val
+			config.Operator.SkipDeployment = new(!val)
 			return nil
 		}),
 	)
@@ -79,7 +81,7 @@ Examples:
 	registerFlag(cmd, settings, "port-forwarding", "Enable localhost port-forward for Central",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Central.PortForwarding = ptr.To(val)
+			config.Central.PortForwarding = new(val)
 			return nil
 		}),
 	)
@@ -87,8 +89,8 @@ Examples:
 	registerFlag(cmd, settings, "pause-reconciliation", "Pause reconciliation after deployment",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Central.PauseReconciliation = val
-			config.SecuredCluster.PauseReconciliation = val
+			config.Central.PauseReconciliation = new(val)
+			config.SecuredCluster.PauseReconciliation = new(val)
 			return nil
 		}),
 	)
@@ -120,7 +122,7 @@ Examples:
 			if err := yaml.Unmarshal([]byte(val), &exposure); err != nil {
 				return err
 			}
-			config.Central.Exposure = ptr.To(exposure)
+			config.Central.Exposure = new(exposure)
 			return nil
 		}),
 	)
@@ -139,28 +141,12 @@ Examples:
 
 	registerFlag(cmd, settings, "set", "Set expressions, e.g. securedCluster.spec.clusterName=sensor",
 		withApplyFn("set-expression", func(config *deployer.Config, expr string) error {
-			key, yamlValue, found := strings.Cut(expr, "=")
-			if !found {
-				return fmt.Errorf("invalid set expression '%s': expected format 'key.path=value'", expr)
+			unstructuredPatch, err := strvals.Parse(expr)
+			if err != nil {
+				return fmt.Errorf("parsing set expression %q: %w", expr, err)
 			}
-			var val interface{}
-			if err := yaml.Unmarshal([]byte(yamlValue), &val); err != nil {
-				return fmt.Errorf("failed to unmarshal value '%s' for key '%s': %w", yamlValue, key, err)
-			}
-			// SetNestedField requires JSON-compatible types: float64 for numbers, not int.
-			switch v := val.(type) {
-			case int:
-				val = float64(v)
-			case int64:
-				val = float64(v)
-			}
-			pathElements := strings.Split(key, ".")
-			if len(pathElements) > 0 && pathElements[0] == "spec" {
-				return errors.New("set expression begins with 'spec.' -- it must be prefixed with 'central.' or 'securedCluster.'")
-			}
-			unstructuredPatch := make(map[string]interface{})
-			if err := unstructured.SetNestedField(unstructuredPatch, val, pathElements...); err != nil {
-				return err
+			if _, forbidden := unstructuredPatch["spec"]; forbidden {
+				return errors.New("set expression must not set top-level 'spec'; prefix with 'central.' or 'securedCluster.'")
 			}
 			var patch deployer.Config
 			if err := helpers.MapToStruct(unstructuredPatch, &patch); err != nil {
@@ -198,6 +184,20 @@ Examples:
 		}),
 	)
 
+	registerFlag(cmd, settings, "operator-env", "Operator environment variables (e.g., RELATED_IMAGE_MAIN=quay.io/...)",
+		withApplyFn("env-var", func(config *deployer.Config, envExpr string) error {
+			key, value, err := deployer.ParseOperatorEnvVar(envExpr)
+			if err != nil {
+				return fmt.Errorf("parsing operator env var: %w", err)
+			}
+			if config.Operator.EnvVars == nil {
+				config.Operator.EnvVars = make(map[string]string)
+			}
+			config.Operator.EnvVars[key] = value
+			return nil
+		}),
+	)
+
 	registerFlag(cmd, settings, "features", "Feature flag settings (e.g., +ROX_FOO,-ROX_BAR,ROX_BAZ=true)",
 		withApplyFn("feature-flags", func(config *deployer.Config, featureFlagExpr string) error {
 			featureFlags, err := deployer.ParseFeatureFlags([]string{featureFlagExpr})
@@ -228,8 +228,8 @@ Examples:
 	registerFlag(cmd, settings, "early-readiness", "Only wait for essential workloads (central/sensor) to be ready",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			config.Central.EarlyReadiness = val
-			config.SecuredCluster.EarlyReadiness = val
+			config.Central.EarlyReadiness = new(val)
+			config.SecuredCluster.EarlyReadiness = new(val)
 			return nil
 		}),
 	)
@@ -246,7 +246,7 @@ Examples:
 }
 
 func runDeploy(cmd *cobra.Command, args []string) error {
-	log := logger.New()
+	log := globalLogger
 	if !dryRun {
 		if err := env.Initialize(log); err != nil {
 			return err
@@ -264,10 +264,28 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Start with default configuration.
+	deploySettings := deployer.DefaultConfig()
+
+	// Apply user config on top (overriding defaults).
+	if !skipUserConfig {
+		if err := tryApplyUserDefaults(globalLogger, &deploySettings); err != nil {
+			return fmt.Errorf("applying user config: %w", err)
+		}
+	}
+
+	// Apply changes from arg parsing.
+	if err := mergo.Merge(&deploySettings, &deploySettingsFromArgs, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+		return fmt.Errorf("applying config patches from command line argument: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
 	} else {
-		mainImageTag, err := helpers.LookupMainImageTag(log)
+		mainImageTag, err := helpers.LookupMainImageTag(ctx, log)
 		if err != nil {
 			return fmt.Errorf("looking up main image tag: %w", err)
 		}
@@ -282,7 +300,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !deploySettings.Central.EarlyReadiness || !deploySettings.SecuredCluster.EarlyReadiness {
+	if !deploySettings.Central.EarlyReadinessEnabled() || !deploySettings.SecuredCluster.EarlyReadinessEnabled() {
 		// Explanation on the versions involved here:
 		// Deploying StackRox begins with picking a "main image tag" -- this is a version identifier, which cannot be reliably parsed as a semver.
 		// But there is a derived version from that -- the operator version -- which can be parsed as a semver.
@@ -318,8 +336,35 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
+	// If we are deploying to a local cluster and the images exist locally, then we transfer them
+	// to the local cluster.
+	if deploySettings.Roxie.ClusterType.IsLocal() && !deploySettings.Roxie.KonfluxImagesEnabled() {
+		var preLoader deployer.ImagePreLoader
+		if imagePreLoadCommand != "" {
+			preLoader = deployer.NewCustomImagePreloader(ctx, log, imagePreLoadCommand)
+		} else {
+			preLoader, err = d.GetPreLoaderForCluster()
+			if err != nil {
+				// ErrLocalImagesUnsupported indicates that roxie does not contain preloading
+				// support for the respective cluster type. If preloading is required (because
+				// the images do not exist on the remote registry), the user needs to take care
+				// of the preloading.
+				if errors.Is(err, deployer.ErrLocalImagesUnsupported) {
+					log.Warningf("Image preloading not supported for cluster %s.", d.GetKubeContext())
+					log.Warningf("Use --image-preload-command for specifying custom image preloading mechanism.")
+				} else {
+					return fmt.Errorf("obtaining image preloader for cluster: %w", err)
+				}
+			}
+		}
+		if preLoader != nil {
+			log.Dimf("Using image pre-loader %q", preLoader.Name())
+			if err := d.TryTransferLocalImages(ctx, preLoader); err != nil {
+				// Best effort, keep running.
+				log.Warningf("Transferring images to local cluster failed: %v", err)
+			}
+		}
+	}
 
 	if components.IncludesCentral() {
 		d.PrintCentralDeploymentSummary()
@@ -366,6 +411,9 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		deploySettings.Roxie.ClusterType = clusterType
 	}
 	clusterType := deploySettings.Roxie.ClusterType
+	centralDeployLocally := components.IncludesCentral() && clusterType.IsLocal()
+	sensorDeployLocally := components.IncludesSensor() && clusterType.IsLocal()
+
 	defaults, err := clusterdefaults.ApplyClusterDefaults(deploySettings)
 	if err != nil {
 		return err
@@ -381,10 +429,17 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		log.Dimf("Selecting resource profile %v for Central", profile)
 		deploySettings.Central.ResourceProfile = profile
 	}
+	if centralDeployLocally && deploySettings.Central.ResourceProfile == types.ResourceProfileAcsDefaults {
+		log.Warning("You are deploying Central to a local cluster, it is recommended to specify a resource profile (or --resources=auto)")
+	}
+
 	if deploySettings.SecuredCluster.ResourceProfile == types.ResourceProfileAuto {
 		profile := clusterdefaults.ResolveAutoResourceProfile(clusterType)
 		log.Dimf("Selecting resource profile %v for SecuredCluster", profile)
 		deploySettings.SecuredCluster.ResourceProfile = profile
+	}
+	if sensorDeployLocally && deploySettings.SecuredCluster.ResourceProfile == types.ResourceProfileAcsDefaults {
+		log.Warning("You are deploying SecuredCluster to a local cluster, it is recommended to specify a resource profile (or --resources=auto)")
 	}
 
 	// We need to do this regardless of whether the operator is deployed or not, because
@@ -411,7 +466,7 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 
 	if !deploySettings.Central.PortForwardingSet() && !deploySettings.Central.ExposureEnabled() {
 		log.Info("Enabling port-forwarding due to no exposure")
-		deploySettings.Central.PortForwarding = ptr.To(true)
+		deploySettings.Central.PortForwarding = new(true)
 	}
 
 	return nil
@@ -448,12 +503,12 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		}
 	}
 
-	if deploySettings.Operator.SkipDeployment && deploySettings.Operator.DeployViaOlm {
+	if deploySettings.Operator.SkipDeploymentEnabled() && deploySettings.Operator.DeployViaOlmEnabled() {
 		return errors.New("skipping operator deployment while also requesting deploying via OLM at the same time does not make sense")
 	}
 
-	if deploySettings.Roxie.KonfluxImages {
-		if deploySettings.Operator.DeployViaOlm {
+	if deploySettings.Roxie.KonfluxImagesEnabled() {
+		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
 		}
 		if !clusterType.IsOpenShift() {

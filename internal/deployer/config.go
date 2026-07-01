@@ -18,12 +18,21 @@ type Config struct {
 	SecuredCluster SecuredClusterConfig `yaml:"securedCluster,omitempty"`
 }
 
-// NewConfig returns a Config populated with default values.
-func NewConfig() Config {
+// DefaultConfig returns a Config populated with default values.
+func DefaultConfig() Config {
 	return Config{
 		Roxie:          NewRoxieConfig(),
 		Central:        DefaultCentralConfig(),
 		SecuredCluster: DefaultSecuredClusterConfig(),
+	}
+}
+
+// NewConfig returns a Config populated with default values.
+func NewConfig() Config {
+	return Config{
+		Roxie:          NewRoxieConfig(),
+		Central:        NewCentralConfig(),
+		SecuredCluster: NewSecuredClusterConfig(),
 	}
 }
 
@@ -45,9 +54,17 @@ func (c *Config) DeepCopy() (*Config, error) {
 // RoxieConfig holds roxie-level settings such as version and feature flags.
 type RoxieConfig struct {
 	Version       string            `yaml:"version,omitempty"`
-	KonfluxImages bool              `yaml:"konfluxImages,omitempty"`
+	KonfluxImages *bool             `yaml:"konfluxImages,omitempty"`
 	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
 	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
+}
+
+func (c *RoxieConfig) KonfluxImagesSet() bool {
+	return c.KonfluxImages != nil
+}
+
+func (c *RoxieConfig) KonfluxImagesEnabled() bool {
+	return c.KonfluxImages != nil && *c.KonfluxImages
 }
 
 // NewRoxieConfig returns a RoxieConfig with initialized defaults.
@@ -59,9 +76,26 @@ func NewRoxieConfig() RoxieConfig {
 
 // OperatorConfig controls how the ACS operator is deployed.
 type OperatorConfig struct {
-	SkipDeployment bool   `yaml:"skipDeployment,omitempty"`
-	DeployViaOlm   bool   `yaml:"deployViaOlm,omitempty"`
-	Version        string `yaml:"version,omitempty"`
+	SkipDeployment *bool             `yaml:"skipDeployment,omitempty"`
+	DeployViaOlm   *bool             `yaml:"deployViaOlm,omitempty"`
+	Version        string            `yaml:"version,omitempty"`
+	EnvVars        map[string]string `yaml:"envVars,omitempty"`
+}
+
+func (c *OperatorConfig) SkipDeploymentSet() bool {
+	return c.SkipDeployment != nil
+}
+
+func (c *OperatorConfig) SkipDeploymentEnabled() bool {
+	return c.SkipDeployment != nil && *c.SkipDeployment
+}
+
+func (c *OperatorConfig) DeployViaOlmSet() bool {
+	return c.DeployViaOlm != nil
+}
+
+func (c *OperatorConfig) DeployViaOlmEnabled() bool {
+	return c.DeployViaOlm != nil && *c.DeployViaOlm
 }
 
 // Configure derives the operator version from the roxie configuration.
@@ -82,28 +116,37 @@ type WaitConfig struct {
 type CentralConfig struct {
 	Namespace           string                 `yaml:"namespace,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
-	PauseReconciliation bool                   `yaml:"pauseReconciliation,omitempty"`
+	PauseReconciliation *bool                  `yaml:"pauseReconciliation,omitempty"`
 	Exposure            *types.Exposure        `yaml:"exposure,omitempty"`
 	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
 	PortForwarding      *bool                  `yaml:"portForwarding,omitempty"`
-	EarlyReadiness      bool                   `yaml:"earlyReadiness,omitempty"`
+	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
 	Spec                map[string]interface{} `yaml:"spec,omitempty"`
+}
+
+func (c *CentralConfig) EarlyReadinessEnabled() bool {
+	return c.EarlyReadiness != nil && *c.EarlyReadiness
+}
+
+// NewCentralConfig returns an emptry CentralConfig, with deep initialization of data structures.
+func NewCentralConfig() CentralConfig {
+	return CentralConfig{
+		Spec: make(map[string]interface{}),
+	}
 }
 
 // DefaultCentralConfig returns a CentralConfig with sensible defaults.
 func DefaultCentralConfig() CentralConfig {
-	return CentralConfig{
-		DeployTimeout:  DefaultCentralWaitTimeout,
-		Namespace:      "acs-central",
-		EarlyReadiness: true,
-		Spec: map[string]interface{}{
-			"central": map[string]interface{}{
-				"telemetry": map[string]interface{}{
-					"enabled": false,
-				},
-			},
+	cfg := NewCentralConfig()
+	cfg.DeployTimeout = DefaultCentralWaitTimeout
+	cfg.Namespace = "acs-central"
+	cfg.EarlyReadiness = new(true)
+	cfg.Spec["central"] = map[string]interface{}{
+		"telemetry": map[string]interface{}{
+			"enabled": false,
 		},
 	}
+	return cfg
 }
 
 func (c *CentralConfig) GetWaitConfig() WaitConfig {
@@ -112,15 +155,27 @@ func (c *CentralConfig) GetWaitConfig() WaitConfig {
 	// With earlyReadiness we just wait for the Available condition of that component's core
 	// Deployment to be True.
 	waitFor := "central/" + centralCrName
-	if c.EarlyReadiness {
+	if c.EarlyReadinessEnabled() {
 		waitFor = "deployment/central"
 	}
 	return WaitConfig{
 		Namespace:      c.Namespace,
-		EarlyReadiness: c.EarlyReadiness,
+		EarlyReadiness: c.EarlyReadinessEnabled(),
 		WaitFor:        waitFor,
 		Timeout:        c.DeployTimeout,
 	}
+}
+
+func (c *CentralConfig) PauseReconciliationSet() bool {
+	return c.PauseReconciliation != nil
+}
+
+func (c *CentralConfig) PauseReconciliationEnabled() bool {
+	return c.PauseReconciliation != nil && *c.PauseReconciliation
+}
+
+func (c *CentralConfig) EarlyReadinessSet() bool {
+	return c.EarlyReadiness != nil
 }
 
 func (c *CentralConfig) PortForwardingSet() bool {
@@ -202,30 +257,52 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 type SecuredClusterConfig struct {
 	Namespace           string                 `yaml:"namespace,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
-	PauseReconciliation bool                   `yaml:"pauseReconciliation,omitempty"`
+	PauseReconciliation *bool                  `yaml:"pauseReconciliation,omitempty"`
 	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
-	EarlyReadiness      bool                   `yaml:"earlyReadiness,omitempty"`
+	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
 	Spec                map[string]interface{} `yaml:"spec,omitempty"`
+}
+
+func (s *SecuredClusterConfig) EarlyReadinessEnabled() bool {
+	return s.EarlyReadiness != nil && *s.EarlyReadiness
+}
+
+// NewSecuredClusterConfig returns an emptry SecuredClusterConfig, with deep initialization of data structures.
+func NewSecuredClusterConfig() SecuredClusterConfig {
+	return SecuredClusterConfig{
+		Spec: make(map[string]interface{}),
+	}
 }
 
 // DefaultSecuredClusterConfig returns a SecuredClusterConfig with sensible defaults.
 func DefaultSecuredClusterConfig() SecuredClusterConfig {
-	return SecuredClusterConfig{
-		DeployTimeout:  DefaultSecuredClusterWaitTimeout,
-		Namespace:      "acs-sensor",
-		EarlyReadiness: true,
-		Spec:           make(map[string]interface{}),
-	}
+	cfg := NewSecuredClusterConfig()
+	cfg.DeployTimeout = DefaultSecuredClusterWaitTimeout
+	cfg.Namespace = "acs-sensor"
+	cfg.EarlyReadiness = new(true)
+	return cfg
+}
+
+func (s *SecuredClusterConfig) PauseReconciliationSet() bool {
+	return s.PauseReconciliation != nil
+}
+
+func (s *SecuredClusterConfig) PauseReconciliationEnabled() bool {
+	return s.PauseReconciliation != nil && *s.PauseReconciliation
+}
+
+func (s *SecuredClusterConfig) EarlyReadinessSet() bool {
+	return s.EarlyReadiness != nil
 }
 
 func (s *SecuredClusterConfig) GetWaitConfig() WaitConfig {
 	waitFor := "securedcluster/" + securedClusterCrName
-	if s.EarlyReadiness {
+	if s.EarlyReadinessEnabled() {
 		waitFor = "deployment/sensor"
 	}
 	return WaitConfig{
 		Namespace:      s.Namespace,
-		EarlyReadiness: s.EarlyReadiness,
+		EarlyReadiness: s.EarlyReadinessEnabled(),
 		WaitFor:        waitFor,
 		Timeout:        s.DeployTimeout,
 	}

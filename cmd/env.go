@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/env"
-	"github.com/stackrox/roxie/internal/logger"
 )
 
 func newEnvCmd() *cobra.Command {
@@ -22,7 +21,7 @@ func newEnvCmd() *cobra.Command {
 }
 
 func runEnv(cmd *cobra.Command, args []string) error {
-	log := logger.New()
+	log := globalLogger
 	if err := env.Initialize(log); err != nil {
 		return err
 	}
