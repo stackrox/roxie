@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -319,7 +320,7 @@ func IsInStackroxRepository() bool {
 	if err != nil {
 		return false
 	}
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		if fields := strings.Fields(line); len(fields) >= 2 && isStackRoxRepositoryRemote(fields[1]) {
 			return true
 		}
@@ -327,11 +328,10 @@ func IsInStackroxRepository() bool {
 	return false
 }
 
+var stackroxRepoPattern = regexp.MustCompile(`[/:]stackrox/stackrox(\.git)?$`)
+
 func isStackRoxRepositoryRemote(remote string) bool {
-	remote = strings.TrimSuffix(remote, ".git")
-	return remote == "git@github.com:stackrox/stackrox" ||
-		remote == "https://github.com/stackrox/stackrox" ||
-		remote == "ssh://git@github.com/stackrox/stackrox"
+	return stackroxRepoPattern.MatchString(remote)
 }
 
 func GetStackroxRepositoryTag() (string, error) {
