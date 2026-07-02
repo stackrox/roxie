@@ -315,16 +315,28 @@ func fetchAPIResources() ([]string, error) {
 	return lines, nil
 }
 
-func IsInStackroxRepository() bool {
+func IsInStackroxRepository(log *logger.Logger) bool {
 	out, err := exec.Command("git", "remote", "-v").Output()
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+		log.Dimf("Not a git repository, ignoring ('git remote' returned %d)", exitErr.ExitCode())
+		return false
+	}
 	if err != nil {
+		log.Dimf("Invoking 'git remote' failed: %v", err)
 		return false
 	}
 	for line := range strings.SplitSeq(string(out), "\n") {
-		if fields := strings.Fields(line); len(fields) >= 2 && isStackRoxRepositoryRemote(fields[1]) {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		remote := fields[1]
+		if isStackRoxRepositoryRemote(remote) {
+			log.Dimf("Identified repository as a clone of stackrox/stackrox based on the configured git remote %q", remote)
 			return true
 		}
 	}
+	log.Dim("Repository does not seem to be a clone of stackrox/stackrox based on the configured git remotes")
 	return false
 }
 
@@ -334,11 +346,12 @@ func isStackRoxRepositoryRemote(remote string) bool {
 	return stackroxRepoPattern.MatchString(remote)
 }
 
-func GetStackroxRepositoryTag() (string, error) {
+func GetStackroxRepositoryTag(log *logger.Logger) (string, error) {
 	topLevelDir, err := getStackRoxTopLevelDir()
 	if err != nil {
 		return "", fmt.Errorf("getting stackrox top level directory: %w", err)
 	}
+	log.Dimf("Invoking 'make tag' in directory %q", topLevelDir)
 	cmd := exec.Command("make", "-s", "-C", topLevelDir, "tag")
 	outputBytes, err := cmd.Output()
 	if err != nil {
