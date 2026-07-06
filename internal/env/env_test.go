@@ -325,6 +325,33 @@ func TestClusterTypeString(t *testing.T) {
 	}
 }
 
+func TestIsStackRoxRepositoryRemote(t *testing.T) {
+	tests := []struct {
+		remote string
+		want   bool
+	}{
+		{"git@github.com:stackrox/stackrox.git", true},
+		{"git@github.com:stackrox/stackrox", true},
+		{"https://github.com/stackrox/stackrox.git", true},
+		{"https://github.com/stackrox/stackrox", true},
+		{"ssh://git@github.com/stackrox/stackrox.git", true},
+		{"ssh://git@github.com/stackrox/stackrox", true},
+		{"git@github.com:someone/stackrox.git", false},
+		{"git@github.com:stackrox/other.git", false},
+		{"git@github.com:foo-stackrox/stackrox-bar.git", false},
+		{"git@github.com:foo-stackrox/stackrox.git", false},
+		{"git@github.com:stackrox/stackrox-bar.git", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.remote, func(t *testing.T) {
+			got := isStackRoxRepositoryRemote(tt.remote)
+			assert.Equal(t, tt.want, got, "isStackRoxRepositoryRemote(%q)", tt.remote)
+		})
+	}
+}
+
 func TestDefaultDetector_Detect(t *testing.T) {
 	tests := []struct {
 		name        string

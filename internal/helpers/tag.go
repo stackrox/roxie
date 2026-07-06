@@ -17,29 +17,32 @@ import (
 )
 
 func LookupMainImageTag(ctx context.Context, log *logger.Logger) (string, error) {
-	log.Info("Looking up main image tag")
+	log.Dim("Checking if main image tag is defined in the environment")
 	if tag := os.Getenv("MAIN_IMAGE_TAG"); tag != "" {
-		log.Dimf("Using MAIN_IMAGE_TAG from environment: %s", tag)
+		log.Infof("Using MAIN_IMAGE_TAG from environment: %s", tag)
 		return tag, nil
 	}
-	if env.IsInStackroxRepository() {
-		tag, err := env.GetStackroxRepositoryTag()
+	log.Dim("Checking if current working directory is checkout of stackrox/stackrox repository")
+	if env.IsInStackroxRepository(log) {
+		tag, err := env.GetStackroxRepositoryTag(log)
 		if err != nil {
 			log.Dimf("Error retrieving stackrox repository tag: %v", err)
 			return "", err
 		}
-		log.Dimf("Using stackrox repository tag: %s", tag)
+		log.Infof("Using stackrox repository tag: %s", tag)
 		return tag, nil
 	}
 
-	log.Warningf("No MAIN_IMAGE_TAG found in the environment, looking up latest release tag on registry")
-	log.Warning("To use a different tag, set the MAIN_IMAGE_TAG environment variable")
+	log.Warning("No tag specified and no MAIN_IMAGE_TAG found in the environment, looking up latest release tag on registry")
+	log.Warning("To use a different tag, use `--tag` or set the MAIN_IMAGE_TAG environment variable")
 	log.Warning("Alternatively, execute roxie from within the stackrox repository, in which case the currently checked out stackrox tag will be used")
 
+	log.Dim("Checking what the latest released version tag is")
 	latestTag, err := LookupLatestTag(ctx, log)
 	if err != nil {
 		return "", fmt.Errorf("looking up latest release tag: %w", err)
 	}
+	log.Infof("Using latest released tag %v", latestTag)
 
 	return latestTag, nil
 }

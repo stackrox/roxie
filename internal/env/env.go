@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -314,28 +315,43 @@ func fetchAPIResources() ([]string, error) {
 	return lines, nil
 }
 
-func IsInStackroxRepository() bool {
-	// TODO(#91): This assumes that:
-	// - origin is the name of the upstream remote (not true if someone cloned their fork)
-	// - the git transport was used
-	// How about instead looking for "# StackRox Kubernetes Security Platform" in README?
-	cmd := exec.Command("git", "remote", "get-url", "origin")
-	outputBytes, err := cmd.Output()
+func IsInStackroxRepository(log *logger.Logger) bool {
+	out, err := exec.Command("git", "remote", "-v").Output()
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+		log.Dimf("Not a git repository, ignoring ('git remote' returned %d)", exitErr.ExitCode())
+		return false
+	}
 	if err != nil {
+		log.Dimf("Invoking 'git remote' failed: %v", err)
 		return false
 	}
-	outputLines := strings.Split(string(outputBytes), "\n")
-	if len(outputLines) == 0 {
-		return false
+	for line := range strings.SplitSeq(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		remote := fields[1]
+		if isStackRoxRepositoryRemote(remote) {
+			log.Dimf("Identified repository as a clone of stackrox/stackrox based on the configured git remote %q", remote)
+			return true
+		}
 	}
-	return outputLines[0] == "git@github.com:stackrox/stackrox.git"
+	log.Dim("Repository does not seem to be a clone of https://github.com/stackrox/stackrox, based on the configured git remotes")
+	return false
 }
 
-func GetStackroxRepositoryTag() (string, error) {
+var stackroxRepoPattern = regexp.MustCompile(`[/:]stackrox/stackrox(\.git)?$`)
+
+func isStackRoxRepositoryRemote(remote string) bool {
+	return stackroxRepoPattern.MatchString(remote)
+}
+
+func GetStackroxRepositoryTag(log *logger.Logger) (string, error) {
 	topLevelDir, err := getStackRoxTopLevelDir()
 	if err != nil {
 		return "", fmt.Errorf("getting stackrox top level directory: %w", err)
 	}
+	log.Dimf("Invoking 'make tag' in directory %q", topLevelDir)
 	cmd := exec.Command("make", "-s", "-C", topLevelDir, "tag")
 	outputBytes, err := cmd.Output()
 	if err != nil {
