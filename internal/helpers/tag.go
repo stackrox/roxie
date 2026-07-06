@@ -33,7 +33,7 @@ func LookupMainImageTag(ctx context.Context, log *logger.Logger) (string, error)
 		return tag, nil
 	}
 
-	log.Warning("No tag specific and no MAIN_IMAGE_TAG found in the environment, looking up latest release tag on registry")
+	log.Warning("No tag specified and no MAIN_IMAGE_TAG found in the environment, looking up latest release tag on registry")
 	log.Warning("To use a different tag, use `--tag` or set the MAIN_IMAGE_TAG environment variable")
 	log.Warning("Alternatively, execute roxie from within the stackrox repository, in which case the currently checked out stackrox tag will be used")
 
