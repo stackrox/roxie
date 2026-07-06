@@ -336,7 +336,7 @@ func IsInStackroxRepository(log *logger.Logger) bool {
 			return true
 		}
 	}
-	log.Dim("Repository does not seem to be a clone of stackrox/stackrox based on the configured git remotes")
+	log.Dim("Repository does not seem to be a clone of https://github.com/stackrox/stackrox, based on the configured git remotes")
 	return false
 }
 
