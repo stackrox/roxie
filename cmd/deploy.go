@@ -449,6 +449,10 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		return fmt.Errorf("configuring operator configuration: %w", err)
 	}
 
+	if deploySettings.Roxie.KonfluxImagesEnabled() {
+		deployer.PopulateKonfluxEnvVars(deploySettings)
+	}
+
 	if components.IncludesCentral() {
 		if err := deploySettings.Central.ConfigureSpec(&deploySettings.Roxie); err != nil {
 			return fmt.Errorf("configuring Central spec: %w", err)
@@ -510,9 +514,6 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 	if deploySettings.Roxie.KonfluxImagesEnabled() {
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
-		}
-		if !clusterType.IsOpenShift() {
-			return fmt.Errorf("--konflux flag is only supported on OpenShift 4 clusters (current cluster type: %s)", clusterType)
 		}
 	}
 

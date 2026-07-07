@@ -14,7 +14,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
 )
@@ -34,15 +33,6 @@ var requiredCRDs = []string{
 // deployOperatorNonOLM deploys the RHACS operator without OLM
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
-	if d.config.Roxie.KonfluxImagesEnabled() {
-		if err := d.ensureKonfluxImageRewriting(ctx); err != nil {
-			return fmt.Errorf("failed to configure Konflux image rewriting: %w", err)
-		}
-	} else {
-		if err := d.removeKonfluxImageRewriting(ctx); err != nil {
-			return fmt.Errorf("failed to remove Konflux ImageContentSourcePolicy: %v", err)
-		}
-	}
 	bundleImage := OperatorBundleImage(d.config)
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
@@ -184,111 +174,6 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 		}
 
 		return d.applyCRDsToCluster(ctx, crdFiles)
-	}
-
-	return nil
-}
-
-// ensureKonfluxImageRewriting configures image rewriting for Konflux images
-func (d *Deployer) ensureKonfluxImageRewriting(ctx context.Context) error {
-	if !d.config.Roxie.ClusterType.IsOpenShift() {
-		return errors.New("image rewriting for Konflux is only supported on OpenShift4 clusters")
-	}
-
-	d.logger.Info("Configuring ImageContentSourcePolicy for Konflux images on OpenShift4...")
-	return d.applyImageContentSourcePolicy(ctx)
-}
-
-// applyImageContentSourcePolicy creates the ImageContentSourcePolicy for Konflux image mirrors
-func (d *Deployer) applyImageContentSourcePolicy(ctx context.Context) error {
-	// Define repository digest mirrors as Go data structures
-	rewrite := func(from, to string) map[string]interface{} {
-		source := fmt.Sprintf("registry.redhat.io/advanced-cluster-security/%s", from)
-		mirror := fmt.Sprintf("%s/%s", constants.DefaultRegistry, to)
-		if d.verbose {
-			d.logger.Dimf("Image rewriting rule: %s -> %s", source, mirror)
-		}
-		return map[string]interface{}{
-			"source":  source,
-			"mirrors": []string{mirror},
-		}
-	}
-	repositoryDigestMirrors := []map[string]interface{}{
-		rewrite("rhacs-operator-bundle", "release-operator-bundle"),
-		rewrite("rhacs-rhel8-operator", "release-operator"),
-		rewrite("rhacs-main-rhel8", "release-main"),
-		rewrite("rhacs-scanner-rhel8", "release-scanner"),
-		rewrite("rhacs-scanner-slim-rhel8", "release-scanner-slim"),
-		rewrite("rhacs-scanner-db-rhel8", "release-scanner-db"),
-		rewrite("rhacs-scanner-db-slim-rhel8", "release-scanner-db-slim"),
-		rewrite("rhacs-collector-slim-rhel8", "release-collector-slim"),
-		rewrite("rhacs-collector-rhel8", "release-collector"),
-		rewrite("rhacs-fact-rhel8", "release-fact"),
-		rewrite("rhacs-roxctl-rhel8", "release-roxctl"),
-		rewrite("rhacs-central-db-rhel8", "release-central-db"),
-		rewrite("rhacs-scanner-v4-db-rhel8", "release-scanner-v4-db"),
-		rewrite("rhacs-scanner-v4-rhel8", "release-scanner-v4"),
-
-		// Also support downstream image rewriting for upcoming UBI9/rhel9 images.
-		rewrite("rhacs-operator-bundle-rhel9", "release-operator-bundle"),
-		rewrite("rhacs-rhel9-operator", "release-operator"),
-		rewrite("rhacs-main-rhel9", "release-main"),
-		rewrite("rhacs-scanner-rhel9", "release-scanner"),
-		rewrite("rhacs-scanner-slim-rhel9", "release-scanner-slim"),
-		rewrite("rhacs-scanner-db-rhel9", "release-scanner-db"),
-		rewrite("rhacs-scanner-db-slim-rhel9", "release-scanner-db-slim"),
-		rewrite("rhacs-collector-slim-rhel9", "release-collector-slim"),
-		rewrite("rhacs-collector-rhel9", "release-collector"),
-		rewrite("rhacs-fact-rhel9", "release-fact"),
-		rewrite("rhacs-roxctl-rhel9", "release-roxctl"),
-		rewrite("rhacs-central-db-rhel9", "release-central-db"),
-		rewrite("rhacs-scanner-v4-db-rhel9", "release-scanner-v4-db"),
-		rewrite("rhacs-scanner-v4-rhel9", "release-scanner-v4"),
-	}
-
-	icsp := map[string]interface{}{
-		"apiVersion": "operator.openshift.io/v1alpha1",
-		"kind":       "ImageContentSourcePolicy",
-		"metadata": map[string]interface{}{
-			"name": "acs-konflux-builds",
-		},
-		"spec": map[string]interface{}{
-			"repositoryDigestMirrors": repositoryDigestMirrors,
-		},
-	}
-
-	yamlData, err := yaml.Marshal(icsp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal ImageContentSourcePolicy: %w", err)
-	}
-
-	d.logger.Dim("Applying ImageContentSourcePolicy...")
-	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
-		Args:  []string{"apply", "-f", "-"},
-		Stdin: bytes.NewReader(yamlData),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to apply ImageContentSourcePolicy: %w", err)
-	}
-
-	d.logger.Successf("✓ ImageContentSourcePolicy 'acs-konflux-builds' applied")
-	d.logger.Info("Note: OpenShift nodes may need to restart to apply the image mirroring configuration")
-
-	return nil
-}
-
-// removeKonfluxImageRewriting removes the ImageContentSourcePolicy for Konflux images if it exists
-func (d *Deployer) removeKonfluxImageRewriting(ctx context.Context) error {
-	if !d.config.Roxie.ClusterType.IsOpenShift() {
-		return nil
-	}
-
-	d.logger.Dim("Removing Konflux ImageContentSourcePolicy if present...")
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{"delete", "imagecontentsourcepolicy", "acs-konflux-builds", "--ignore-not-found=true"},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to delete ImageContentSourcePolicy: %w", err)
 	}
 
 	return nil
@@ -529,11 +414,18 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 		if podSpec, ok := template["spec"].(map[string]interface{}); ok {
 			podSpec["serviceAccountName"] = deploymentSpec["service_account"]
 
-			if len(d.config.Operator.EnvVars) > 0 {
-				containers, ok := podSpec["containers"].([]interface{})
-				if !ok {
-					return errors.New("no containers found in deployment pod spec")
+			containers, ok := podSpec["containers"].([]interface{})
+			if !ok {
+				return errors.New("no containers found in deployment pod spec")
+			}
+
+			if d.config.Roxie.KonfluxImagesEnabled() {
+				if err := d.rewriteKonfluxOperatorImage(containers); err != nil {
+					return fmt.Errorf("failed to rewrite operator image for Konflux: %w", err)
 				}
+			}
+
+			if len(d.config.Operator.EnvVars) > 0 {
 				if err := d.injectEnvVarsIntoManagerContainer(containers); err != nil {
 					return fmt.Errorf("failed to inject operator env vars: %w", err)
 				}
@@ -590,6 +482,25 @@ func (d *Deployer) injectEnvVarsIntoManagerContainer(containers []interface{}) e
 		}
 
 		container["env"] = envList
+		return nil
+	}
+	return fmt.Errorf("container %q not found in deployment", managerContainerName)
+}
+
+// rewriteKonfluxOperatorImage replaces the manager container's image with the
+// Konflux-built operator image.
+func (d *Deployer) rewriteKonfluxOperatorImage(containers []interface{}) error {
+	for _, c := range containers {
+		container, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if container["name"] != managerContainerName {
+			continue
+		}
+		newImage := KonfluxOperatorImage(&d.config)
+		d.logger.Infof("Rewriting operator image to %s", newImage)
+		container["image"] = newImage
 		return nil
 	}
 	return fmt.Errorf("container %q not found in deployment", managerContainerName)
