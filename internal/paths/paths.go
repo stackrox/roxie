@@ -8,7 +8,12 @@ import (
 
 const appName = "roxie"
 
+const envUserConfigPath = "ROXIE_USER_CONFIG_PATH"
+
 func UserConfigPath() (string, error) {
+	if p := os.Getenv(envUserConfigPath); p != "" {
+		return p, nil
+	}
 	dir, err := configDir()
 	if err != nil {
 		return "", fmt.Errorf("retrieving user config path: %w", err)
