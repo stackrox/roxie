@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
@@ -22,6 +23,7 @@ const (
 	adminPasswordSecretName = "admin-password"
 	operatorNamespace       = "rhacs-operator-system"
 	operatorDeploymentName  = "rhacs-operator-controller-manager"
+	managerContainerName    = "manager"
 )
 
 var requiredCRDs = []string{
@@ -203,7 +205,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	if len(d.config.Operator.EnvVars) > 0 {
 		d.logger.Dimf("  • Custom operator env vars: %d", len(d.config.Operator.EnvVars))
 		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
-			ev := envVar.(map[string]interface{})
+			ev := envVar.(map[string]any)
 			d.logger.Dimf("    %s=%s", ev["name"], ev["value"])
 		}
 	}
@@ -240,26 +242,26 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 }
 
 // parseCSVDeploymentSpec parses the CSV file
-func (d *Deployer) parseCSVDeploymentSpec(csvFile string) (map[string]interface{}, error) {
+func (d *Deployer) parseCSVDeploymentSpec(csvFile string) (map[string]any, error) {
 	content, err := os.ReadFile(csvFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read CSV file: %w", err)
 	}
 
-	var csvContent map[string]interface{}
+	var csvContent map[string]any
 	if err := yaml.Unmarshal(content, &csvContent); err != nil {
 		return nil, fmt.Errorf("failed to parse CSV: %w", err)
 	}
 
-	spec := csvContent["spec"].(map[string]interface{})
-	installSpec := spec["install"].(map[string]interface{})["spec"].(map[string]interface{})
+	spec := csvContent["spec"].(map[string]any)
+	installSpec := spec["install"].(map[string]any)["spec"].(map[string]any)
 
-	deployments := installSpec["deployments"].([]interface{})
-	clusterPermissions := installSpec["clusterPermissions"].([]interface{})
+	deployments := installSpec["deployments"].([]any)
+	clusterPermissions := installSpec["clusterPermissions"].([]any)
 
-	metadata := csvContent["metadata"].(map[string]interface{})
+	metadata := csvContent["metadata"].(map[string]any)
 
-	deploymentSpec := map[string]interface{}{
+	deploymentSpec := map[string]any{
 		"name":                metadata["name"],
 		"deployments":         deployments,
 		"cluster_permissions": clusterPermissions,
@@ -267,7 +269,7 @@ func (d *Deployer) parseCSVDeploymentSpec(csvFile string) (map[string]interface{
 	}
 
 	if len(clusterPermissions) > 0 {
-		firstPerm := clusterPermissions[0].(map[string]interface{})
+		firstPerm := clusterPermissions[0].(map[string]any)
 		if sa, ok := firstPerm["serviceAccountName"]; ok {
 			deploymentSpec["service_account"] = sa
 		}
@@ -278,10 +280,10 @@ func (d *Deployer) parseCSVDeploymentSpec(csvFile string) (map[string]interface{
 
 // createServiceAccount creates a service account
 func (d *Deployer) createServiceAccount(ctx context.Context, namespace, name string) error {
-	sa := map[string]interface{}{
+	sa := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "ServiceAccount",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      name,
 			"namespace": namespace,
 			"labels":    map[string]string{"app": "rhacs-operator"},
@@ -310,20 +312,20 @@ func (d *Deployer) createServiceAccount(ctx context.Context, namespace, name str
 }
 
 // createClusterRoleFromCSV creates ClusterRole from CSV
-func (d *Deployer) createClusterRoleFromCSV(ctx context.Context, deploymentSpec map[string]interface{}) error {
-	clusterPermissions := deploymentSpec["cluster_permissions"].([]interface{})
+func (d *Deployer) createClusterRoleFromCSV(ctx context.Context, deploymentSpec map[string]any) error {
+	clusterPermissions := deploymentSpec["cluster_permissions"].([]any)
 	if len(clusterPermissions) == 0 {
 		d.logger.Warning("No cluster permissions found in CSV")
 		return nil
 	}
 
-	firstPerm := clusterPermissions[0].(map[string]interface{})
+	firstPerm := clusterPermissions[0].(map[string]any)
 	rules := firstPerm["rules"]
 
-	clusterRole := map[string]interface{}{
+	clusterRole := map[string]any{
 		"apiVersion": "rbac.authorization.k8s.io/v1",
 		"kind":       "ClusterRole",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":   "rhacs-operator-manager-role",
 			"labels": map[string]string{"app": "rhacs-operator"},
 		},
@@ -347,20 +349,20 @@ func (d *Deployer) createClusterRoleFromCSV(ctx context.Context, deploymentSpec 
 
 // createClusterRoleBinding creates ClusterRoleBinding
 func (d *Deployer) createClusterRoleBinding(ctx context.Context, namespace, serviceAccountName string) error {
-	crb := map[string]interface{}{
+	crb := map[string]any{
 		"apiVersion": "rbac.authorization.k8s.io/v1",
 		"kind":       "ClusterRoleBinding",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":   "rhacs-operator-manager-rolebinding",
 			"labels": map[string]string{"app": "rhacs-operator"},
 		},
-		"roleRef": map[string]interface{}{
+		"roleRef": map[string]any{
 			"apiGroup": "rbac.authorization.k8s.io",
 			"kind":     "ClusterRole",
 			"name":     "rhacs-operator-manager-role",
 		},
-		"subjects": []interface{}{
-			map[string]interface{}{
+		"subjects": []any{
+			map[string]any{
 				"kind":      "ServiceAccount",
 				"name":      serviceAccountName,
 				"namespace": namespace,
@@ -384,24 +386,24 @@ func (d *Deployer) createClusterRoleBinding(ctx context.Context, namespace, serv
 }
 
 // createDeploymentFromCSV creates Deployment from CSV
-func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string, deploymentSpec map[string]interface{}) error {
-	deployments := deploymentSpec["deployments"].([]interface{})
+func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string, deploymentSpec map[string]any) error {
+	deployments := deploymentSpec["deployments"].([]any)
 	if len(deployments) == 0 {
 		return errors.New("no deployments found in CSV")
 	}
 
-	csvDeployment := deployments[0].(map[string]interface{})
+	csvDeployment := deployments[0].(map[string]any)
 	deploymentName, _ := csvDeployment["name"].(string)
 	if deploymentName == "" {
 		deploymentName = operatorDeploymentName
 	}
 
-	deploymentTemplate := csvDeployment["spec"].(map[string]interface{})
+	deploymentTemplate := csvDeployment["spec"].(map[string]any)
 
-	deployment := map[string]interface{}{
+	deployment := map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"name":      deploymentName,
 			"namespace": namespace,
 			"labels":    csvDeployment["label"],
@@ -409,28 +411,30 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 		"spec": deploymentTemplate,
 	}
 
-	spec := deployment["spec"].(map[string]interface{})
-	if template, ok := spec["template"].(map[string]interface{}); ok {
-		if podSpec, ok := template["spec"].(map[string]interface{}); ok {
-			podSpec["serviceAccountName"] = deploymentSpec["service_account"]
+	podSpecAny, found, err := unstructured.NestedFieldNoCopy(deployment, "spec", "template", "spec")
+	if err != nil {
+		return fmt.Errorf("extracting pod spec from operator deployment object: %w", err)
+	}
+	if !found {
+		return errors.New("missing pod spec in deployment object")
+	}
+	podSpec, ok := podSpecAny.(map[string]any)
+	if !ok {
+		return fmt.Errorf("pod spec in deployment object of invalid type %T", podSpecAny)
+	}
 
-			containers, ok := podSpec["containers"].([]interface{})
-			if !ok {
-				return errors.New("no containers found in deployment pod spec")
-			}
+	managerContainer, err := managerContainerFromPodSpec(podSpec)
+	if err != nil {
+		return fmt.Errorf("extracting manager container from operator pod spec: %w", err)
+	}
 
-			if d.config.Roxie.KonfluxImagesEnabled() {
-				if err := d.rewriteKonfluxOperatorImage(containers); err != nil {
-					return fmt.Errorf("failed to rewrite operator image for Konflux: %w", err)
-				}
-			}
+	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
+	if d.config.Roxie.KonfluxImagesEnabled() {
+		d.rewriteKonfluxOperatorImage(managerContainer)
+	}
 
-			if len(d.config.Operator.EnvVars) > 0 {
-				if err := d.injectEnvVarsIntoManagerContainer(containers); err != nil {
-					return fmt.Errorf("failed to inject operator env vars: %w", err)
-				}
-			}
-		}
+	if len(d.config.Operator.EnvVars) > 0 {
+		d.injectEnvVarsIntoManagerContainer(managerContainer)
 	}
 
 	yamlData, err := yaml.Marshal(deployment)
@@ -448,62 +452,55 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 	return nil
 }
 
-const managerContainerName = "manager"
+func managerContainerFromPodSpec(podSpec map[string]any) (map[string]any, error) {
+	containers, ok := podSpec["containers"].([]any)
+	if !ok {
+		return nil, errors.New("no containers found in deployment pod spec")
+	}
 
-// injectEnvVarsIntoManagerContainer merges configured operator env vars into
-// the manager container, overriding any existing env vars with the same name.
-func (d *Deployer) injectEnvVarsIntoManagerContainer(containers []interface{}) error {
 	for _, c := range containers {
-		container, ok := c.(map[string]interface{})
+		container, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
-		if container["name"] != managerContainerName {
-			continue
+		if container["name"] == managerContainerName {
+			return container, nil
 		}
-
-		existing := make(map[string]int)
-		envList, _ := container["env"].([]interface{})
-		for i, item := range envList {
-			if envVar, ok := item.(map[string]interface{}); ok {
-				if name, ok := envVar["name"].(string); ok {
-					existing[name] = i
-				}
-			}
-		}
-
-		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
-			name := envVar.(map[string]interface{})["name"].(string)
-			if idx, found := existing[name]; found {
-				envList[idx] = envVar
-			} else {
-				envList = append(envList, envVar)
-			}
-		}
-
-		container["env"] = envList
-		return nil
 	}
-	return fmt.Errorf("container %q not found in deployment", managerContainerName)
+	return nil, fmt.Errorf("container %q missing from operator pod spec", managerContainerName)
+}
+
+// injectEnvVarsIntoManagerContainer merges configured operator env vars into
+// the manager container, overriding any existing env vars with the same name.
+func (d *Deployer) injectEnvVarsIntoManagerContainer(container map[string]any) {
+	existing := make(map[string]int)
+	envList, _ := container["env"].([]any)
+	for i, item := range envList {
+		if envVar, ok := item.(map[string]any); ok {
+			if name, ok := envVar["name"].(string); ok {
+				existing[name] = i
+			}
+		}
+	}
+
+	for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
+		name := envVar.(map[string]any)["name"].(string)
+		if idx, found := existing[name]; found {
+			envList[idx] = envVar
+		} else {
+			envList = append(envList, envVar)
+		}
+	}
+
+	container["env"] = envList
 }
 
 // rewriteKonfluxOperatorImage replaces the manager container's image with the
 // Konflux-built operator image.
-func (d *Deployer) rewriteKonfluxOperatorImage(containers []interface{}) error {
-	for _, c := range containers {
-		container, ok := c.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if container["name"] != managerContainerName {
-			continue
-		}
-		newImage := KonfluxOperatorImage(&d.config)
-		d.logger.Infof("Rewriting operator image to %s", newImage)
-		container["image"] = newImage
-		return nil
-	}
-	return fmt.Errorf("container %q not found in deployment", managerContainerName)
+func (d *Deployer) rewriteKonfluxOperatorImage(container map[string]any) {
+	newImage := KonfluxOperatorImage(&d.config)
+	d.logger.Infof("Rewriting operator image to %s", newImage)
+	container["image"] = newImage
 }
 
 func (d *Deployer) applyBundleServiceResources(ctx context.Context, bundleDir, namespace string) error {
