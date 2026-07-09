@@ -145,13 +145,16 @@ func (d *Deployer) centralHTTPClient() (*http.Client, error) {
 			return nil, fmt.Errorf("reading CA cert file %s: %w", d.roxCACertFile, err)
 		}
 		pool := x509.NewCertPool()
+		var caCertsAdded int
 		for block, rest := pem.Decode(pemData); block != nil; block, rest = pem.Decode(rest) {
 			cert, err := x509.ParseCertificate(block.Bytes)
 			if err != nil {
 				return nil, fmt.Errorf("parsing CA certificate from %s: %w", d.roxCACertFile, err)
 			}
 			pool.AddCert(cert)
+			caCertsAdded++
 		}
+		d.logger.Infof("Loaded %d CA certificate(s) from %q", caCertsAdded, d.roxCACertFile)
 		tlsConfig.RootCAs = pool
 	}
 
