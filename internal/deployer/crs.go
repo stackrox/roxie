@@ -15,7 +15,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stackrox/roxie/internal/errorhelpers"
 	"github.com/stackrox/roxie/internal/k8s"
+)
+
+const (
+	ServiceCACommonName string = `StackRox Certificate Authority`
+	CentralCommonName   string = `CENTRAL_SERVICE: Central`
 )
 
 type crsGenRequest struct {
@@ -156,6 +162,8 @@ func (d *Deployer) centralHTTPClient() (*http.Client, error) {
 		}
 		d.logger.Infof("Loaded %d CA certificate(s) from %q", caCertsAdded, d.roxCACertFile)
 		tlsConfig.RootCAs = pool
+		tlsConfig.InsecureSkipVerify = true
+		tlsConfig.VerifyPeerCertificate = verifyFunc(tlsConfig)
 	}
 
 	return &http.Client{
@@ -164,6 +172,69 @@ func (d *Deployer) centralHTTPClient() (*http.Client, error) {
 			TLSClientConfig: tlsConfig,
 		},
 	}, nil
+}
+
+// logic borrowed from VerifyPeerCertFunc in tlscheck package and serviceCertFallbackVerifier in stackrox/stackrox codebase.
+func verifyFunc(conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
+	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+
+		if len(rawCerts) == 0 {
+			return errors.New("remote peer presented no certificates")
+		}
+
+		certs := make([]*x509.Certificate, 0, len(rawCerts))
+		for _, rawCert := range rawCerts {
+			cert, err := x509.ParseCertificate(rawCert)
+			if err != nil {
+				return fmt.Errorf("failed to parse peer certificate: %w", err)
+			}
+			certs = append(certs, cert)
+		}
+
+		leaf := certs[0]
+		intermediates := x509.NewCertPool()
+		for _, cert := range certs[1:] {
+			intermediates.AddCert(cert)
+		}
+
+		systemVerifyOpts := x509.VerifyOptions{
+			DNSName:       conf.ServerName,
+			Intermediates: intermediates,
+			Roots:         conf.RootCAs,
+		}
+
+		_, systemVerifyErr := leaf.Verify(systemVerifyOpts)
+		if systemVerifyErr == nil || !isACentralCert(leaf) {
+			return systemVerifyErr
+		}
+
+		verifyErrs := errorhelpers.NewErrorList("verifying central certificate")
+		verifyErrs.AddError(systemVerifyErr)
+
+		serviceVerifyOpts := x509.VerifyOptions{
+			DNSName:       "central.stackrox",
+			Intermediates: intermediates,
+			Roots:         conf.RootCAs,
+		}
+
+		_, serviceVerifyErr := leaf.Verify(serviceVerifyOpts)
+		if serviceVerifyErr == nil {
+			return nil
+		}
+		verifyErrs.AddError(serviceVerifyErr)
+		return verifyErrs.ToError()
+	}
+}
+
+// isACentralCert returns true if the cert's issuer and subject CNs claim look like central's.
+func isACentralCert(cert *x509.Certificate) bool {
+	if cert.Issuer.CommonName != ServiceCACommonName {
+		return false
+	}
+	if cert.Subject.CommonName == CentralCommonName {
+		return true
+	}
+	return false
 }
 
 // applyCRS applies the CRS content to the sensor namespace
