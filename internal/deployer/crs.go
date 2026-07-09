@@ -97,9 +97,12 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 		}
 
 		body, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		closeErr := resp.Body.Close()
 		if readErr != nil {
 			return "", fmt.Errorf("failed to read CRS response body: %w", readErr)
+		}
+		if closeErr != nil {
+			return "", fmt.Errorf("failed to close CRS response body: %w", closeErr)
 		}
 
 		if resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable {
