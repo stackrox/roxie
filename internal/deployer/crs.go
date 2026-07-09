@@ -28,9 +28,6 @@ type crsGenResponse struct {
 
 // generateCRS generates a Cluster Registration Secret via Central's REST API.
 func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string, error) {
-	crsName := fmt.Sprintf("%s-crs", clusterName)
-	d.logger.Infof("Generating CRS named %q via Central API...", crsName)
-
 	const maxAttempts = 5
 	const baseRetryDelay = 10
 
@@ -56,11 +53,6 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 		return "", fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	reqBody, err := json.Marshal(crsGenRequest{Name: crsName})
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal CRS request: %w", err)
-	}
-
 	url := fmt.Sprintf("https://%s/v1/cluster-init/crs", d.centralEndpoint)
 
 	var lastErr error
@@ -73,6 +65,15 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 				return "", ctx.Err()
 			case <-time.After(waitTime):
 			}
+		}
+
+		// Include attempt in name for uniqueness, in case a failure is between addition to DB and reading response.
+		crsName := fmt.Sprintf("%s-crs-%d", clusterName, attempt)
+		d.logger.Infof("Generating CRS named %q via Central API...", crsName)
+
+		reqBody, err := json.Marshal(crsGenRequest{Name: crsName})
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal CRS request: %w", err)
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(reqBody)))
