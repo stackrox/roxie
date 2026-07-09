@@ -11,8 +11,12 @@ const appName = "roxie"
 const envUserConfigPath = "ROXIE_USER_CONFIG_PATH"
 
 func UserConfigPath() (string, error) {
-	if p := os.Getenv(envUserConfigPath); p != "" {
-		return p, nil
+	if overwrittenPath := os.Getenv(envUserConfigPath); overwrittenPath != "" {
+		if _, err := os.ReadFile(overwrittenPath); err != nil {
+			return "", fmt.Errorf("config file %q specified in environment variable %s cannot be read: %w",
+				overwrittenPath, envUserConfigPath, err)
+		}
+		return overwrittenPath, nil
 	}
 	dir, err := configDir()
 	if err != nil {
