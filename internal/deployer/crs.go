@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stackrox/roxie/internal/errorhelpers"
 	"github.com/stackrox/roxie/internal/k8s"
 )
 
@@ -115,7 +114,7 @@ func (d *Deployer) centralHTTPClient() (*http.Client, error) {
 		d.logger.Infof("Loaded %d CA certificate(s) from %q", caCertsAdded, d.roxCACertFile)
 		tlsConfig.RootCAs = pool
 		tlsConfig.InsecureSkipVerify = true
-		tlsConfig.VerifyPeerCertificate = verifyFunc(tlsConfig)
+		tlsConfig.VerifyPeerCertificate = centralVerifyFunc(tlsConfig)
 	}
 
 	return &http.Client{
@@ -182,8 +181,16 @@ func (d *Deployer) isRetryableError(err error) bool {
 	})
 }
 
-// logic borrowed from VerifyPeerCertFunc in tlscheck package and serviceCertFallbackVerifier in stackrox/stackrox codebase.
-func verifyFunc(conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
+// centralVerifyFunc returns a custom TLS peer certificate verifier for Central.
+// Central's self-signed serving cert uses IP SANs and the internal DNS name
+// "central.stackrox" rather than the external hostname roxie connects to (e.g.
+// a port-forwarded localhost or LoadBalancer IP). Go's default TLS verification
+// rejects the cert because the hostname doesn't match any SAN. We work around
+// this by setting InsecureSkipVerify and performing chain verification ourselves:
+// first against the actual hostname (which may work if the user added a matching
+// SAN), then falling back to "central.stackrox" for certs issued by Central's
+// own service CA.
+func centralVerifyFunc(conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 
 		if len(rawCerts) == 0 {
@@ -216,9 +223,6 @@ func verifyFunc(conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
 			return systemVerifyErr
 		}
 
-		verifyErrs := errorhelpers.NewErrorList("verifying central certificate")
-		verifyErrs.AddError(systemVerifyErr)
-
 		serviceVerifyOpts := x509.VerifyOptions{
 			DNSName:       "central.stackrox",
 			Intermediates: intermediates,
@@ -229,8 +233,7 @@ func verifyFunc(conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
 		if serviceVerifyErr == nil {
 			return nil
 		}
-		verifyErrs.AddError(serviceVerifyErr)
-		return verifyErrs.ToError()
+		return errors.Join(systemVerifyErr, serviceVerifyErr)
 	}
 }
 
