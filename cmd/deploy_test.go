@@ -391,7 +391,7 @@ func TestApplyUserDefaults(t *testing.T) {
 			t.Setenv("HOME", tmpDir) // For non-Unix systems.
 
 			if !reflect.DeepEqual(tt.user, deployer.Config{}) {
-				configPath, err := paths.UserConfigPath()
+				configPath, err := paths.UserConfigPath(false)
 				require.NoError(t, err)
 				require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
 				data, err := yaml.Marshal(tt.user)
@@ -415,7 +415,7 @@ func TestApplyUserDefaults(t *testing.T) {
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 		t.Setenv("HOME", tmpDir) // For non-Unix systems.
 
-		configPath, err := paths.UserConfigPath()
+		configPath, err := paths.UserConfigPath(false)
 		require.NoError(t, err)
 		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
 		require.NoError(t, os.WriteFile(configPath, []byte(`invalid: [yaml`), 0o644))

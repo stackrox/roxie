@@ -40,7 +40,7 @@ func main() {
 // current config. This essentially means, that the user config can
 // override values, which are already initialized in NewConfig().
 func tryApplyUserDefaults(log *logger.Logger, config *deployer.Config) error {
-	path, err := paths.UserConfigPath()
+	path, err := paths.UserConfigPath(true)
 	if err != nil {
 		return err
 	}
