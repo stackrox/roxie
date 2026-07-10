@@ -24,20 +24,8 @@ const (
 	CentralCommonName   string = `CENTRAL_SERVICE: Central`
 )
 
-type crsGenRequest struct {
-	Name string `json:"name"`
-}
-
-type crsGenResponse struct {
-	CRS []byte `json:"crs"`
-}
-
-// generateCRS generates a Cluster Registration Secret via Central's REST API.
-func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string, error) {
-	const maxAttempts = 5
-	const baseRetryDelay = 10
-
-	retryableSubstrings := []string{
+var (
+	retryableSubstrings = []string{
 		"connection refused",
 		"connection reset",
 		"connection timed out",
@@ -53,13 +41,25 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 		"context deadline exceeded",
 		"no such host",
 	}
+)
+
+type crsGenRequest struct {
+	Name string `json:"name"`
+}
+
+type crsGenResponse struct {
+	CRS []byte `json:"crs"`
+}
+
+// generateCRS is a retrying wrapper on top of generateCRSOnce.
+func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string, error) {
+	const maxAttempts = 5
+	const baseRetryDelay = 10
 
 	client, err := d.centralHTTPClient()
 	if err != nil {
 		return "", fmt.Errorf("failed to create HTTP client: %w", err)
 	}
-
-	url := fmt.Sprintf("https://%s/v1/cluster-init/crs", d.centralEndpoint)
 
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
@@ -75,63 +75,15 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 
 		// Include attempt in name for uniqueness, in case a failure is between addition to DB and reading response.
 		crsName := fmt.Sprintf("%s-crs-%d", clusterName, attempt)
-		d.logger.Infof("Generating CRS named %q via Central API...", crsName)
 
-		reqBody, err := json.Marshal(crsGenRequest{Name: crsName})
+		crsContent, err := d.generateCRSOnce(ctx, client, crsName)
 		if err != nil {
-			return "", fmt.Errorf("failed to marshal CRS request: %w", err)
-		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(reqBody)))
-		if err != nil {
-			return "", fmt.Errorf("failed to create HTTP request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.SetBasicAuth(AdminUsername, d.centralPassword)
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = err
-			errLower := strings.ToLower(err.Error())
-			if attempt < maxAttempts && slices.ContainsFunc(retryableSubstrings, func(sub string) bool {
-				return strings.Contains(errLower, sub)
-			}) {
+			if d.isRetryableError(err) {
 				d.logger.Warningf("Transient error generating CRS: %v", err)
+				lastErr = err
 				continue
 			}
-			return "", fmt.Errorf("failed to generate CRS: %w", err)
-		}
-
-		body, readErr := io.ReadAll(resp.Body)
-		closeErr := resp.Body.Close()
-		if readErr != nil {
-			return "", fmt.Errorf("failed to read CRS response body: %w", readErr)
-		}
-		if closeErr != nil {
-			return "", fmt.Errorf("failed to close CRS response body: %w", closeErr)
-		}
-
-		if resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable {
-			lastErr = fmt.Errorf("server returned %s", resp.Status)
-			if attempt < maxAttempts {
-				d.logger.Warningf("Transient HTTP error generating CRS: %s", resp.Status)
-				continue
-			}
-			return "", lastErr
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return "", fmt.Errorf("CRS generation failed with status %s: %s", resp.Status, string(body))
-		}
-
-		var crsResp crsGenResponse
-		if err := json.Unmarshal(body, &crsResp); err != nil {
-			return "", fmt.Errorf("failed to parse CRS response: %w", err)
-		}
-
-		crsContent := strings.TrimSpace(string(crsResp.CRS))
-		if crsContent == "" {
-			return "", errors.New("CRS content is empty")
+			return "", fmt.Errorf("CRS generation failed with non-retryable error: %w", err)
 		}
 
 		d.logger.Success("✓ CRS generated")
@@ -172,6 +124,62 @@ func (d *Deployer) centralHTTPClient() (*http.Client, error) {
 			TLSClientConfig: tlsConfig,
 		},
 	}, nil
+}
+
+// generateCRSOnce generates a Cluster Registration Secret via Central's REST API.
+func (d *Deployer) generateCRSOnce(ctx context.Context, client *http.Client, crsName string) (string, error) {
+	d.logger.Infof("Generating CRS named %q via Central API...", crsName)
+
+	reqBody, err := json.Marshal(crsGenRequest{Name: crsName})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal CRS request: %w", err)
+	}
+
+	url := fmt.Sprintf("https://%s/v1/cluster-init/crs", d.centralEndpoint)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return "", fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(AdminUsername, d.centralPassword)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("executing HTTP request: %w", err)
+	}
+
+	body, readErr := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil {
+		return "", fmt.Errorf("failed to read CRS response body: %w", readErr)
+	}
+	if closeErr != nil {
+		return "", fmt.Errorf("failed to close CRS response body: %w", closeErr)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("server returned status %s: %s", resp.Status, string(body))
+	}
+
+	var crsResp crsGenResponse
+	if err := json.Unmarshal(body, &crsResp); err != nil {
+		return "", fmt.Errorf("failed to parse CRS response: %w", err)
+	}
+
+	crsContent := strings.TrimSpace(string(crsResp.CRS))
+	if crsContent == "" {
+		return "", errors.New("CRS content is empty")
+	}
+
+	return crsContent, nil
+}
+
+func (d *Deployer) isRetryableError(err error) bool {
+	errLower := strings.ToLower(err.Error())
+	return slices.ContainsFunc(retryableSubstrings, func(sub string) bool {
+		return strings.Contains(errLower, sub)
+	})
 }
 
 // logic borrowed from VerifyPeerCertFunc in tlscheck package and serviceCertFallbackVerifier in stackrox/stackrox codebase.
