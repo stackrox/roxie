@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"slices"
@@ -114,7 +115,11 @@ func (d *Deployer) centralHTTPClient() (*http.Client, error) {
 		d.logger.Infof("Loaded %d CA certificate(s) from %q", caCertsAdded, d.roxCACertFile)
 		tlsConfig.RootCAs = pool
 		tlsConfig.InsecureSkipVerify = true
-		tlsConfig.VerifyPeerCertificate = centralVerifyFunc(tlsConfig)
+		host, _, err := net.SplitHostPort(d.centralEndpoint)
+		if err != nil {
+			return nil, fmt.Errorf("parsing central endpoint %q: %w", d.centralEndpoint, err)
+		}
+		tlsConfig.VerifyPeerCertificate = centralVerifyFunc(host, tlsConfig)
 	}
 
 	return &http.Client{
@@ -190,9 +195,8 @@ func (d *Deployer) isRetryableError(err error) bool {
 // first against the actual hostname (which may work if the user added a matching
 // SAN), then falling back to "central.stackrox" for certs issued by Central's
 // own service CA.
-func centralVerifyFunc(conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
+func centralVerifyFunc(hostname string, conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-
 		if len(rawCerts) == 0 {
 			return errors.New("remote peer presented no certificates")
 		}
@@ -213,7 +217,7 @@ func centralVerifyFunc(conf *tls.Config) func([][]byte, [][]*x509.Certificate) e
 		}
 
 		systemVerifyOpts := x509.VerifyOptions{
-			DNSName:       conf.ServerName,
+			DNSName:       hostname,
 			Intermediates: intermediates,
 			Roots:         conf.RootCAs,
 		}
