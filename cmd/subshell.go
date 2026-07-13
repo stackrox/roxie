@@ -10,10 +10,12 @@ import (
 	"github.com/fatih/color"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/haproxy"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/roxieenv"
 	"github.com/stackrox/roxie/internal/types"
 )
+
 
 // spawnSubshellForDeployerEnv assembles the roxie environment from a Deployer and invokes an interactive subshell.
 func spawnSubshellForDeployerEnv(d *deployer.Deployer, log *logger.Logger) error {
@@ -105,32 +107,16 @@ func resolveShellPath() string {
 	return "/bin/bash"
 }
 
-func startHAProxy(endpoint, caCertFile string, log *logger.Logger) (*exec.Cmd, string, error) {
+func startHAProxy(roxieConfig deployer.RoxieConfig, centralDeploymentInfo *types.CentralDeploymentInfo) (*exec.Cmd, string, error) {
 	configFile, err := os.CreateTemp("", "roxie-haproxy-*.cfg")
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create temp config: %w", err)
 	}
 	configPath := configFile.Name()
 
-	haproxyConfig := fmt.Sprintf(`global
-    log /dev/null local0
+	haproxyCfg := haproxy.RenderConfig(roxieConfig.HAProxy, centralDeploymentInfo.Endpoint, centralDeploymentInfo.CACertFile)
 
-defaults
-    log     global
-    mode    http
-    timeout connect 5s
-    timeout client  30s
-    timeout server  30s
-
-frontend http_front
-    bind *:8080  # TODO(#91): this should probably be configurable?
-    default_backend https_back
-
-backend https_back
-    server srv1 %s ssl verify required ca-file %s
-`, endpoint, caCertFile)
-
-	if _, err := configFile.WriteString(haproxyConfig); err != nil {
+	if _, err := configFile.WriteString(haproxyCfg); err != nil {
 		configFile.Close()
 		os.Remove(configPath)
 		return nil, "", fmt.Errorf("failed to write haproxy config: %w", err)
@@ -146,6 +132,8 @@ backend https_back
 		os.Remove(configPath)
 		return nil, "", fmt.Errorf("failed to start haproxy: %w", err)
 	}
+
+	centralDeploymentInfo.HAProxyPort = roxieConfig.HAProxy.BindPort
 
 	return cmd, configPath, nil
 }
