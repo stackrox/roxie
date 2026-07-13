@@ -81,6 +81,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&skipUserConfig, "skip-user-config", false,
 		fmt.Sprintf("Skips reading of user's configuration (%s)", paths.UserConfigPathString()))
 	registerFlag(rootCmd, &deploySettingsFromArgs, "config", "Path to YAML config file",
+		withPersistent(),
 		withShortName("c"),
 		withApplyFn("filename", func(config *deployer.Config, filename string) error {
 			if filename == "-" {
