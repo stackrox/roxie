@@ -203,12 +203,12 @@ func printBanner(centralDeploymentInfo types.CentralDeploymentInfo) {
 	cyan.Println("[roxie]   * roxcurl /v1/clusters")
 	cyan.Println("[roxie]")
 
-	if centralDeploymentInfo.HAProxyStarted {
-		cyan.Println("[roxie] Central UI: http://localhost:8080 (username: admin, password: see $ROX_ADMIN_PASSWORD)")
+	if port := centralDeploymentInfo.HAProxyPort; port > 0 {
+		cyan.Printf("[roxie] Central UI: http://localhost:%d (username: admin, password: see $ROX_ADMIN_PASSWORD)\n", port)
 	} else if centralDeploymentInfo.Exposure != types.ExposureNone {
 		cyan.Printf("[roxie] Central UI: https://%s", centralDeploymentInfo.Endpoint)
 	} else if !env.RunningInRoxieContainer {
-		cyan.Println("[roxie] Note: Installing haproxy enables automatic HTTP access to Central at http://localhost:8080")
+		cyan.Println("[roxie] Note: Installing haproxy enables automatic HTTP access to Central through a forwarded local port")
 	}
 
 	cyan.Println("")
