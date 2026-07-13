@@ -138,8 +138,7 @@ backend https_back
 	configFile.Close()
 
 	cmd := exec.Command("haproxy", "-f", configPath)
-	// TODO(#91): What about stdin? We probably should prevent haproxy from reading from
-	// the terminal just in case...
+	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 
