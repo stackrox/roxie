@@ -16,7 +16,6 @@ import (
 	"github.com/stackrox/roxie/internal/types"
 )
 
-
 // spawnSubshellForDeployerEnv assembles the roxie environment from a Deployer and invokes an interactive subshell.
 func spawnSubshellForDeployerEnv(d *deployer.Deployer, log *logger.Logger) error {
 	return runCommandOrSubshell(d.GetCentralDeploymentInfo(), log, nil)
@@ -88,6 +87,37 @@ func runCommandOrSubshell(centralDeploymentInfo types.CentralDeploymentInfo, log
 	}
 
 	return nil
+}
+
+func tryStartHAProxy(
+	log *logger.Logger,
+	roxieConfig deployer.RoxieConfig,
+	centralDeploymentInfo *types.CentralDeploymentInfo) (func(), error) {
+
+	if !isHAProxyAvailable() {
+		log.Dim("No HAProxy available, skipping")
+		return nil, nil
+	}
+
+	if centralDeploymentInfo.Endpoint == "" {
+		log.Warning("No Central endpoint available, skipping")
+		return nil, nil
+	}
+	if centralDeploymentInfo.CACertFile == "" {
+		log.Warning("No Central CA Cert available, skipping")
+		return nil, nil
+	}
+
+	haproxyCmd, haproxyConfigPath, err := startHAProxy(roxieConfig, centralDeploymentInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("Started HAProxy at localhost:%v", centralDeploymentInfo.HAProxyPort)
+
+	return func() {
+		cleanupHAProxy(haproxyCmd, haproxyConfigPath)
+	}, nil
 }
 
 func subShellMode(args []string) bool {
