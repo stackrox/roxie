@@ -55,7 +55,18 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	deploySettings, err := assembleConfigForCommand(nil, deploySettingsFromArgs, skipUserConfig)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	var clusterConfig *deployer.Config
+	clusterManifest, err := manifest.LoadManifestSecret(ctx, log)
+	if err != nil {
+		log.Warningf("Failed to load manifest from cluster: %v", err)
+	} else {
+		clusterConfig = &clusterManifest.Config
+	}
+
+	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
 	if err != nil {
 		return err
 	}
@@ -67,9 +78,6 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	defer d.Cleanup()
 
 	d.SetConfig(deploySettings)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
 
 	if err := d.Teardown(ctx, components); err != nil {
 		return fmt.Errorf("teardown failed: %w", err)
