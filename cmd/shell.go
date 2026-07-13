@@ -33,7 +33,7 @@ Examples:
   roxie shell -- roxctl central whoami
   roxie shell -- bash -c 'echo $ROX_ENDPOINT'`,
 		Run: func(cmd *cobra.Command, args []string) {
-			err := runShell(cmd, args)
+			err := runShell(args)
 			if err != nil {
 				if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 					// Propagate exit error from the child process.
@@ -51,7 +51,7 @@ Examples:
 	return cmd
 }
 
-func runShell(cmd *cobra.Command, args []string) error {
+func runShell(args []string) error {
 	log := logger.New()
 	if err := env.Initialize(log); err != nil {
 		return err
@@ -84,5 +84,5 @@ func runShell(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("extracting central deployment info from manifest: %w", err)
 	}
 
-	return runCommandOrSubshell(centralDeploymentInfo, log, args)
+	return runCommandOrSubshell(m.Config.Roxie, centralDeploymentInfo, log, args)
 }

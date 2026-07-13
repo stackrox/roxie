@@ -17,14 +17,14 @@ import (
 )
 
 // spawnSubshellForDeployerEnv assembles the roxie environment from a Deployer and invokes an interactive subshell.
-func spawnSubshellForDeployerEnv(d *deployer.Deployer, log *logger.Logger) error {
-	return runCommandOrSubshell(d.GetCentralDeploymentInfo(), log, nil)
+func spawnSubshellForDeployerEnv(roxieConfig deployer.RoxieConfig, d *deployer.Deployer, log *logger.Logger) error {
+	return runCommandOrSubshell(roxieConfig, d.GetCentralDeploymentInfo(), log, nil)
 }
 
 // runCommandOrSubshell spawns an interactive subshell or runs the provided command using the given
 // central deployment info.
 // It handles HAProxy setup, prints the connection banner, and manages shell lifecycle.
-func runCommandOrSubshell(centralDeploymentInfo types.CentralDeploymentInfo, log *logger.Logger, args []string) error {
+func runCommandOrSubshell(roxieConfig deployer.RoxieConfig, centralDeploymentInfo types.CentralDeploymentInfo, log *logger.Logger, args []string) error {
 	cmdEnv := os.Environ()
 	for name, val := range roxieenv.AssembleRoxieEnvironment(centralDeploymentInfo).Export() {
 		cmdEnv = append(cmdEnv, fmt.Sprintf("%s=%s", name, val))
@@ -32,17 +32,12 @@ func runCommandOrSubshell(centralDeploymentInfo types.CentralDeploymentInfo, log
 	cmdEnv = append(cmdEnv, "ROXIE_SHELL=1")
 	cmdEnv = append(cmdEnv, fmt.Sprintf("name=acs@%s", centralDeploymentInfo.KubeContext))
 
-	haproxyAvailable := isHAProxyAvailable()
-
-	if haproxyAvailable && centralDeploymentInfo.Endpoint != "" && centralDeploymentInfo.CACertFile != "" {
-		haproxyCmd, haproxyConfigPath, err := startHAProxy(centralDeploymentInfo.Endpoint, centralDeploymentInfo.CACertFile, log)
-		if err != nil {
-			log.Warningf("Failed to start HAProxy: %v", err)
-		} else {
-			cmdEnv = append(cmdEnv, "ROXIE_HAPROXY_CFG_FILE="+haproxyConfigPath)
-			centralDeploymentInfo.HAProxyStarted = true
-			defer cleanupHAProxy(haproxyCmd, haproxyConfigPath)
-		}
+	cleanupFunc, err := tryStartHAProxy(log, roxieConfig, &centralDeploymentInfo)
+	if err != nil {
+		log.Warningf("Failed to start HAProxy: %v", err)
+	}
+	if cleanupFunc != nil {
+		defer cleanupFunc()
 	}
 
 	var cmd *exec.Cmd
@@ -61,7 +56,7 @@ func runCommandOrSubshell(centralDeploymentInfo types.CentralDeploymentInfo, log
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	err := cmd.Run()
+	err = cmd.Run()
 
 	if subShellMode(args) {
 		cyan := color.New(color.FgCyan, color.Bold)
