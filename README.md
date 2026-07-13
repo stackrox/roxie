@@ -158,6 +158,44 @@ ROX_CA_CERT_FILE=<path-to-ca-cert> \
 > already set. For automation, consider using `--envrc <file>` on the Central deploy to write the
 > environment to a file instead of spawning a subshell.
 
+### Helm chart add-ons
+
+roxie can deploy additional Helm charts alongside ACS. Add-ons are installed after Central
+becomes ready and torn down before Central is removed.
+
+Add-ons are configured entirely via the config file (`--config`). Each add-on needs a
+definition in `availableAddOns`:
+
+```yaml
+central:
+  addOns:
+    monitoring: true
+  availableAddOns:
+    monitoring:
+      helmChart:
+        repo: https://prometheus-community.github.io/helm-charts
+        chart: kube-state-metrics
+        version: "5.27.0"
+```
+
+Charts from a local stackrox repo checkout are also supported:
+
+```yaml
+central:
+  addOns:
+    my-chart: true
+  availableAddOns:
+    my-chart:
+      stackroxRepoHelmChart:
+        path: deploy/charts/my-chart
+        valuesFile: deploy/charts/my-chart/dev-values.yaml
+        envSubst: true   # expand environment variables in the values file
+```
+
+Add-ons are installed as Helm releases prefixed with `roxie-addon-` in the Central namespace.
+During teardown, roxie discovers which add-ons have been installed as part of the most
+recent deployment and uninstalls those add-ons as part of a Central teardown.
+
 ## Development
 
 Enter the dev shell:
