@@ -71,6 +71,12 @@ func runShell(args []string) error {
 		return fmt.Errorf("failed to load roxie manifest: %w", err)
 	}
 	log.Dim("roxie manifest loaded")
+	configBase := m.Config
+
+	config, err := assembleConfigForCommand(&configBase, deploySettingsFromArgs, skipUserConfig)
+	if err != nil {
+		return err
+	}
 
 	// We need this for the setup of the CA cert.
 	tempDir, err := os.MkdirTemp("", "roxie-shell-*")
@@ -84,5 +90,5 @@ func runShell(args []string) error {
 		return fmt.Errorf("extracting central deployment info from manifest: %w", err)
 	}
 
-	return runCommandOrSubshell(m.Config.Roxie, centralDeploymentInfo, log, args)
+	return runCommandOrSubshell(config.Roxie, centralDeploymentInfo, log, args)
 }
