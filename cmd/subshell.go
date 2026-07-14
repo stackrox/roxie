@@ -32,12 +32,16 @@ func runCommandOrSubshell(roxieConfig deployer.RoxieConfig, centralDeploymentInf
 	cmdEnv = append(cmdEnv, "ROXIE_SHELL=1")
 	cmdEnv = append(cmdEnv, fmt.Sprintf("name=acs@%s", centralDeploymentInfo.KubeContext))
 
-	cleanupFunc, err := tryStartHAProxy(log, roxieConfig, &centralDeploymentInfo)
-	if err != nil {
-		log.Warningf("Failed to start HAProxy: %v", err)
-	}
-	if cleanupFunc != nil {
-		defer cleanupFunc()
+	if roxieConfig.HAProxy.Enabled() {
+		cleanupFunc, err := tryStartHAProxy(log, roxieConfig, &centralDeploymentInfo)
+		if err != nil {
+			log.Warningf("Failed to start HAProxy: %v", err)
+		}
+		if cleanupFunc != nil {
+			defer cleanupFunc()
+		}
+	} else {
+		log.Dim("spawning of HAProxy is disabled")
 	}
 
 	var cmd *exec.Cmd
@@ -56,7 +60,7 @@ func runCommandOrSubshell(roxieConfig deployer.RoxieConfig, centralDeploymentInf
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	err = cmd.Run()
+	err := cmd.Run()
 
 	if subShellMode(args) {
 		cyan := color.New(color.FgCyan, color.Bold)
