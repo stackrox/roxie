@@ -95,7 +95,7 @@ func init() {
 			if err := yaml.Unmarshal(data, &configFromFile); err != nil {
 				return fmt.Errorf("failed to unmarshal config file %q: %w", filename, err)
 			}
-			if err := mergo.Merge(config, configFromFile, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+			if err := mergo.Merge(config, &configFromFile, mergo.WithOverride, mergo.WithoutDereference); err != nil {
 				return fmt.Errorf("merging config file %q into deployer Config: %w", filename, err)
 			}
 			return nil
