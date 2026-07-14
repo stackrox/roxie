@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 
@@ -84,19 +85,24 @@ func init() {
 		withPersistent(),
 		withShortName("c"),
 		withApplyFn("filename", func(config *deployer.Config, filename string) error {
+			var data []byte
+			var err error
 			if filename == "-" {
-				filename = "/dev/stdin"
+				data, err = io.ReadAll(os.Stdin)
+				filename = "stdin"
+			} else {
+				data, err = os.ReadFile(filename)
 			}
-			data, err := os.ReadFile(filename)
 			if err != nil {
-				return fmt.Errorf("failed to read config file %q: %w", filename, err)
+				return fmt.Errorf("failed to read config from %q: %w", filename, err)
 			}
+
 			var configFromFile deployer.Config
 			if err := yaml.Unmarshal(data, &configFromFile); err != nil {
-				return fmt.Errorf("failed to unmarshal config file %q: %w", filename, err)
+				return fmt.Errorf("failed to unmarshal config from %q: %w", filename, err)
 			}
 			if err := mergo.Merge(config, &configFromFile, mergo.WithOverride, mergo.WithoutDereference); err != nil {
-				return fmt.Errorf("merging config file %q into deployer Config: %w", filename, err)
+				return fmt.Errorf("merging config from %q into deployer Config: %w", filename, err)
 			}
 			return nil
 		}),
