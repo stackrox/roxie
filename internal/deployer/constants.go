@@ -8,6 +8,8 @@ var (
 
 	centralDbPVCSizeSmall = "30Gi"
 
+	defaultHAProxyBindPort = 8080
+
 	centralResourcesSmall = map[string]interface{}{
 		"requests": map[string]string{
 			"memory": "1Gi",

@@ -278,10 +278,11 @@ central:
 			if tt.config != "" {
 				require.NoError(t, os.WriteFile(configFilePath, []byte(tt.config), 0o644))
 			}
-			cfg := deployer.NewConfig()
-			cmd := newDeployCmd(&cfg)
-			require.NoError(t, cmd.ParseFlags(tt.args))
-			tt.assert(t, cfg)
+			deploySettingsFromArgs = deployer.NewConfig() // Need to reset this global after each test.
+			deployCmd, _, err := rootCmd.Find([]string{"deploy"})
+			require.NoError(t, err)
+			require.NoError(t, deployCmd.ParseFlags(tt.args))
+			tt.assert(t, deploySettingsFromArgs)
 		})
 	}
 }
@@ -302,9 +303,10 @@ func TestNewDeployCmd_SetRejectsSpec(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := deployer.NewConfig()
-			cmd := newDeployCmd(&cfg)
-			err := cmd.ParseFlags(tt.args)
+			deploySettingsFromArgs = deployer.NewConfig() // Need to reset this global after each test.
+			cmd, _, err := rootCmd.Find([]string{"deploy"})
+			require.NoError(t, err)
+			err = cmd.ParseFlags(tt.args)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "spec")
 		})

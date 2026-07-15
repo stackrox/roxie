@@ -21,7 +21,7 @@ type Config struct {
 // DefaultConfig returns a Config populated with default values.
 func DefaultConfig() Config {
 	return Config{
-		Roxie:          NewRoxieConfig(),
+		Roxie:          DefaultRoxieConfig(),
 		Central:        DefaultCentralConfig(),
 		SecuredCluster: DefaultSecuredClusterConfig(),
 	}
@@ -57,6 +57,7 @@ type RoxieConfig struct {
 	KonfluxImages *bool             `yaml:"konfluxImages,omitempty"`
 	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
 	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
+	HAProxy       HAProxyConfig     `yaml:"haProxy,omitempty"`
 }
 
 func (c *RoxieConfig) KonfluxImagesSet() bool {
@@ -133,6 +134,12 @@ func NewCentralConfig() CentralConfig {
 	return CentralConfig{
 		Spec: make(map[string]interface{}),
 	}
+}
+
+func DefaultRoxieConfig() RoxieConfig {
+	cfg := NewRoxieConfig()
+	cfg.HAProxy.BindPort = defaultHAProxyBindPort
+	return cfg
 }
 
 // DefaultCentralConfig returns a CentralConfig with sensible defaults.
@@ -355,4 +362,13 @@ func (s *SecuredClusterConfig) CustomResource() (map[string]interface{}, error) 
 		return nil, fmt.Errorf("merging spec into SecuredCluster CR: %w", err)
 	}
 	return cr, nil
+}
+
+type HAProxyConfig struct {
+	Disabled *bool `yaml:"disabled"`
+	BindPort int   `yaml:"bindPort"`
+}
+
+func (c *HAProxyConfig) Enabled() bool {
+	return (c.Disabled == nil || !*c.Disabled) && c.BindPort > 0
 }
