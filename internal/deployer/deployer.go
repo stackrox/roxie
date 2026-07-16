@@ -318,9 +318,11 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component) e
 		return d.deployOperatorOnly(ctx)
 	}
 
-	// Deploy operator first if needed.
-	if err := d.ensureOperatorDeployed(ctx); err != nil {
-		return fmt.Errorf("failed to deploy operator: %w", err)
+	if components.IncludesOperator() {
+		// Deploy operator first if needed.
+		if err := d.ensureOperatorDeployed(ctx); err != nil {
+			return fmt.Errorf("failed to deploy operator: %w", err)
+		}
 	}
 
 	if components.IncludesCentral() {

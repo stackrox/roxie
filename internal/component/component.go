@@ -67,6 +67,10 @@ func (c Component) IncludesAddOns() bool {
 	return c.IncludesCentral() || c == AddOns
 }
 
+func (c Component) IncludesOperator() bool {
+	return c.IncludesOperatorExplicitly() || c.IncludesCentral() || c.IncludesSensor()
+}
+
 func (c Component) IncludesOperatorExplicitly() bool {
 	return c == Operator
 }
