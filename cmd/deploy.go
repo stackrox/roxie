@@ -135,6 +135,20 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 		}),
 	)
 
+	registerFlag(cmd, settings, "central-tag", "Image tag for Central (overrides --tag for Central)",
+		withApplyFn("version", func(config *deployer.Config, tag string) error {
+			config.Central.Version = tag
+			return nil
+		}),
+	)
+
+	registerFlag(cmd, settings, "secured-cluster-tag", "Image tag for SecuredCluster (overrides --tag for SecuredCluster)",
+		withApplyFn("version", func(config *deployer.Config, tag string) error {
+			config.SecuredCluster.Version = tag
+			return nil
+		}),
+	)
+
 	registerFlag(cmd, settings, "operator-env", "Operator environment variables (e.g., RELATED_IMAGE_MAIN=quay.io/...)",
 		withApplyFn("env-var", func(config *deployer.Config, envExpr string) error {
 			key, value, err := deployer.ParseOperatorEnvVar(envExpr)
@@ -251,12 +265,22 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		// storing of the derived operator version within the operator configuration.
 		//
 		// This is why we use the operator version here when checking version constraints.
-		hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(deploySettings.Operator.Version)
-		if err != nil {
-			return fmt.Errorf("checking version constraint on main image tag %s: %w", deploySettings.Roxie.Version, err)
+		// With split versions, check every operator instance that will be deployed.
+		versionsToCheck := []string{deploySettings.Operator.Version}
+		if deploySettings.NeedsSplitOperators() {
+			versionsToCheck = nil
+			for _, instance := range deploySettings.OperatorInstances() {
+				versionsToCheck = append(versionsToCheck, instance.Version)
+			}
 		}
-		if !hasSupport {
-			return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
+		for _, opVersion := range versionsToCheck {
+			hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(opVersion)
+			if err != nil {
+				return fmt.Errorf("checking version constraint on operator version %s: %w", opVersion, err)
+			}
+			if !hasSupport {
+				return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
+			}
 		}
 	}
 
@@ -390,7 +414,10 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		return fmt.Errorf("configuring operator configuration: %w", err)
 	}
 
-	if deploySettings.Roxie.KonfluxImagesEnabled() {
+	// For the single-operator path (including OLM), populate RELATED_IMAGE_* on the
+	// top-level OperatorConfig. Split-version deployments apply Konflux env vars
+	// per OperatorInstance during deployment instead.
+	if deploySettings.Roxie.KonfluxImagesEnabled() && !deploySettings.NeedsSplitOperators() {
 		deployer.PopulateKonfluxEnvVars(deploySettings)
 	}
 
@@ -455,6 +482,15 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 	if deploySettings.Roxie.KonfluxImagesEnabled() {
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
+		}
+	}
+
+	if deploySettings.NeedsSplitOperators() {
+		if components.IncludesOperatorExplicitly() {
+			return errors.New("split versions (--central-tag / --secured-cluster-tag / central.version / securedCluster.version) are not supported with operator-only deploy")
+		}
+		if deploySettings.Operator.DeployViaOlmEnabled() {
+			return errors.New("split versions (--central-tag / --secured-cluster-tag / central.version / securedCluster.version) are not supported with OLM deployment mode")
 		}
 	}
 

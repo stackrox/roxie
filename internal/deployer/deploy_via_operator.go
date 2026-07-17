@@ -45,7 +45,7 @@ func (d *Deployer) deployOperatorOnly(ctx context.Context) error {
 	return nil
 }
 
-// ensureOperatorDeployed ensures the operator is deployed with the correct version and mode
+// ensureOperatorDeployed ensures the required operator instance(s) are deployed.
 func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	// Skip operator deployment/checks if flag is set to false
 	if d.config.Operator.SkipDeploymentEnabled() {
@@ -58,7 +58,118 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 		return fmt.Errorf("failed to ensure CRDs installed: %w", err)
 	}
 
-	// Detect current operator deployment mode
+	instances := d.preparedOperatorInstances()
+
+	if d.config.Operator.DeployViaOlmEnabled() {
+		return d.ensureOperatorDeployedOLM(ctx)
+	}
+
+	// Switching from OLM to non-OLM in the system namespace.
+	operatorExists, currentMode, err := d.detectOperatorDeploymentMode(ctx)
+	if err != nil {
+		return fmt.Errorf("detecting operator deployment mode: %w", err)
+	}
+	if operatorExists && currentMode == OperatorModeOLM {
+		d.logger.Info("🔄 Switching operator from OLM to non-OLM mode...")
+		if err := d.teardownOperatorOLM(ctx); err != nil {
+			return fmt.Errorf("failed to teardown OLM operator: %w", err)
+		}
+	}
+
+	if err := d.teardownUnwantedOperatorNamespaces(ctx, instances); err != nil {
+		return err
+	}
+
+	for _, instance := range instances {
+		if err := d.ensureOperatorInstanceNonOLM(ctx, instance); err != nil {
+			return fmt.Errorf("failed to deploy operator in %s: %w", instance.Namespace, err)
+		}
+	}
+
+	return nil
+}
+
+// preparedOperatorInstances returns OperatorInstances with Konflux env vars applied when enabled.
+func (d *Deployer) preparedOperatorInstances() []OperatorInstance {
+	instances := d.config.OperatorInstances()
+	if !d.config.Roxie.KonfluxImagesEnabled() {
+		return instances
+	}
+	for i := range instances {
+		instances[i].EnvVars = MergeKonfluxEnvVars(instances[i].EnvVars, instances[i].Version)
+	}
+	return instances
+}
+
+// teardownUnwantedOperatorNamespaces removes operators from namespaces that are not
+// part of the desired deployment plan (e.g. switching between single and split).
+func (d *Deployer) teardownUnwantedOperatorNamespaces(ctx context.Context, desired []OperatorInstance) error {
+	desiredNS := make(map[string]bool, len(desired))
+	for _, inst := range desired {
+		desiredNS[inst.Namespace] = true
+	}
+
+	for _, ns := range AllOperatorNamespaces {
+		if desiredNS[ns] {
+			continue
+		}
+		if !d.operatorDeploymentExists(ctx, ns) && !d.namespaceExists(ns) {
+			continue
+		}
+		d.logger.Infof("🔄 Removing operator from unwanted namespace %s...", ns)
+		instance := OperatorInstance{Namespace: ns}
+		switch ns {
+		case operatorNamespaceCentral:
+			instance.RoleNameSuffix = "central"
+		case operatorNamespaceSensor:
+			instance.RoleNameSuffix = "sensor"
+		}
+		if err := d.teardownOperatorNonOLMInNamespace(ctx, instance); err != nil {
+			return fmt.Errorf("tearing down unwanted operator in %s: %w", ns, err)
+		}
+	}
+	return nil
+}
+
+// ensureOperatorInstanceNonOLM ensures one non-OLM operator instance matches the desired version.
+func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance OperatorInstance) error {
+	exists := d.operatorDeploymentExists(ctx, instance.Namespace)
+	needsDeployment := !exists
+	needsTeardown := false
+
+	if exists {
+		if d.isOperatorVersionCorrect(ctx, instance) {
+			d.logger.Infof("✓ Operator already deployed with correct version in %s", instance.Namespace)
+			return nil
+		}
+		d.logger.Infof("🔄 Operator version mismatch in %s, redeploying...", instance.Namespace)
+		needsTeardown = true
+		needsDeployment = true
+	}
+
+	if needsTeardown {
+		if err := d.teardownOperatorNonOLMInNamespace(ctx, instance); err != nil {
+			return fmt.Errorf("failed to teardown non-OLM operator: %w", err)
+		}
+	}
+
+	if needsDeployment {
+		if err := d.deployOperatorNonOLM(ctx, instance); err != nil {
+			return fmt.Errorf("failed to deploy operator: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// ensureOperatorDeployedOLM is the single-operator OLM path (split versions are rejected in validation).
+func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
+	// Remove any leftover split-operator namespaces before installing via OLM.
+	desired := []OperatorInstance{{Namespace: operatorNamespaceSystem}}
+	if err := d.teardownUnwantedOperatorNamespaces(ctx, desired); err != nil {
+		return err
+	}
+
 	operatorExists, currentMode, err := d.detectOperatorDeploymentMode(ctx)
 	if err != nil {
 		return fmt.Errorf("detecting operator deployment mode: %w", err)
@@ -68,19 +179,17 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 
 	if !operatorExists {
 		needsDeployment = true
-	} else if d.config.Operator.DeployViaOlmEnabled() && currentMode == OperatorModeNonOLM {
-		// Switching from non-OLM to OLM
+	} else if currentMode == OperatorModeNonOLM {
 		d.logger.Info("🔄 Switching operator from non-OLM to OLM mode...")
 		needsTeardown = true
 		needsDeployment = true
-	} else if !d.config.Operator.DeployViaOlmEnabled() && currentMode == OperatorModeOLM {
-		// Switching from OLM to non-OLM
-		d.logger.Info("🔄 Switching operator from OLM to non-OLM mode...")
-		needsTeardown = true
-		needsDeployment = true
 	} else {
-		// Same mode, check version
-		if d.isOperatorVersionCorrect(ctx) {
+		instance := OperatorInstance{
+			Version:   d.config.Operator.Version,
+			Namespace: operatorNamespaceSystem,
+			EnvVars:   d.config.Operator.EnvVars,
+		}
+		if d.isOperatorVersionCorrect(ctx, instance) {
 			d.logger.Info("✓ Operator already deployed with correct version")
 		} else {
 			d.logger.Info("🔄 Operator version mismatch, redeploying...")
@@ -90,7 +199,6 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	}
 
 	if needsTeardown {
-		// Perform teardown for the current mode
 		if currentMode == OperatorModeOLM {
 			if err := d.teardownOperatorOLM(ctx); err != nil {
 				return fmt.Errorf("failed to teardown OLM operator: %w", err)
@@ -103,14 +211,8 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	}
 
 	if needsDeployment {
-		if d.config.Operator.DeployViaOlmEnabled() {
-			if err := d.deployOperatorViaOLM(ctx); err != nil {
-				return fmt.Errorf("failed to deploy operator via OLM: %w", err)
-			}
-		} else {
-			if err := d.deployOperatorNonOLM(ctx); err != nil {
-				return fmt.Errorf("failed to deploy operator: %w", err)
-			}
+		if err := d.deployOperatorViaOLM(ctx); err != nil {
+			return fmt.Errorf("failed to deploy operator via OLM: %w", err)
 		}
 	}
 
@@ -154,9 +256,9 @@ func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 	return d.configureCentralEndpoint(ctx)
 }
 
-// isOperatorVersionCorrect checks if the deployed operator matches the desired version
-func (d *Deployer) isOperatorVersionCorrect(ctx context.Context) bool {
-	currentImage, err := d.getDeployedOperatorImage(ctx)
+// isOperatorVersionCorrect checks if the deployed operator matches the desired version.
+func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance OperatorInstance) bool {
+	currentImage, err := d.getDeployedOperatorImage(ctx, instance.Namespace)
 	if err != nil {
 		d.logger.Warningf("Could not retrieve operator image: %v", err)
 		return false
@@ -170,19 +272,19 @@ func (d *Deployer) isOperatorVersionCorrect(ctx context.Context) bool {
 	}
 	currentTag := parts[1]
 
-	if currentTag != d.config.Operator.Version {
+	if currentTag != instance.Version {
 		d.logger.Info("Operator version mismatch detected:")
 		d.logger.Infof("  Current: %s", currentTag)
-		d.logger.Infof("  Desired: %s", d.config.Operator.Version)
+		d.logger.Infof("  Desired: %s", instance.Version)
 		return false
 	}
 	return true
 }
 
-// getDeployedOperatorImage gets the image of the currently deployed operator
-func (d *Deployer) getDeployedOperatorImage(ctx context.Context) (string, error) {
+// getDeployedOperatorImage gets the image of the currently deployed operator in a namespace.
+func (d *Deployer) getDeployedOperatorImage(ctx context.Context, namespace string) (string, error) {
 	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{"get", "deployment", operatorDeploymentName, "-n", operatorNamespace,
+		Args: []string{"get", "deployment", operatorDeploymentName, "-n", namespace,
 			"-o", "jsonpath={.spec.template.spec.containers[0].image}"},
 	})
 	if err != nil {

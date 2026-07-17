@@ -21,9 +21,11 @@ import (
 
 const (
 	adminPasswordSecretName = "admin-password"
-	operatorNamespace       = "rhacs-operator-system"
-	operatorDeploymentName  = "rhacs-operator-controller-manager"
-	managerContainerName    = "manager"
+	// operatorNamespace is the single-operator namespace used by the OLM path
+	// and other code that still references the package-level constant.
+	operatorNamespace      = operatorNamespaceSystem
+	operatorDeploymentName = "rhacs-operator-controller-manager"
+	managerContainerName   = "manager"
 )
 
 var requiredCRDs = []string{
@@ -32,10 +34,10 @@ var requiredCRDs = []string{
 	"securitypolicies.config.stackrox.io",
 }
 
-// deployOperatorNonOLM deploys the RHACS operator without OLM
-func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
-	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
-	bundleImage := OperatorBundleImage(d.config)
+// deployOperatorNonOLM deploys one RHACS operator instance without OLM.
+func (d *Deployer) deployOperatorNonOLM(ctx context.Context, instance OperatorInstance) error {
+	d.logger.Infof("Operator tag: %s (namespace %s)", instance.Version, instance.Namespace)
+	bundleImage := OperatorBundleImageForVersion(instance.Version, d.config.Roxie.KonfluxImagesEnabled())
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
 	if err != nil {
@@ -45,16 +47,22 @@ func (d *Deployer) deployOperatorNonOLM(ctx context.Context) error {
 
 	d.logger.Infof("Bundle image: %s", bundleImage)
 
-	crdFiles, err := d.identifyCRDFileNames(bundleDir)
-	if err != nil {
-		return err
+	// Only the newest planned operator version may apply CRDs, so an older
+	// companion operator cannot downgrade cluster CRD schemas.
+	if instance.Version == d.config.NewestOperatorVersion() {
+		crdFiles, err := d.identifyCRDFileNames(bundleDir)
+		if err != nil {
+			return err
+		}
+		if err := d.applyCRDsToCluster(ctx, crdFiles); err != nil {
+			return err
+		}
+	} else {
+		d.logger.Dimf("Skipping CRD apply for older operator version %s (newest is %s)",
+			instance.Version, d.config.NewestOperatorVersion())
 	}
 
-	if err := d.applyCRDsToCluster(ctx, crdFiles); err != nil {
-		return err
-	}
-
-	if err := d.deployOperatorFromCSV(ctx, bundleDir); err != nil {
+	if err := d.deployOperatorFromCSV(ctx, bundleDir, instance); err != nil {
 		return err
 	}
 
@@ -160,7 +168,11 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	}
 
 	if len(missing) > 0 {
-		bundleImage := OperatorBundleImage(d.config)
+		version := d.config.NewestOperatorVersion()
+		if version == "" {
+			version = d.config.Operator.Version
+		}
+		bundleImage := OperatorBundleImageForVersion(version, d.config.Roxie.KonfluxImagesEnabled())
 		d.logger.Warningf("Missing CRDs detected (%s)", strings.Join(missing, ", "))
 		d.logger.Warningf("Fetching bundle %s", bundleImage)
 
@@ -181,8 +193,8 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	return nil
 }
 
-// deployOperatorFromCSV deploys the operator from CSV
-func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) error {
+// deployOperatorFromCSV deploys the operator from CSV into the given instance namespace.
+func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string, instance OperatorInstance) error {
 	csvFile := filepath.Join(bundleDir, "rhacs-operator.clusterserviceversion.yaml")
 	if _, err := os.Stat(csvFile); os.IsNotExist(err) {
 		return errors.New("ClusterServiceVersion file not found in bundle")
@@ -199,45 +211,45 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string) 
 	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsPullSecrets()
 
 	d.logger.Info("📋 Operator deployment plan:")
-	d.logger.Dimf("  • Namespace: %s", operatorNamespace)
+	d.logger.Dimf("  • Namespace: %s", instance.Namespace)
 	d.logger.Dimf("  • ServiceAccount: %s", serviceAccountName)
 	d.logger.Dimf("  • Setting up pull secrets: %v", d.useOperatorPullSecrets)
-	if len(d.config.Operator.EnvVars) > 0 {
-		d.logger.Dimf("  • Custom operator env vars: %d", len(d.config.Operator.EnvVars))
-		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
+	if len(instance.EnvVars) > 0 {
+		d.logger.Dimf("  • Custom operator env vars: %d", len(instance.EnvVars))
+		for _, envVar := range envVarsToSortedList(instance.EnvVars) {
 			ev := envVar.(map[string]any)
 			d.logger.Dimf("    %s=%s", ev["name"], ev["value"])
 		}
 	}
 
-	if err := d.prepareNamespace(ctx, operatorNamespace, d.useOperatorPullSecrets); err != nil {
+	if err := d.prepareNamespace(ctx, instance.Namespace, d.useOperatorPullSecrets); err != nil {
 		return err
 	}
 
-	if err := d.createServiceAccount(ctx, operatorNamespace, serviceAccountName); err != nil {
+	if err := d.createServiceAccount(ctx, instance.Namespace, serviceAccountName); err != nil {
 		return err
 	}
 
-	if err := d.createClusterRoleFromCSV(ctx, deploymentSpec); err != nil {
+	if err := d.createClusterRoleFromCSV(ctx, deploymentSpec, instance); err != nil {
 		return err
 	}
 
-	if err := d.createClusterRoleBinding(ctx, operatorNamespace, serviceAccountName); err != nil {
+	if err := d.createClusterRoleBinding(ctx, instance, serviceAccountName); err != nil {
 		return err
 	}
 
-	if err := d.createDeploymentFromCSV(ctx, operatorNamespace, deploymentSpec); err != nil {
+	if err := d.createDeploymentFromCSV(ctx, instance, deploymentSpec); err != nil {
 		return err
 	}
 
 	// Apply bundle service resources (if they exist)
-	_ = d.applyBundleServiceResources(ctx, bundleDir, operatorNamespace)
+	_ = d.applyBundleServiceResources(ctx, bundleDir, instance.Namespace)
 
-	if err := d.waitForOperatorReady(ctx, operatorNamespace, operatorDeploymentName, 300); err != nil {
+	if err := d.waitForOperatorReady(ctx, instance.Namespace, operatorDeploymentName, 300); err != nil {
 		return err
 	}
 
-	d.logger.Success("🎉 Operator deployment completed successfully!")
+	d.logger.Successf("🎉 Operator deployment completed successfully in %s!", instance.Namespace)
 	return nil
 }
 
@@ -311,8 +323,8 @@ func (d *Deployer) createServiceAccount(ctx context.Context, namespace, name str
 	return nil
 }
 
-// createClusterRoleFromCSV creates ClusterRole from CSV
-func (d *Deployer) createClusterRoleFromCSV(ctx context.Context, deploymentSpec map[string]any) error {
+// createClusterRoleFromCSV creates ClusterRole from CSV for the given operator instance.
+func (d *Deployer) createClusterRoleFromCSV(ctx context.Context, deploymentSpec map[string]any, instance OperatorInstance) error {
 	clusterPermissions := deploymentSpec["cluster_permissions"].([]any)
 	if len(clusterPermissions) == 0 {
 		d.logger.Warning("No cluster permissions found in CSV")
@@ -321,12 +333,13 @@ func (d *Deployer) createClusterRoleFromCSV(ctx context.Context, deploymentSpec 
 
 	firstPerm := clusterPermissions[0].(map[string]any)
 	rules := firstPerm["rules"]
+	roleName := instance.ClusterRoleName()
 
 	clusterRole := map[string]any{
 		"apiVersion": "rbac.authorization.k8s.io/v1",
 		"kind":       "ClusterRole",
 		"metadata": map[string]any{
-			"name":   "rhacs-operator-manager-role",
+			"name":   roleName,
 			"labels": map[string]string{"app": "rhacs-operator"},
 		},
 		"rules": rules,
@@ -334,7 +347,7 @@ func (d *Deployer) createClusterRoleFromCSV(ctx context.Context, deploymentSpec 
 
 	yamlData, err := yaml.Marshal(clusterRole)
 	if err != nil {
-		return fmt.Errorf("failed to marshal ClusterRole 'rhacs-operator-manager-role': %w", err)
+		return fmt.Errorf("failed to marshal ClusterRole '%s': %w", roleName, err)
 	}
 
 	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
@@ -342,37 +355,40 @@ func (d *Deployer) createClusterRoleFromCSV(ctx context.Context, deploymentSpec 
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create ClusterRole 'rhacs-operator-manager-role': %w", err)
+		return fmt.Errorf("failed to create ClusterRole '%s': %w", roleName, err)
 	}
 	return nil
 }
 
-// createClusterRoleBinding creates ClusterRoleBinding
-func (d *Deployer) createClusterRoleBinding(ctx context.Context, namespace, serviceAccountName string) error {
+// createClusterRoleBinding creates ClusterRoleBinding for the given operator instance.
+func (d *Deployer) createClusterRoleBinding(ctx context.Context, instance OperatorInstance, serviceAccountName string) error {
+	roleName := instance.ClusterRoleName()
+	bindingName := instance.ClusterRoleBindingName()
+
 	crb := map[string]any{
 		"apiVersion": "rbac.authorization.k8s.io/v1",
 		"kind":       "ClusterRoleBinding",
 		"metadata": map[string]any{
-			"name":   "rhacs-operator-manager-rolebinding",
+			"name":   bindingName,
 			"labels": map[string]string{"app": "rhacs-operator"},
 		},
 		"roleRef": map[string]any{
 			"apiGroup": "rbac.authorization.k8s.io",
 			"kind":     "ClusterRole",
-			"name":     "rhacs-operator-manager-role",
+			"name":     roleName,
 		},
 		"subjects": []any{
 			map[string]any{
 				"kind":      "ServiceAccount",
 				"name":      serviceAccountName,
-				"namespace": namespace,
+				"namespace": instance.Namespace,
 			},
 		},
 	}
 
 	yamlData, err := yaml.Marshal(crb)
 	if err != nil {
-		return fmt.Errorf("failed to marshal ClusterRoleBinding 'rhacs-operator-manager-rolebinding' for ServiceAccount '%s/%s': %w", namespace, serviceAccountName, err)
+		return fmt.Errorf("failed to marshal ClusterRoleBinding '%s' for ServiceAccount '%s/%s': %w", bindingName, instance.Namespace, serviceAccountName, err)
 	}
 
 	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
@@ -380,13 +396,13 @@ func (d *Deployer) createClusterRoleBinding(ctx context.Context, namespace, serv
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create ClusterRoleBinding 'rhacs-operator-manager-rolebinding': %w", err)
+		return fmt.Errorf("failed to create ClusterRoleBinding '%s': %w", bindingName, err)
 	}
 	return nil
 }
 
-// createDeploymentFromCSV creates Deployment from CSV
-func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string, deploymentSpec map[string]any) error {
+// createDeploymentFromCSV creates Deployment from CSV for the given operator instance.
+func (d *Deployer) createDeploymentFromCSV(ctx context.Context, instance OperatorInstance, deploymentSpec map[string]any) error {
 	deployments := deploymentSpec["deployments"].([]any)
 	if len(deployments) == 0 {
 		return errors.New("no deployments found in CSV")
@@ -405,7 +421,7 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 		"kind":       "Deployment",
 		"metadata": map[string]any{
 			"name":      deploymentName,
-			"namespace": namespace,
+			"namespace": instance.Namespace,
 			"labels":    csvDeployment["label"],
 		},
 		"spec": deploymentTemplate,
@@ -430,16 +446,16 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 
 	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
 	if d.config.Roxie.KonfluxImagesEnabled() {
-		d.rewriteKonfluxOperatorImage(managerContainer)
+		d.rewriteKonfluxOperatorImage(managerContainer, instance.Version)
 	}
 
-	if len(d.config.Operator.EnvVars) > 0 {
-		d.injectEnvVarsIntoManagerContainer(managerContainer)
+	if len(instance.EnvVars) > 0 {
+		injectEnvVarsIntoManagerContainer(managerContainer, instance.EnvVars)
 	}
 
 	yamlData, err := yaml.Marshal(deployment)
 	if err != nil {
-		return fmt.Errorf("failed to marshal Deployment '%s/%s': %w", namespace, deploymentName, err)
+		return fmt.Errorf("failed to marshal Deployment '%s/%s': %w", instance.Namespace, deploymentName, err)
 	}
 
 	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
@@ -447,7 +463,7 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, namespace string
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create Deployment '%s/%s': %w", namespace, deploymentName, err)
+		return fmt.Errorf("failed to create Deployment '%s/%s': %w", instance.Namespace, deploymentName, err)
 	}
 	return nil
 }
@@ -472,7 +488,7 @@ func managerContainerFromPodSpec(podSpec map[string]any) (map[string]any, error)
 
 // injectEnvVarsIntoManagerContainer merges configured operator env vars into
 // the manager container, overriding any existing env vars with the same name.
-func (d *Deployer) injectEnvVarsIntoManagerContainer(container map[string]any) {
+func injectEnvVarsIntoManagerContainer(container map[string]any, envVars map[string]string) {
 	existing := make(map[string]int)
 	envList, _ := container["env"].([]any)
 	for i, item := range envList {
@@ -483,7 +499,7 @@ func (d *Deployer) injectEnvVarsIntoManagerContainer(container map[string]any) {
 		}
 	}
 
-	for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
+	for _, envVar := range envVarsToSortedList(envVars) {
 		name := envVar.(map[string]any)["name"].(string)
 		if idx, found := existing[name]; found {
 			envList[idx] = envVar
@@ -496,9 +512,9 @@ func (d *Deployer) injectEnvVarsIntoManagerContainer(container map[string]any) {
 }
 
 // rewriteKonfluxOperatorImage replaces the manager container's image with the
-// Konflux-built operator image.
-func (d *Deployer) rewriteKonfluxOperatorImage(container map[string]any) {
-	newImage := KonfluxOperatorImage(&d.config)
+// Konflux-built operator image for the given operator version.
+func (d *Deployer) rewriteKonfluxOperatorImage(container map[string]any, operatorVersion string) {
+	newImage := KonfluxOperatorImage(operatorVersion)
 	d.logger.Infof("Rewriting operator image to %s", newImage)
 	container["image"] = newImage
 }
@@ -551,35 +567,74 @@ func generateClusterName() string {
 	return fmt.Sprintf("sensor-%d", n.Int64()+1000)
 }
 
-// teardownOperatorNonOLM removes the operator when installed without OLM.
-func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
-	d.logger.Info("🧹 Tearing down operator deployed without OLM...")
+// teardownOperatorNonOLMInNamespace removes a non-OLM operator from the given namespace
+// and deletes its cluster-scoped RBAC resources for that instance.
+func (d *Deployer) teardownOperatorNonOLMInNamespace(ctx context.Context, instance OperatorInstance) error {
+	d.logger.Infof("🧹 Tearing down non-OLM operator in namespace %s...", instance.Namespace)
 
-	// Delete operator namespace.
 	d.runKubectl(ctx, k8s.KubectlOptions{
-		Args:         []string{"delete", "namespace", operatorNamespace, "--wait=false"},
+		Args:         []string{"delete", "namespace", instance.Namespace, "--wait=false"},
 		IgnoreErrors: true,
 	})
 
-	// Delete cluster-scoped resources created by non-OLM flow.
-	clusterResources := []struct {
+	for _, resource := range []struct {
 		name string
 		kind string
 	}{
-		{name: "rhacs-operator-manager-rolebinding", kind: "clusterrolebinding"},
-		{name: "rhacs-operator-manager-role", kind: "clusterrole"},
-	}
-	for _, resource := range clusterResources {
+		{name: instance.ClusterRoleBindingName(), kind: "clusterrolebinding"},
+		{name: instance.ClusterRoleName(), kind: "clusterrole"},
+	} {
 		d.runKubectl(ctx, k8s.KubectlOptions{
 			Args:         []string{"delete", resource.kind, resource.name, "--ignore-not-found=true"},
 			IgnoreErrors: true,
 		})
 	}
 
-	if err := d.waitForNamespaceDeletion(operatorNamespace); err != nil {
-		d.logger.Warningf("Namespace %s deletion incomplete: %v", operatorNamespace, err)
+	if err := d.waitForNamespaceDeletion(instance.Namespace); err != nil {
+		d.logger.Warningf("Namespace %s deletion incomplete: %v", instance.Namespace, err)
 	}
 
+	d.logger.Successf("✓ Non-OLM operator resources removed from %s", instance.Namespace)
+	return nil
+}
+
+// teardownAllOperatorClusterRBAC deletes all known operator ClusterRole/Binding names.
+func (d *Deployer) teardownAllOperatorClusterRBAC(ctx context.Context) {
+	for _, instance := range []OperatorInstance{
+		{Namespace: operatorNamespaceSystem},
+		{Namespace: operatorNamespaceCentral, RoleNameSuffix: "central"},
+		{Namespace: operatorNamespaceSensor, RoleNameSuffix: "sensor"},
+	} {
+		d.runKubectl(ctx, k8s.KubectlOptions{
+			Args:         []string{"delete", "clusterrolebinding", instance.ClusterRoleBindingName(), "--ignore-not-found=true"},
+			IgnoreErrors: true,
+		})
+		d.runKubectl(ctx, k8s.KubectlOptions{
+			Args:         []string{"delete", "clusterrole", instance.ClusterRoleName(), "--ignore-not-found=true"},
+			IgnoreErrors: true,
+		})
+	}
+}
+
+// teardownOperatorNonOLM removes non-OLM operators from all known namespaces.
+func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
+	d.logger.Info("🧹 Tearing down operator deployed without OLM...")
+
+	for _, ns := range AllOperatorNamespaces {
+		if !d.namespaceExists(ns) {
+			continue
+		}
+		instance := OperatorInstance{Namespace: ns}
+		switch ns {
+		case operatorNamespaceCentral:
+			instance.RoleNameSuffix = "central"
+		case operatorNamespaceSensor:
+			instance.RoleNameSuffix = "sensor"
+		}
+		_ = d.teardownOperatorNonOLMInNamespace(ctx, instance)
+	}
+
+	d.teardownAllOperatorClusterRBAC(ctx)
 	d.logger.Success("✓ Non-OLM operator resources removed")
 	return nil
 }
@@ -590,13 +645,31 @@ func (d *Deployer) teardownOperator(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("detecting operator deployment mode: %w", err)
 	}
-	if !operatorExists {
+	if operatorExists && operatorMode == OperatorModeOLM {
+		return d.teardownOperatorOLM(ctx)
+	}
+
+	foundAny := operatorExists
+	for _, ns := range AllOperatorNamespaces {
+		if ns == operatorNamespaceSystem {
+			continue // already covered by detectOperatorDeploymentMode for non-OLM
+		}
+		if d.operatorDeploymentExists(ctx, ns) {
+			foundAny = true
+			break
+		}
+	}
+	if !foundAny {
 		d.logger.Dim("No operator deployment found, skipping operator teardown")
 		return nil
 	}
 
-	if operatorMode == OperatorModeOLM {
-		return d.teardownOperatorOLM(ctx)
-	}
 	return d.teardownOperatorNonOLM(ctx)
+}
+
+func (d *Deployer) operatorDeploymentExists(ctx context.Context, namespace string) bool {
+	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		Args: []string{"get", "deployment", operatorDeploymentName, "-n", namespace},
+	})
+	return err == nil
 }
