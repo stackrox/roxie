@@ -64,6 +64,21 @@ curl -fsSL --retry 5 --retry-all-errors -o /usr/local/bin/roxie \
 chmod +x /usr/local/bin/roxie
 ```
 
+### Install via Nix flake
+
+With a flake-enabled Nix, install straight from the repository:
+```bash
+nix profile install github:stackrox/roxie
+```
+
+Or run it without installing:
+```bash
+nix run github:stackrox/roxie -- --help
+```
+
+Both build from source at the pinned revision. For a development shell with
+roxie and related tooling, see the `nix develop` instructions below.
+
 ### Install in container image
 
 roxie can also be installed by extracting from a published roxie container image, for example
