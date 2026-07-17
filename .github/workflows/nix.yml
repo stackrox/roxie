@@ -1,0 +1,55 @@
+name: Nix
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  nix-build:
+    name: Nix Flake Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v22
+
+      - name: Check flake
+        run: nix flake check
+
+      - name: Build roxie
+        run: |
+          set -o pipefail
+          if nix build -L 2>&1 | tee build.log; then
+            exit 0
+          fi
+          # A stale vendorHash surfaces as a hash mismatch on the go-modules
+          # fixed-output derivation. Point the author at the fix, including
+          # the correct hash which nix prints on the "got:" line.
+          if grep -q "hash mismatch in fixed-output derivation '.*-go-modules" build.log; then
+            got=$(awk '/got:/ { print $2; exit }' build.log)
+            line=$(grep -n 'vendorHash = ' flake.nix | cut -d: -f1)
+            echo "::error file=flake.nix,line=${line},title=vendorHash out of date::This PR changes the Go module set (go.mod/go.sum), so the Nix vendor hash no longer matches. Set vendorHash in flake.nix to \"${got}\"."
+            {
+              echo "### Nix build failed: stale \`vendorHash\`"
+              echo
+              echo "This PR changes the Go module set (go.mod/go.sum), so the"
+              echo "vendored dependencies no longer match the hash recorded in"
+              echo "\`flake.nix\`. Update it to:"
+              echo
+              echo '```nix'
+              echo "vendorHash = \"${got}\";"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 1
+
+      - name: Run roxie
+        run: ./result/bin/roxie version
