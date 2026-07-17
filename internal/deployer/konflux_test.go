@@ -10,11 +10,8 @@ import (
 )
 
 func TestKonfluxOperatorImage(t *testing.T) {
-	config := &Config{
-		Operator: OperatorConfig{Version: "4.9.2"},
-	}
 	expected := fmt.Sprintf("%s/release-operator:4.9.2", constants.DefaultRegistry)
-	assert.Equal(t, expected, KonfluxOperatorImage(config))
+	assert.Equal(t, expected, KonfluxOperatorImage("4.9.2"))
 }
 
 func TestPopulateKonfluxEnvVars_AllEntries(t *testing.T) {
@@ -70,4 +67,15 @@ func TestPopulateKonfluxEnvVars_NilEnvVarsMap(t *testing.T) {
 
 	require.NotNil(t, config.Operator.EnvVars)
 	assert.Len(t, config.Operator.EnvVars, len(konfluxRelatedImages))
+}
+
+func TestMergeKonfluxEnvVars_PerInstanceVersion(t *testing.T) {
+	base := map[string]string{"CUSTOM": "1"}
+	merged := MergeKonfluxEnvVars(base, "4.8.0")
+
+	assert.Equal(t, "1", merged["CUSTOM"])
+	assert.Equal(t, fmt.Sprintf("%s/release-main:4.8.0", constants.DefaultRegistry), merged["RELATED_IMAGE_MAIN"])
+	assert.Equal(t, "1", base["CUSTOM"], "base map should not be mutated for existing keys")
+	_, ok := base["RELATED_IMAGE_MAIN"]
+	assert.False(t, ok, "base map should not receive new keys")
 }

@@ -19,27 +19,32 @@ var konfluxRelatedImages = map[string]string{
 	"RELATED_IMAGE_FACT":            "fact",
 }
 
-// KonfluxOperatorImage returns the Konflux-built operator image reference.
-func KonfluxOperatorImage(config *Config) string {
-	return fmt.Sprintf("%s/release-operator:%s", constants.DefaultRegistry, config.Operator.Version)
+// KonfluxOperatorImage returns the Konflux-built operator image reference for a version.
+func KonfluxOperatorImage(operatorVersion string) string {
+	return fmt.Sprintf("%s/release-operator:%s", constants.DefaultRegistry, operatorVersion)
 }
 
-// PopulateKonfluxEnvVars populates config.Operator.EnvVars with RELATED_IMAGE_*
-// entries for Konflux image rewriting. Explicitly-provided env vars (e.g. from
-// --operator-env) take precedence and are not overwritten.
-func PopulateKonfluxEnvVars(config *Config) {
-	if config.Operator.EnvVars == nil {
-		config.Operator.EnvVars = make(map[string]string)
-	}
+// MergeKonfluxEnvVars returns a copy of envVars with RELATED_IMAGE_* entries filled
+// for the given operator version. Explicitly-provided env vars take precedence.
+func MergeKonfluxEnvVars(envVars map[string]string, operatorVersion string) map[string]string {
+	result := copyStringMap(envVars)
 	for envName, imageSuffix := range konfluxRelatedImages {
-		if _, exists := config.Operator.EnvVars[envName]; exists {
+		if _, exists := result[envName]; exists {
 			continue
 		}
-		config.Operator.EnvVars[envName] = fmt.Sprintf(
+		result[envName] = fmt.Sprintf(
 			"%s/release-%s:%s",
 			constants.DefaultRegistry,
 			imageSuffix,
-			config.Operator.Version, // Konflux built images use the "operator tag".
+			operatorVersion, // Konflux built images use the "operator tag".
 		)
 	}
+	return result
+}
+
+// PopulateKonfluxEnvVars populates config.Operator.EnvVars with RELATED_IMAGE_*
+// entries for Konflux image rewriting. Used for the single-operator / OLM path
+// where env vars live on the top-level OperatorConfig.
+func PopulateKonfluxEnvVars(config *Config) {
+	config.Operator.EnvVars = MergeKonfluxEnvVars(config.Operator.EnvVars, config.Operator.Version)
 }
