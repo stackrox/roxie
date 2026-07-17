@@ -1,0 +1,70 @@
+name: Nix vendorHash Autofix
+
+# Dependabot go.mod/go.sum bumps invalidate the vendorHash in flake.nix and
+# would fail the Nix Flake Build check on every gomod PR. This workflow
+# computes the correct hash and pushes the fix to the dependabot branch.
+#
+# Setup: requires a NIX_AUTOFIX_PUSH_TOKEN secret holding a token with
+# contents write access to this repository (fine-grained PAT or GitHub App
+# token). It must be registered as a *Dependabot* secret, because workflow
+# runs triggered by dependabot only receive Dependabot secrets. The default
+# GITHUB_TOKEN cannot be used: pushes made with it do not retrigger CI, so
+# the PR's checks would never run for the fixed commit.
+
+on:
+  pull_request:
+    paths:
+      - go.mod
+      - go.sum
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-autofix-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  autofix:
+    name: Update vendorHash
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          # Keep the default credentials out of .git/config; the build below
+          # runs dependency code (tests), which must not see any token.
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v22
+
+      - name: Update vendorHash
+        id: fix
+        run: |
+          ./scripts/update-nix-vendor-hash.sh
+          if git diff --quiet flake.nix; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.fix.outputs.changed == 'true'
+        env:
+          TOKEN: ${{ secrets.NIX_AUTOFIX_PUSH_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::NIX_AUTOFIX_PUSH_TOKEN is not set (must be a Dependabot secret); cannot push the vendorHash fix." >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # "[dependabot skip]" lets dependabot rebase/recreate the PR even
+          # though someone else pushed to its branch.
+          git commit -m "Update nix vendorHash [dependabot skip]" flake.nix
+          git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"
