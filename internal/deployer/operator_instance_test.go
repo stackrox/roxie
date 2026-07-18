@@ -45,6 +45,10 @@ func TestEffectiveVersions_BothOverridesSame_NoSplit(t *testing.T) {
 	assert.Equal(t, "4.8.0", cfg.EffectiveCentralVersion())
 	assert.Equal(t, "4.8.0", cfg.EffectiveSecuredClusterVersion())
 	assert.False(t, cfg.NeedsSplitOperators())
+
+	instances := cfg.OperatorInstances()
+	require.Len(t, instances, 1)
+	assert.Equal(t, "4.8.0", instances[0].Version, "operator should use the override version, not Roxie.Version")
 }
 
 func TestOperatorInstances_SingleVersion(t *testing.T) {

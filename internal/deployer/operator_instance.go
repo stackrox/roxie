@@ -76,7 +76,7 @@ func (c *Config) NeedsSplitOperators() bool {
 // When they differ, two operators are deployed with reconciler toggles.
 func (c *Config) OperatorInstances() []OperatorInstance {
 	if !c.NeedsSplitOperators() {
-		version := helpers.ConvertMainTagToOperatorTag(c.Roxie.Version)
+		version := helpers.ConvertMainTagToOperatorTag(c.EffectiveCentralVersion())
 		if version == "" {
 			version = c.Operator.Version
 		}
