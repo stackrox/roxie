@@ -115,16 +115,17 @@ type WaitConfig struct {
 
 // CentralConfig holds deployment settings for the Central component.
 type CentralConfig struct {
-	Namespace           string                            `yaml:"namespace,omitempty"`
-	ResourceProfile     types.ResourceProfile             `yaml:"resourceProfile,omitempty"`
-	PauseReconciliation *bool                             `yaml:"pauseReconciliation,omitempty"`
-	Exposure            *types.Exposure                   `yaml:"exposure,omitempty"`
-	DeployTimeout       time.Duration                     `yaml:"deployTimeout,omitempty"`
-	PortForwarding      *bool                             `yaml:"portForwarding,omitempty"`
-	EarlyReadiness      *bool                             `yaml:"earlyReadiness,omitempty"`
-	AddOns              map[string]bool                   `yaml:"addOns,omitempty"`
-	AvailableAddOns     map[string]CentralAddOnDefinition `yaml:"availableAddOns,omitempty"`
-	Spec                map[string]interface{}            `yaml:"spec,omitempty"`
+	Namespace           string                 `yaml:"namespace,omitempty"`
+	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
+	PauseReconciliation *bool                  `yaml:"pauseReconciliation,omitempty"`
+	Exposure            *types.Exposure        `yaml:"exposure,omitempty"`
+	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
+	PortForwarding      *bool                  `yaml:"portForwarding,omitempty"`
+	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
+	Spec                map[string]interface{} `yaml:"spec,omitempty"`
+
+	AddOns          map[string]bool                   `yaml:"addOns,omitempty"`
+	AvailableAddOns map[string]CentralAddOnDefinition `yaml:"availableAddOns,omitempty"`
 }
 
 func (c *CentralConfig) EarlyReadinessEnabled() bool {
