@@ -406,7 +406,7 @@ func (d *Deployer) waitForAvailableCondition(ctx context.Context, resource, name
 		return fmt.Errorf("error waiting for resource %s in namespace %s to exist: %v", resource, namespace, err)
 	}
 
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
 			"wait",
 			"--for=condition=Available",
@@ -416,6 +416,13 @@ func (d *Deployer) waitForAvailableCondition(ctx context.Context, resource, name
 		},
 	})
 	if err != nil {
+		stderr := strings.TrimSpace(result.Stderr)
+		if len(stderr) > 0 {
+			d.logger.Errorf("kubectl wait produced error output:")
+			for line := range strings.SplitSeq(stderr, "\n") {
+				d.logger.Dim("| " + line)
+			}
+		}
 		return fmt.Errorf("error waiting for resource %s in namespace %s to become Available: %v", resource, namespace, err)
 	}
 	d.logger.Successf("✓ Resource %s in namespace %s is ready", resource, namespace)
