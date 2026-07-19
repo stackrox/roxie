@@ -35,6 +35,9 @@ func (l *Logger) getTimestamp() string {
 
 // Info prints an info message with magenta styling
 func (l *Logger) Info(message string) {
+	if l == nil {
+		return
+	}
 	timestamp := color.GreenString(l.getTimestamp())
 	info := color.New(color.FgMagenta, color.Bold).Sprint(message)
 	fmt.Fprintf(l.stdout, "%s %s\n", timestamp, info)
@@ -47,6 +50,9 @@ func (l *Logger) Infof(format string, args ...interface{}) {
 
 // Error prints an error message with red styling to stderr
 func (l *Logger) Error(message string) {
+	if l == nil {
+		return
+	}
 	timestamp := color.GreenString(l.getTimestamp())
 	errMsg := color.New(color.FgRed, color.Bold).Sprint(message)
 	fmt.Fprintf(l.stderr, "%s %s\n", timestamp, errMsg)
@@ -59,6 +65,9 @@ func (l *Logger) Errorf(format string, args ...interface{}) {
 
 // Success prints a success message with green styling
 func (l *Logger) Success(message string) {
+	if l == nil {
+		return
+	}
 	timestamp := color.GreenString(l.getTimestamp())
 	success := color.New(color.FgGreen, color.Bold).Sprint(message)
 	fmt.Fprintf(l.stdout, "%s %s\n", timestamp, success)
@@ -71,6 +80,9 @@ func (l *Logger) Successf(format string, args ...interface{}) {
 
 // Warning prints a warning message with yellow styling
 func (l *Logger) Warning(message string) {
+	if l == nil {
+		return
+	}
 	timestamp := color.GreenString(l.getTimestamp())
 	warning := color.New(color.FgYellow, color.Bold).Sprint(message)
 	fmt.Fprintf(l.stdout, "%s %s\n", timestamp, warning)
@@ -83,6 +95,9 @@ func (l *Logger) Warningf(format string, args ...interface{}) {
 
 // Dim prints a dimmed message
 func (l *Logger) Dim(message string) {
+	if l == nil {
+		return
+	}
 	timestamp := color.GreenString(l.getTimestamp())
 	dim := color.New(color.Faint).Sprint(message)
 	fmt.Fprintf(l.stdout, "%s %s\n", timestamp, dim)
