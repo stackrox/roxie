@@ -325,7 +325,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		d.WaitForCentral(5 * time.Minute)
 	}
 
-	if components.IncludesCentral() && !dryRun {
+	if !dryRun {
 		roxieEnv := roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo())
 		m := manifest.RoxieManifest{
 			RoxieEnvironment: roxieEnv,
