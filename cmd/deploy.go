@@ -513,6 +513,12 @@ func applySecuredClusterDefaults(config *deployer.SecuredClusterConfig) error {
 }
 
 func generateClusterName() string {
-	n, _ := rand.Int(rand.Reader, big.NewInt(9000))
-	return fmt.Sprintf("sensor-%d", n.Int64()+1000)
+	var randInt int64
+	bigInt, err := rand.Int(rand.Reader, big.NewInt(9000))
+	if err == nil {
+		// Don't want to do error handling here.
+		randInt = bigInt.Int64() + 1000
+	}
+
+	return fmt.Sprintf("sensor-%d", randInt)
 }
