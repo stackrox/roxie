@@ -250,7 +250,7 @@ func (d *Deployer) createAdminPasswordSecret(ctx context.Context) error {
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create admin password secret: %w", err)
+		return err
 	}
 
 	d.logger.Success("✓ Admin password secret created")
