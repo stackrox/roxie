@@ -46,7 +46,6 @@ var retryableErrors = []string{
 	"tls handshake timeout",
 	"eof",
 	"broken pipe",
-	"context deadline exceeded",
 }
 
 type HelmCtx struct {
@@ -101,7 +100,7 @@ func ListByPrefix(helmCtx HelmCtx, prefix, namespace string) ([]string, error) {
 }
 
 func executeHelmActionWithRetries(helmCtx HelmCtx, actionName string, helmAction func(helmCtx HelmCtx) error) error {
-	var lastErr error
+	var err error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if attempt > 1 {
 			waitTime := time.Duration(attempt) * retryDelay
@@ -113,19 +112,18 @@ func executeHelmActionWithRetries(helmCtx HelmCtx, actionName string, helmAction
 			}
 		}
 
-		err := helmAction(helmCtx)
+		err = helmAction(helmCtx)
 		if err == nil {
 			return nil
 		}
-		lastErr = err
 
-		if !isRetryable(err) || attempt == maxAttempts {
+		if !isRetryable(err) {
 			return fmt.Errorf("helm %s failed: %w", actionName, err)
 		}
 
 		helmCtx.Log.Warningf("Transient error during helm %s: %v", actionName, err)
 	}
-	return fmt.Errorf("helm %s failed after %d attempts: %w", actionName, maxAttempts, lastErr)
+	return fmt.Errorf("helm %s failed after %d attempts: %w", actionName, maxAttempts, err)
 }
 
 func doInstall(helmCtx HelmCtx, opts InstallOptions) error {
