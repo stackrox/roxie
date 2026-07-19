@@ -114,5 +114,7 @@ func getTestNamespaceName(t *testing.T) string {
 	name = strings.ReplaceAll(name, "_", "-")
 	name = strings.ToLower(name)
 	name = "helm-test-" + name
-	return name[:63]
+	name = name[:63]
+	name = strings.TrimSuffix(name, "-")
+	return name
 }
