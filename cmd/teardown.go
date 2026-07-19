@@ -78,6 +78,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	defer d.Cleanup()
 
 	d.SetConfig(deploySettings)
+	d.SetVerbose(verbose)
 
 	if err := d.Teardown(ctx, components); err != nil {
 		return fmt.Errorf("teardown failed: %w", err)
