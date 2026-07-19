@@ -245,11 +245,18 @@ func (d *Deployer) createAdminPasswordSecret(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal secret: %w", err)
 	}
 
-	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
+		stderr := strings.TrimSpace(result.Stderr)
+		if len(stderr) > 0 {
+			d.logger.Errorf("kubectl apply produced error output:")
+			for line := range strings.SplitSeq(stderr, "\n") {
+				d.logger.Dim("| " + line)
+			}
+		}
 		return err
 	}
 
