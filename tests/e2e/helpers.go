@@ -106,7 +106,6 @@ func runCommand(t *testing.T, timeout time.Duration, env map[string]string, args
 
 	err := cmd.Run()
 	if err != nil {
-		t.Logf("Command failed: %v", err)
 		t.Fatalf("Command failed: %v", err)
 	}
 	t.Logf("Command completed successfully")
