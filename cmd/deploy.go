@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stackrox/roxie/internal/clusterdefaults"
@@ -14,6 +17,7 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
 	"github.com/stackrox/roxie/internal/roxieenv"
@@ -231,6 +235,12 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("looking up main image tag: %w", err)
 		}
 		deploySettings.Roxie.Version = mainImageTag
+	}
+
+	if components.IncludesSensor() {
+		if err := applySecuredClusterDefaults(&deploySettings.SecuredCluster); err != nil {
+			return fmt.Errorf("applying SecuredCluster defaults: %w", err)
+		}
 	}
 
 	if err := configureConfig(log, components, &deploySettings); err != nil {
@@ -459,4 +469,23 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 	}
 
 	return nil
+}
+
+func applySecuredClusterDefaults(config *deployer.SecuredClusterConfig) error {
+	if config.Spec == nil {
+		config.Spec = make(map[string]any)
+	}
+	return mergo.Merge(&config.Spec, &map[string]any{
+		"clusterName": generateClusterName(),
+		"imagePullSecrets": []any{
+			map[string]any{
+				"name": "stackrox",
+			},
+		},
+	}, mergo.WithAppendSlice)
+}
+
+func generateClusterName() string {
+	n, _ := rand.Int(rand.Reader, big.NewInt(9000))
+	return fmt.Sprintf("sensor-%d", n.Int64()+1000)
 }

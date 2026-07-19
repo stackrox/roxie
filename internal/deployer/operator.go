@@ -3,10 +3,8 @@ package deployer
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -544,11 +542,6 @@ func (d *Deployer) waitForOperatorReady(ctx context.Context, namespace, deployme
 	}
 
 	return errors.New("timeout waiting for operator deployment to become ready")
-}
-
-func generateClusterName() string {
-	n, _ := rand.Int(rand.Reader, big.NewInt(9000))
-	return fmt.Sprintf("sensor-%d", n.Int64()+1000)
 }
 
 // teardownOperatorNonOLM removes the operator when installed without OLM.

@@ -342,12 +342,6 @@ func (s *SecuredClusterConfig) CustomResource() (map[string]interface{}, error) 
 				"app": "stackrox-secured-cluster",
 			},
 		},
-		"spec": map[string]interface{}{
-			"clusterName": generateClusterName(),
-			"imagePullSecrets": []map[string]string{
-				{"name": "stackrox"},
-			},
-		},
 	}
 	if s.ResourceProfile == types.ResourceProfileAuto {
 		return nil, fmt.Errorf("resource profile 'auto' must have been resolved before building the CR")
