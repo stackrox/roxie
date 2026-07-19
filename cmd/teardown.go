@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/manifest"
 )
 
@@ -60,7 +62,9 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 
 	var clusterConfig *deployer.Config
 	clusterManifest, err := manifest.LoadManifestSecret(ctx, log)
-	if err != nil {
+	if errors.Is(err, k8s.ErrResourceNotFound) {
+		log.Infof("No roxie manifest found in cluster, proceeding without it")
+	} else if err != nil {
 		log.Warningf("Failed to load manifest from cluster: %v", err)
 	} else {
 		clusterConfig = &clusterManifest.Config
