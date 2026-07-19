@@ -219,13 +219,15 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	deploySettings, err := assembleConfigForCommand(nil, deploySettingsFromArgs, skipUserConfig)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	clusterConfig := retrieveClusterConfigForComponents(ctx, log, components)
+
+	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
 	if err != nil {
 		return err
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
 
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
@@ -353,6 +355,31 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func retrieveClusterConfigForComponents(
+	ctx context.Context,
+	log *logger.Logger,
+	components component.Component,
+) *deployer.Config {
+	clusterManifest, err := manifest.LoadManifestSecret(ctx, log)
+	if err != nil {
+		if errors.Is(err, k8s.ErrResourceNotFound) {
+			log.Dim("No existing manifest found on cluster, starting from defaults")
+		} else {
+			log.Warningf("Failed to load manifest from cluster: %v", err)
+		}
+		return nil // Let's try to continue without manifest
+	}
+
+	if components == component.SecuredCluster && clusterManifest.Config.SecuredCluster.Spec != nil {
+		// Reusing these fields from the config stored on the cluster would cause problems
+		// during repeating sensor deploy & teardown cycles.
+		delete(clusterManifest.Config.SecuredCluster.Spec, "clusterName")
+		delete(clusterManifest.Config.SecuredCluster.Spec, "centralEndpoint")
+	}
+
+	return &clusterManifest.Config
 }
 
 func configureConfig(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
