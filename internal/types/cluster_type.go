@@ -7,7 +7,9 @@ type ClusterType string
 
 const (
 	// ClusterTypeUnknown represents an unidentified cluster type
-	ClusterTypeUnknown ClusterType = ""
+	ClusterTypeUnknown ClusterType = "Unknown"
+	// ClusterTypeGKE represents a generic GKE cluster.
+	ClusterTypeGKE ClusterType = "GKE"
 	// ClusterTypeInfraGKE represents a GKE cluster created via Infra.
 	ClusterTypeInfraGKE ClusterType = "InfraGKE"
 	// ClusterTypeInfraOpenShift4 represents an OpenShift 4 cluster
@@ -24,6 +26,10 @@ const (
 	ClusterTypeCRC ClusterType = "CRC"
 )
 
+func (ct ClusterType) IsGKE() bool {
+	return ct == ClusterTypeInfraGKE || ct == ClusterTypeGKE
+}
+
 func (ct ClusterType) IsOpenShift() bool {
 	return ct == ClusterTypeInfraOpenShift4 || ct == ClusterTypeOpenShift4
 }
@@ -35,8 +41,6 @@ func (ct ClusterType) String() string {
 		return "GKE (infra)"
 	case ClusterTypeInfraOpenShift4:
 		return "OpenShift4 (infra)"
-	case ClusterTypeUnknown:
-		return "Unknown"
 	default:
 		return string(ct)
 	}
@@ -44,6 +48,8 @@ func (ct ClusterType) String() string {
 
 func AllClusterTypes() []ClusterType {
 	return []ClusterType{
+		ClusterTypeUnknown,
+		ClusterTypeGKE,
 		ClusterTypeInfraGKE,
 		ClusterTypeKind,
 		ClusterTypeMinikube,

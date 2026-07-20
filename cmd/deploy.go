@@ -346,7 +346,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 }
 
 func configureConfig(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
-	if deploySettings.Roxie.ClusterType == types.ClusterTypeUnknown {
+	if deploySettings.Roxie.ClusterType == "" {
 		clusterType := env.GetAutoDetectedClusterType()
 		log.Dimf("Detected cluster type: %v", clusterType)
 		deploySettings.Roxie.ClusterType = clusterType
