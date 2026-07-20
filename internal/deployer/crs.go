@@ -189,17 +189,23 @@ func (d *Deployer) isRetryableError(err error) bool {
 }
 
 // centralVerifyFunc returns a custom TLS peer certificate verifier for Central.
-// Central's self-signed serving cert uses IP SANs and the internal DNS name
-// "central.stackrox" rather than the external hostname roxie connects to (e.g.
-// a port-forwarded localhost or LoadBalancer IP). Go's default TLS verification
-// rejects the cert because the hostname doesn't match any SAN. We work around
-// this by setting InsecureSkipVerify and performing chain verification ourselves:
-// first against the actual hostname (which may work if the user added a matching
-// SAN), then falling back to "central.stackrox" for certs issued by Central's
-// own service CA.
+//
+// Go's default TLS verifier is disabled (InsecureSkipVerify) because roxie
+// often connects via port-forward to 127.0.0.1, which never matches any SAN.
+// This function performs certificate verification in its place.
+//
+// Two modes based on connection type:
+//
+//   - Port-forward (hostname is 127.0.0.1): chain verification only. Hostname
+//     checking is unnecessary because kubectl port-forward provides transport-
+//     level assurance that we're reaching the correct pod.
+//
+//   - Direct connection (LoadBalancer, service DNS): chain verification plus
+//     hostname checking. If the hostname doesn't match, falls back to
+//     "central.stackrox" for certs issued by the StackRox internal CA, since
+//     those use internal DNS names rather than the external endpoint.
 func centralVerifyFunc(log *logger.Logger, hostname string, conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-		log.Dim("Inside custom verifier func")
 		if len(rawCerts) == 0 {
 			return errors.New("remote peer presented no certificates")
 		}
@@ -219,35 +225,46 @@ func centralVerifyFunc(log *logger.Logger, hostname string, conf *tls.Config) fu
 			intermediates.AddCert(cert)
 		}
 
-		log.Dimf("Crafting custom verifier options: hostname=%s", hostname)
-		systemVerifyOpts := x509.VerifyOptions{
+		log.Dimf("Leaf cert: Subject.CN=%q, Issuer.CN=%q, AuthorityKeyId=%x",
+			leaf.Subject.CommonName, leaf.Issuer.CommonName, leaf.AuthorityKeyId)
+
+		// Port-forward: chain verification only.
+		if hostname == "127.0.0.1" {
+			log.Dim("Port-forward connection: verifying certificate chain only")
+			_, err := leaf.Verify(x509.VerifyOptions{
+				Intermediates: intermediates,
+				Roots:         conf.RootCAs,
+			})
+			return err
+		}
+
+		// Direct connection: chain + hostname verification.
+		log.Dimf("Direct connection: verifying against hostname %s", hostname)
+		verifyOpts := x509.VerifyOptions{
 			DNSName:       hostname,
 			Intermediates: intermediates,
 			Roots:         conf.RootCAs,
 		}
-
-		_, systemVerifyErr := leaf.Verify(systemVerifyOpts)
-		log.Dimf("Leaf cert: Subject.CN=%q, Issuer.CN=%q, AuthorityKeyId=%x", leaf.Subject.CommonName, leaf.Issuer.CommonName, leaf.AuthorityKeyId)
-		log.Dimf("leaf.Verify() returned: %v (isACentralCert == %v)", systemVerifyErr, isACentralCert(leaf))
-
-		if systemVerifyErr == nil || !isACentralCert(leaf) {
-			return systemVerifyErr
+		_, err := leaf.Verify(verifyOpts)
+		if err == nil {
+			return nil
+		}
+		if !isACentralCert(leaf) {
+			return err
 		}
 
-		log.Dim("Crafting fallback verifier options")
-
-		serviceVerifyOpts := x509.VerifyOptions{
+		// Fallback for StackRox service certs: the internal cert uses
+		// "central.stackrox" as its SAN, not the external endpoint hostname.
+		log.Dim("Falling back to central.stackrox for StackRox service cert")
+		_, fallbackErr := leaf.Verify(x509.VerifyOptions{
 			DNSName:       "central.stackrox",
 			Intermediates: intermediates,
 			Roots:         conf.RootCAs,
-		}
-
-		_, serviceVerifyErr := leaf.Verify(serviceVerifyOpts)
-		log.Dimf("fallback leaf.Verify() returned: %v", serviceVerifyErr)
-		if serviceVerifyErr == nil {
+		})
+		if fallbackErr == nil {
 			return nil
 		}
-		return errors.Join(systemVerifyErr, serviceVerifyErr)
+		return errors.Join(err, fallbackErr)
 	}
 }
 
