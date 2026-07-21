@@ -13,7 +13,7 @@ func TestEffectiveVersions_DefaultToRoxieVersion(t *testing.T) {
 	}
 	assert.Equal(t, "4.9.0", cfg.EffectiveCentralVersion())
 	assert.Equal(t, "4.9.0", cfg.EffectiveSecuredClusterVersion())
-	assert.False(t, cfg.NeedsSplitOperators())
+	assert.False(t, cfg.HasMixedVersions())
 }
 
 func TestEffectiveVersions_CentralOverride(t *testing.T) {
@@ -23,7 +23,7 @@ func TestEffectiveVersions_CentralOverride(t *testing.T) {
 	}
 	assert.Equal(t, "4.8.0", cfg.EffectiveCentralVersion())
 	assert.Equal(t, "4.9.0", cfg.EffectiveSecuredClusterVersion())
-	assert.True(t, cfg.NeedsSplitOperators())
+	assert.True(t, cfg.HasMixedVersions())
 }
 
 func TestEffectiveVersions_SecuredClusterOverride(t *testing.T) {
@@ -33,10 +33,10 @@ func TestEffectiveVersions_SecuredClusterOverride(t *testing.T) {
 	}
 	assert.Equal(t, "4.9.0", cfg.EffectiveCentralVersion())
 	assert.Equal(t, "4.7.0", cfg.EffectiveSecuredClusterVersion())
-	assert.True(t, cfg.NeedsSplitOperators())
+	assert.True(t, cfg.HasMixedVersions())
 }
 
-func TestEffectiveVersions_BothOverridesSame_NoSplit(t *testing.T) {
+func TestEffectiveVersions_BothOverridesSame_NoMixed(t *testing.T) {
 	cfg := Config{
 		Roxie:          RoxieConfig{Version: "4.9.0"},
 		Central:        CentralConfig{Version: "4.8.0"},
@@ -44,7 +44,7 @@ func TestEffectiveVersions_BothOverridesSame_NoSplit(t *testing.T) {
 	}
 	assert.Equal(t, "4.8.0", cfg.EffectiveCentralVersion())
 	assert.Equal(t, "4.8.0", cfg.EffectiveSecuredClusterVersion())
-	assert.False(t, cfg.NeedsSplitOperators())
+	assert.False(t, cfg.HasMixedVersions())
 
 	instances := cfg.OperatorInstances()
 	require.Len(t, instances, 1)
@@ -71,7 +71,7 @@ func TestOperatorInstances_SingleVersion(t *testing.T) {
 	assert.NotContains(t, instances[0].EnvVars, envSecuredClusterReconcilerEnabled)
 }
 
-func TestOperatorInstances_SplitVersions(t *testing.T) {
+func TestOperatorInstances_MixedVersions(t *testing.T) {
 	cfg := Config{
 		Roxie: RoxieConfig{Version: "4.9.0"},
 		Central: CentralConfig{
@@ -148,7 +148,7 @@ func TestNewestOperatorVersion(t *testing.T) {
 	})
 }
 
-func TestImagesForConfig_SplitVersions(t *testing.T) {
+func TestImagesForConfig_MixedVersions(t *testing.T) {
 	cfg := Config{
 		Roxie:          RoxieConfig{Version: "4.9.0"},
 		Central:        CentralConfig{Version: "4.8.0"},

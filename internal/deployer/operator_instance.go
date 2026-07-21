@@ -24,7 +24,7 @@ var AllOperatorNamespaces = []string{
 	operatorNamespaceSensor,
 }
 
-// OperatorInstance describes one operator deployment (single- or split-version).
+// OperatorInstance describes one operator deployment (single- or mixed-version).
 type OperatorInstance struct {
 	Version   string
 	Namespace string
@@ -66,8 +66,8 @@ func (c *Config) EffectiveSecuredClusterVersion() string {
 	return c.Roxie.Version
 }
 
-// NeedsSplitOperators reports whether Central and SecuredCluster require different operators.
-func (c *Config) NeedsSplitOperators() bool {
+// HasMixedVersions reports whether Central and SecuredCluster use different versions.
+func (c *Config) HasMixedVersions() bool {
 	return c.EffectiveCentralVersion() != c.EffectiveSecuredClusterVersion()
 }
 
@@ -75,7 +75,7 @@ func (c *Config) NeedsSplitOperators() bool {
 // When versions match, a single operator is deployed to rhacs-operator-system.
 // When they differ, two operators are deployed with reconciler toggles.
 func (c *Config) OperatorInstances() []OperatorInstance {
-	if !c.NeedsSplitOperators() {
+	if !c.HasMixedVersions() {
 		version := helpers.ConvertMainTagToOperatorTag(c.EffectiveCentralVersion())
 		if version == "" {
 			version = c.Operator.Version

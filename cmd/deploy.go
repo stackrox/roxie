@@ -265,9 +265,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		// storing of the derived operator version within the operator configuration.
 		//
 		// This is why we use the operator version here when checking version constraints.
-		// With split versions, check every operator instance that will be deployed.
+		// With mixed versions, check every operator instance that will be deployed.
 		versionsToCheck := []string{deploySettings.Operator.Version}
-		if deploySettings.NeedsSplitOperators() {
+		if deploySettings.HasMixedVersions() {
 			versionsToCheck = nil
 			for _, instance := range deploySettings.OperatorInstances() {
 				versionsToCheck = append(versionsToCheck, instance.Version)
@@ -415,9 +415,9 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 	}
 
 	// For the single-operator path (including OLM), populate RELATED_IMAGE_* on the
-	// top-level OperatorConfig. Split-version deployments apply Konflux env vars
+	// top-level OperatorConfig. Mixed-version deployments apply Konflux env vars
 	// per OperatorInstance during deployment instead.
-	if deploySettings.Roxie.KonfluxImagesEnabled() && !deploySettings.NeedsSplitOperators() {
+	if deploySettings.Roxie.KonfluxImagesEnabled() && !deploySettings.HasMixedVersions() {
 		deployer.PopulateKonfluxEnvVars(deploySettings)
 	}
 
@@ -485,12 +485,12 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		}
 	}
 
-	if deploySettings.NeedsSplitOperators() {
+	if deploySettings.HasMixedVersions() {
 		if components.IncludesOperatorExplicitly() {
-			return errors.New("split versions (--central-tag / --secured-cluster-tag / central.version / securedCluster.version) are not supported with operator-only deploy")
+			return errors.New("mixed versions (--central-tag / --secured-cluster-tag / central.version / securedCluster.version) are not supported with operator-only deploy")
 		}
 		if deploySettings.Operator.DeployViaOlmEnabled() {
-			return errors.New("split versions (--central-tag / --secured-cluster-tag / central.version / securedCluster.version) are not supported with OLM deployment mode")
+			return errors.New("mixed versions (--central-tag / --secured-cluster-tag / central.version / securedCluster.version) are not supported with OLM deployment mode")
 		}
 	}
 

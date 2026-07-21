@@ -115,7 +115,7 @@ type WaitConfig struct {
 
 // CentralConfig holds deployment settings for the Central component.
 type CentralConfig struct {
-	// Version overrides Roxie.Version for Central (and its operator when split).
+	// Version overrides Roxie.Version for Central (and its operator when versions differ).
 	Version             string                 `yaml:"version,omitempty"`
 	Namespace           string                 `yaml:"namespace,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
@@ -264,7 +264,7 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 
 // SecuredClusterConfig holds deployment settings for the SecuredCluster component.
 type SecuredClusterConfig struct {
-	// Version overrides Roxie.Version for SecuredCluster (and its operator when split).
+	// Version overrides Roxie.Version for SecuredCluster (and its operator when versions differ).
 	Version             string                 `yaml:"version,omitempty"`
 	Namespace           string                 `yaml:"namespace,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
