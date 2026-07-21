@@ -102,7 +102,7 @@ func (d *Deployer) preparedOperatorInstances() []OperatorInstance {
 }
 
 // teardownUnwantedOperatorNamespaces removes operators from namespaces that are not
-// part of the desired deployment plan (e.g. switching between single and split).
+// part of the desired deployment plan (e.g. switching between single and mixed versions).
 func (d *Deployer) teardownUnwantedOperatorNamespaces(ctx context.Context, desired []OperatorInstance) error {
 	desiredNS := make(map[string]bool, len(desired))
 	for _, inst := range desired {
@@ -162,9 +162,9 @@ func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance Op
 	return nil
 }
 
-// ensureOperatorDeployedOLM is the single-operator OLM path (split versions are rejected in validation).
+// ensureOperatorDeployedOLM is the single-operator OLM path (mixed versions are rejected in validation).
 func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
-	// Remove any leftover split-operator namespaces before installing via OLM.
+	// Remove any leftover dual-operator namespaces before installing via OLM.
 	desired := []OperatorInstance{{Namespace: operatorNamespaceSystem}}
 	if err := d.teardownUnwantedOperatorNamespaces(ctx, desired); err != nil {
 		return err
