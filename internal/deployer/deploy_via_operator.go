@@ -76,7 +76,7 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 		}
 	}
 
-	if err := d.teardownUnwantedOperatorNamespaces(ctx, instances); err != nil {
+	if err := d.teardownStaleOperatorNamespaces(ctx, instances); err != nil {
 		return err
 	}
 
@@ -101,9 +101,9 @@ func (d *Deployer) preparedOperatorInstances() []OperatorInstance {
 	return instances
 }
 
-// teardownUnwantedOperatorNamespaces removes operators from namespaces that are not
+// teardownStaleOperatorNamespaces removes operators from namespaces that are no longer
 // part of the desired deployment plan (e.g. switching between single and mixed versions).
-func (d *Deployer) teardownUnwantedOperatorNamespaces(ctx context.Context, desired []OperatorInstance) error {
+func (d *Deployer) teardownStaleOperatorNamespaces(ctx context.Context, desired []OperatorInstance) error {
 	desiredNS := make(map[string]bool, len(desired))
 	for _, inst := range desired {
 		desiredNS[inst.Namespace] = true
@@ -116,7 +116,7 @@ func (d *Deployer) teardownUnwantedOperatorNamespaces(ctx context.Context, desir
 		if !d.operatorDeploymentExists(ctx, ns) && !d.namespaceExists(ns) {
 			continue
 		}
-		d.logger.Infof("🔄 Removing operator from unwanted namespace %s...", ns)
+		d.logger.Infof("🔄 Removing previous operator from %s (no longer needed)...", ns)
 		instance := OperatorInstance{Namespace: ns}
 		switch ns {
 		case operatorNamespaceCentral:
@@ -166,7 +166,7 @@ func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance Op
 func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 	// Remove any leftover dual-operator namespaces before installing via OLM.
 	desired := []OperatorInstance{{Namespace: operatorNamespaceSystem}}
-	if err := d.teardownUnwantedOperatorNamespaces(ctx, desired); err != nil {
+	if err := d.teardownStaleOperatorNamespaces(ctx, desired); err != nil {
 		return err
 	}
 
