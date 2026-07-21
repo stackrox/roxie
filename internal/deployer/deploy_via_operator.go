@@ -575,15 +575,17 @@ func (d *Deployer) fetchCentralCACerts(ctx context.Context) error {
 	}
 	caPEMs = append(caPEMs, internalCA)
 
-	// If a custom defaultTLSSecret is configured, fetch its CA certs too.
+	// If a custom defaultTLSSecret is configured, add its certs to the
+	// trust pool. This includes the leaf — Central itself does the same
+	// when building the trust bundle for Sensor.
 	if secretName := d.defaultTLSSecretName(); secretName != "" {
-		d.logger.Infof("Fetching custom TLS CA certificates from secret %s...", secretName)
-		customCAs, err := d.fetchCustomTLSCACerts(ctx, secretName)
+		d.logger.Infof("Fetching custom TLS certificates from secret %s...", secretName)
+		customCerts, err := d.fetchCustomTLSCerts(ctx, secretName)
 		if err != nil {
-			d.logger.Warningf("Could not fetch custom TLS CA from secret %s: %v", secretName, err)
+			d.logger.Warningf("Could not fetch custom TLS certs from secret %s: %v", secretName, err)
 			// Try to continue.
 		} else {
-			caPEMs = append(caPEMs, customCAs...)
+			caPEMs = append(caPEMs, customCerts...)
 		}
 	}
 
@@ -640,32 +642,27 @@ func (d *Deployer) fetchSecretField(ctx context.Context, secretName, jsonpathFie
 	return decoded, nil
 }
 
-// fetchCustomTLSCACerts fetches the tls.crt field from a Kubernetes TLS secret
-// and extracts CA certificates (intermediates and root) from the PEM bundle.
-func (d *Deployer) fetchCustomTLSCACerts(ctx context.Context, secretName string) ([][]byte, error) {
+// fetchCustomTLSCerts fetches the tls.crt field from a Kubernetes TLS secret
+// and returns all certificates (leaf, intermediates, root) as PEM blocks.
+// All certs are added to the trust pool, matching how Central itself builds
+// the trust bundle for Sensor.
+func (d *Deployer) fetchCustomTLSCerts(ctx context.Context, secretName string) ([][]byte, error) {
 	certBundle, err := d.fetchSecretField(ctx, secretName, "tls\\.crt")
 	if err != nil {
 		return nil, fmt.Errorf("fetching certificates from secret %s: %w", secretName, err)
 	}
 
-	var caPEMs [][]byte
+	var pems [][]byte
 	for block, rest := pem.Decode(certBundle); block != nil; block, rest = pem.Decode(rest) {
 		cert, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("parsing certificate from secret %s: %w", secretName, err)
 		}
-		if !cert.IsCA {
-			continue
-		}
-		d.logger.Infof("Found CA certificate in %s: Subject.CN=%q, Issuer.CN=%q, SerialNumber=%s",
-			secretName, cert.Subject.CommonName, cert.Issuer.CommonName, cert.SerialNumber)
-		caPEMs = append(caPEMs, pem.EncodeToMemory(block))
+		d.logger.Infof("Found certificate in %s: Subject.CN=%q, IsCA=%v",
+			secretName, cert.Subject.CommonName, cert.IsCA)
+		pems = append(pems, pem.EncodeToMemory(block))
 	}
-
-	if len(caPEMs) == 0 {
-		d.logger.Infof("No CA certificates found in secret %s (leaf-only bundle)", secretName)
-	}
-	return caPEMs, nil
+	return pems, nil
 }
 
 // configureCentralEndpoint configures the central endpoint in the Deployer based on exposure settings.
