@@ -594,6 +594,7 @@ func (d *Deployer) fetchCentralCACerts(ctx context.Context) error {
 
 	fileName := caCertFile.Name()
 	for _, pemData := range caPEMs {
+		pemData = append(bytes.TrimRight(pemData, "\n"), '\n')
 		if _, err := caCertFile.Write(pemData); err != nil {
 			_ = caCertFile.Close()
 			_ = os.Remove(fileName)
