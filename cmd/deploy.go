@@ -531,6 +531,13 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		}
 	}
 
+	if deploySettings.Central.Version != "" && deploySettings.SecuredCluster.Version != "" &&
+		deploySettings.Central.Version == deploySettings.SecuredCluster.Version &&
+		deploySettings.Central.Version != deploySettings.Roxie.Version {
+		return fmt.Errorf("both --central-tag and --secured-cluster-tag are set to %s which differs from --tag %s; use --tag %s instead",
+			deploySettings.Central.Version, deploySettings.Roxie.Version, deploySettings.Central.Version)
+	}
+
 	return nil
 }
 
