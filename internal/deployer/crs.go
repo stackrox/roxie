@@ -229,7 +229,7 @@ func centralVerifyFunc(log *logger.Logger, hostname string, conf *tls.Config) fu
 			leaf.Subject.CommonName, leaf.Issuer.CommonName, leaf.AuthorityKeyId)
 
 		// Port-forward: chain verification only.
-		if hostname == "127.0.0.1" {
+		if isLoopback(hostname) {
 			log.Dim("Port-forward connection: verifying certificate chain only")
 			_, err := leaf.Verify(x509.VerifyOptions{
 				Intermediates: intermediates,
@@ -275,6 +275,13 @@ func isACentralCert(cert *x509.Certificate) bool {
 		return true
 	}
 	return false
+}
+
+func isLoopback(hostname string) bool {
+	if ip := net.ParseIP(hostname); ip != nil {
+		return ip.IsLoopback()
+	}
+	return hostname == "localhost"
 }
 
 // applyCRS applies the CRS content to the sensor namespace
