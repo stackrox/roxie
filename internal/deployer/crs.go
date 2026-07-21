@@ -249,22 +249,20 @@ func centralVerifyFunc(log *logger.Logger, hostname string, conf *tls.Config) fu
 		if err == nil {
 			return nil
 		}
-		if !isACentralCert(leaf) {
+		var hostErr x509.HostnameError
+		if !errors.As(err, &hostErr) || !isACentralCert(leaf) {
 			return err
 		}
 
 		// Fallback for StackRox service certs: the internal cert uses
 		// "central.stackrox" as its SAN, not the external endpoint hostname.
 		log.Dim("Falling back to central.stackrox for StackRox service cert")
-		_, fallbackErr := leaf.Verify(x509.VerifyOptions{
+		_, err = leaf.Verify(x509.VerifyOptions{
 			DNSName:       "central.stackrox",
 			Intermediates: intermediates,
 			Roots:         conf.RootCAs,
 		})
-		if fallbackErr == nil {
-			return nil
-		}
-		return errors.Join(err, fallbackErr)
+		return err
 	}
 }
 
