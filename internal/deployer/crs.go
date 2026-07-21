@@ -87,7 +87,7 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 			return "", fmt.Errorf("CRS generation failed with non-retryable error: %w", err)
 		}
 
-		d.logger.Success("✓ CR generated")
+		d.logger.Success("✓ CRS generated")
 		return crsContent, nil
 	}
 
