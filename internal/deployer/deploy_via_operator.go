@@ -3,10 +3,12 @@ package deployer
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -558,27 +560,33 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 	return "", errors.New("timeout waiting for LoadBalancer to get external address")
 }
 
-// fetchCentralCACert fetches the Central CA certificate
-func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
-	d.logger.Info("Fetching Central CA certificate...")
+// fetchCentralCACerts fetches CA certificates needed to verify Central's TLS cert.
+// It always fetches the internal StackRox CA from the central-tls secret, and
+// additionally fetches CA certs from the defaultTLSSecret if one is configured
+// in the Central CR spec.
+func (d *Deployer) fetchCentralCACerts(ctx context.Context) error {
+	var caPEMs [][]byte
 
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
-		Args: []string{"get", "secret", "central-tls", "-n", d.config.Central.Namespace, "-o", "jsonpath={.data.ca\\.pem}"},
-	})
+	// Fetch the internal StackRox CA from the central-tls secret.
+	d.logger.Info("Fetching internal CA certificate from central-tls secret...")
+	internalCA, err := d.fetchSecretField(ctx, "central-tls", "ca\\.pem")
 	if err != nil {
-		return fmt.Errorf("failed to get CA cert from secret: %w", err)
+		return fmt.Errorf("failed to get CA cert from central-tls secret: %w", err)
 	}
+	caPEMs = append(caPEMs, internalCA)
 
-	caCertBase64 := strings.TrimSpace(result.Stdout)
-	if caCertBase64 == "" {
-		return errors.New("CA certificate is empty")
-	}
-
-	decodeCmd := exec.CommandContext(ctx, "base64", "-d")
-	decodeCmd.Stdin = strings.NewReader(caCertBase64)
-	caCert, err := decodeCmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to decode CA cert: %w", err)
+	// If a custom defaultTLSSecret is configured, add its certs to the
+	// trust pool. This includes the leaf — Central itself does the same
+	// when building the trust bundle for Sensor.
+	if secretName := d.defaultTLSSecretName(); secretName != "" {
+		d.logger.Infof("Fetching custom TLS certificates from secret %s...", secretName)
+		customCerts, err := d.fetchCustomTLSCerts(ctx, secretName)
+		if err != nil {
+			d.logger.Warningf("Could not fetch custom TLS certs from secret %s: %v", secretName, err)
+			// Try to continue.
+		} else {
+			caPEMs = append(caPEMs, customCerts...)
+		}
 	}
 
 	caCertFile, err := os.CreateTemp(d.tempDir, "roxie-central-ca-*.pem")
@@ -586,18 +594,75 @@ func (d *Deployer) fetchCentralCACert(ctx context.Context) error {
 		return fmt.Errorf("failed to create temp file for CA cert: %w", err)
 	}
 
-	d.roxCACertFile = caCertFile.Name()
-	if _, err := caCertFile.Write(caCert); err != nil {
-		_ = caCertFile.Close()
-		_ = os.Remove(d.roxCACertFile)
-		return fmt.Errorf("failed to write CA cert: %w", err)
+	fileName := caCertFile.Name()
+	for _, pemData := range caPEMs {
+		pemData = append(bytes.TrimRight(pemData, "\n"), '\n')
+		if _, err := caCertFile.Write(pemData); err != nil {
+			_ = caCertFile.Close()
+			_ = os.Remove(fileName)
+			return fmt.Errorf("failed to write CA cert: %w", err)
+		}
 	}
 	if err := caCertFile.Close(); err != nil {
+		_ = os.Remove(fileName)
 		return fmt.Errorf("failed to close CA cert file: %w", err)
 	}
 
-	d.logger.Successf("✓ CA certificate saved to: %s", d.roxCACertFile)
+	d.roxCACertFile = fileName
+	d.logger.Successf("✓ CA certificates saved to: %s", d.roxCACertFile)
 	return nil
+}
+
+// defaultTLSSecretName returns the name of the defaultTLSSecret from the Central
+// CR spec, or "" if none is configured.
+func (d *Deployer) defaultTLSSecretName() string {
+	name, _, _ := unstructured.NestedString(d.config.Central.Spec, "central", "defaultTLSSecret", "name")
+	return name
+}
+
+// fetchSecretField fetches a single base64-encoded field from a Kubernetes secret
+// in the Central namespace and returns the decoded PEM bytes.
+func (d *Deployer) fetchSecretField(ctx context.Context, secretName, jsonpathField string) ([]byte, error) {
+	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		Args: []string{"get", "secret", secretName, "-n", d.config.Central.Namespace, "-o", fmt.Sprintf("jsonpath={.data.%s}", jsonpathField)},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("kubectl get secret %s: %w", secretName, err)
+	}
+
+	b64 := strings.TrimSpace(result.Stdout)
+	if b64 == "" {
+		return nil, fmt.Errorf("field %s in secret %s is empty", jsonpathField, secretName)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return nil, fmt.Errorf("base64 decode of %s from %s: %w", jsonpathField, secretName, err)
+	}
+	return decoded, nil
+}
+
+// fetchCustomTLSCerts fetches the tls.crt field from a Kubernetes TLS secret
+// and returns all certificates (leaf, intermediates, root) as PEM blocks.
+// All certs are added to the trust pool, matching how Central itself builds
+// the trust bundle for Sensor.
+func (d *Deployer) fetchCustomTLSCerts(ctx context.Context, secretName string) ([][]byte, error) {
+	certBundle, err := d.fetchSecretField(ctx, secretName, "tls\\.crt")
+	if err != nil {
+		return nil, fmt.Errorf("fetching certificates from secret %s: %w", secretName, err)
+	}
+
+	var pems [][]byte
+	for block, rest := pem.Decode(certBundle); block != nil; block, rest = pem.Decode(rest) {
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("parsing certificate from secret %s: %w", secretName, err)
+		}
+		d.logger.Infof("Found certificate in %s: Subject.CN=%q, IsCA=%v",
+			secretName, cert.Subject.CommonName, cert.IsCA)
+		pems = append(pems, pem.EncodeToMemory(block))
+	}
+	return pems, nil
 }
 
 // configureCentralEndpoint configures the central endpoint in the Deployer based on exposure settings.
@@ -639,8 +704,8 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 		d.centralEndpoint = "central." + d.config.Central.Namespace + ".svc:443"
 	}
 
-	if err := d.fetchCentralCACert(ctx); err != nil {
-		d.logger.Warningf("Could not fetch CA cert: %v", err)
+	if err := d.fetchCentralCACerts(ctx); err != nil {
+		d.logger.Warningf("Could not fetch Central CA certs: %v", err)
 	}
 
 	if env.RunningInteractively {
