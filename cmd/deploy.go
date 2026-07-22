@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"time"
 
-	"dario.cat/mergo"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stackrox/roxie/internal/clusterdefaults"
@@ -22,7 +20,6 @@ import (
 	"github.com/stackrox/roxie/internal/stackroxversions"
 	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
-	"helm.sh/helm/v3/pkg/strvals"
 )
 
 var (
@@ -95,27 +92,6 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 		}),
 	)
 
-	registerFlag(cmd, settings, "config", "Path to YAML config file",
-		withShortName("c"),
-		withApplyFn("filename", func(config *deployer.Config, filename string) error {
-			if filename == "-" {
-				filename = "/dev/stdin"
-			}
-			data, err := os.ReadFile(filename)
-			if err != nil {
-				return fmt.Errorf("failed to read config file %q: %w", filename, err)
-			}
-			var configFromFile deployer.Config
-			if err := yaml.Unmarshal(data, &configFromFile); err != nil {
-				return fmt.Errorf("failed to unmarshal config file %q: %w", filename, err)
-			}
-			if err := mergo.Merge(config, configFromFile, mergo.WithOverride, mergo.WithoutDereference); err != nil {
-				return fmt.Errorf("merging config file %q into deployer Config: %w", filename, err)
-			}
-			return nil
-		}),
-	)
-
 	registerFlag(cmd, settings, "exposure", "Central exposure backend (loadbalancer, none)",
 		withApplyFn("exposure", func(config *deployer.Config, val string) error {
 			var exposure types.Exposure
@@ -135,31 +111,6 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 			}
 			config.Central.ResourceProfile = valParsed
 			config.SecuredCluster.ResourceProfile = valParsed
-			return nil
-		}),
-	)
-
-	registerFlag(cmd, settings, "set", "Set expressions, e.g. securedCluster.spec.clusterName=sensor",
-		withApplyFn("set-expression", func(config *deployer.Config, expr string) error {
-			unstructuredPatch, err := strvals.Parse(expr)
-			if err != nil {
-				return fmt.Errorf("parsing set expression %q: %w", expr, err)
-			}
-			if _, forbidden := unstructuredPatch["spec"]; forbidden {
-				return errors.New("set expression must not set top-level 'spec'; prefix with 'central.' or 'securedCluster.'")
-			}
-			var patch deployer.Config
-			if err := helpers.MapToStruct(unstructuredPatch, &patch); err != nil {
-				return err
-			}
-			if reflect.DeepEqual(patch, deployer.Config{}) {
-				return fmt.Errorf("set expression %q had no effect -- typo?", expr)
-			}
-
-			if err := mergo.Merge(config, &patch, mergo.WithOverride, mergo.WithoutDereference); err != nil {
-				return fmt.Errorf("merging set-expression %q into deployer Config: %w", expr, err)
-			}
-
 			return nil
 		}),
 	)
@@ -264,19 +215,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Start with default configuration.
-	deploySettings := deployer.DefaultConfig()
-
-	// Apply user config on top (overriding defaults).
-	if !skipUserConfig {
-		if err := tryApplyUserDefaults(globalLogger, &deploySettings); err != nil {
-			return fmt.Errorf("applying user config: %w", err)
-		}
-	}
-
-	// Apply changes from arg parsing.
-	if err := mergo.Merge(&deploySettings, &deploySettingsFromArgs, mergo.WithOverride, mergo.WithoutDereference); err != nil {
-		return fmt.Errorf("applying config patches from command line argument: %w", err)
+	deploySettings, err := assembleConfigForCommand(nil, deploySettingsFromArgs, skipUserConfig)
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
@@ -396,7 +337,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	if components.IncludesCentral() && envrc == "" {
-		if err := spawnSubshellForDeployerEnv(d, log); err != nil {
+		if err := spawnSubshellForDeployerEnv(deploySettings.Roxie, d, log); err != nil {
 			return fmt.Errorf("failed to spawn subshell: %w", err)
 		}
 	}
@@ -405,7 +346,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 }
 
 func configureConfig(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
-	if deploySettings.Roxie.ClusterType == types.ClusterTypeUnknown {
+	if deploySettings.Roxie.ClusterType == "" {
 		clusterType := env.GetAutoDetectedClusterType()
 		log.Dimf("Detected cluster type: %v", clusterType)
 		deploySettings.Roxie.ClusterType = clusterType
@@ -447,6 +388,10 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 	// which we will make use of later for checking version constraints.
 	if err := deploySettings.Operator.Configure(&deploySettings.Roxie); err != nil {
 		return fmt.Errorf("configuring operator configuration: %w", err)
+	}
+
+	if deploySettings.Roxie.KonfluxImagesEnabled() {
+		deployer.PopulateKonfluxEnvVars(deploySettings)
 	}
 
 	if components.IncludesCentral() {
@@ -510,9 +455,6 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 	if deploySettings.Roxie.KonfluxImagesEnabled() {
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
-		}
-		if !clusterType.IsOpenShift() {
-			return fmt.Errorf("--konflux flag is only supported on OpenShift 4 clusters (current cluster type: %s)", clusterType)
 		}
 	}
 

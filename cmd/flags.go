@@ -16,6 +16,7 @@ type cliFlag struct {
 	applyFn     func(config *deployer.Config, val string) error
 	noOptDefVal string
 	description string
+	persistent  bool
 }
 
 type flagOpt func(opts *cliFlag)
@@ -80,6 +81,12 @@ func withShortName(shortName string) flagOpt {
 	}
 }
 
+func withPersistent() flagOpt {
+	return func(opts *cliFlag) {
+		opts.persistent = true
+	}
+}
+
 func registerFlag(cmd *cobra.Command, settings *deployer.Config, longName string, description string, flagOpts ...flagOpt) {
 	f := cliFlag{
 		config:      settings,
@@ -89,7 +96,11 @@ func registerFlag(cmd *cobra.Command, settings *deployer.Config, longName string
 	for _, applyOpt := range flagOpts {
 		applyOpt(&f)
 	}
-	flag := cmd.Flags().VarPF(&f, f.longName, f.shortName, f.description)
+	flagSet := cmd.Flags()
+	if f.persistent {
+		flagSet = cmd.PersistentFlags()
+	}
+	flag := flagSet.VarPF(&f, f.longName, f.shortName, f.description)
 	if f.noOptDefVal != "" {
 		flag.NoOptDefVal = f.noOptDefVal
 	}

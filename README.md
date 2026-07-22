@@ -116,7 +116,6 @@ the cluster to succeed.
 
 Prerequisites:
 - `kubectl` configured to point at your target cluster
-- `roxctl` CLI is installed
 - `roxie` CLI is installed
 
 Deploy using:

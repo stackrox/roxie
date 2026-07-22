@@ -60,16 +60,6 @@ jobs:
           chmod +x /usr/local/bin/roxie
           roxie version
 
-      - name: Install roxctl
-        env:
-          ROXCTL_VERSION: "4.10.0"
-          ROXCTL_SHA256: "5db647b14569465866c0162522e83393ebf02f671f4556b1b3ed551b9f8433bc"
-        run: |
-          curl -fsSLo /usr/local/bin/roxctl \
-            "https://mirror.openshift.com/pub/rhacs/assets/${ROXCTL_VERSION}/bin/Linux/roxctl"
-          echo "${ROXCTL_SHA256}  /usr/local/bin/roxctl" | sha256sum -c -
-          chmod +x /usr/local/bin/roxctl
-          roxctl version
 
       - name: Authenticate to GCloud
         if: inputs.cluster-type == 'gke'

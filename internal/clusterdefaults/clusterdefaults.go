@@ -44,8 +44,8 @@ func ApplyClusterDefaults(
 // in the Config struct. Otherwise, `ApplyClusterDefaults` would not apply those to the caller-provided
 // configuration.
 func getDefaultsForClusterType(clusterType types.ClusterType) *deployer.Config {
-	switch clusterType {
-	case types.ClusterTypeKind, types.ClusterTypeMinikube, types.ClusterTypeK3s, types.ClusterTypeCRC:
+	switch {
+	case clusterType.IsLocal():
 		return &deployer.Config{
 			Central: deployer.CentralConfig{
 				Exposure:       ptr.To(types.ExposureNone),
@@ -53,7 +53,7 @@ func getDefaultsForClusterType(clusterType types.ClusterType) *deployer.Config {
 			},
 		}
 
-	case types.ClusterTypeInfraGKE, types.ClusterTypeInfraOpenShift4:
+	case clusterType.IsGKE() || clusterType.IsOpenShift():
 		return &deployer.Config{
 			Central: deployer.CentralConfig{
 				Exposure:       ptr.To(types.ExposureLoadBalancer),
@@ -68,23 +68,11 @@ func getDefaultsForClusterType(clusterType types.ClusterType) *deployer.Config {
 
 // ResolveAutoResourceProfile resolves the "auto" resource profile depending on the cluster type.
 func ResolveAutoResourceProfile(clusterType types.ClusterType) types.ResourceProfile {
-	switch clusterType {
-	case types.ClusterTypeKind:
+	switch {
+	case clusterType.IsLocal():
 		return types.ResourceProfileSmall
 
-	case types.ClusterTypeMinikube:
-		return types.ResourceProfileSmall
-
-	case types.ClusterTypeK3s:
-		return types.ResourceProfileSmall
-
-	case types.ClusterTypeCRC:
-		return types.ResourceProfileSmall
-
-	case types.ClusterTypeInfraOpenShift4:
-		return types.ResourceProfileMedium
-
-	case types.ClusterTypeInfraGKE:
+	case clusterType.IsGKE() || clusterType.IsOpenShift():
 		return types.ResourceProfileMedium
 
 	default:

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"dario.cat/mergo"
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/deployer"
@@ -56,19 +55,9 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Start with default configuration.
-	deploySettings := deployer.DefaultConfig()
-
-	// Apply user config on top (overriding defaults).
-	if !skipUserConfig {
-		if err := tryApplyUserDefaults(globalLogger, &deploySettings); err != nil {
-			return fmt.Errorf("applying user config: %w", err)
-		}
-	}
-
-	// Apply changes from arg parsing.
-	if err := mergo.Merge(&deploySettings, &deploySettingsFromArgs, mergo.WithOverride, mergo.WithoutDereference); err != nil {
-		return fmt.Errorf("applying config patches from command line argument: %w", err)
+	deploySettings, err := assembleConfigForCommand(nil, deploySettingsFromArgs, skipUserConfig)
+	if err != nil {
+		return err
 	}
 
 	d, err := deployer.New(log)

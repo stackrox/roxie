@@ -278,10 +278,11 @@ central:
 			if tt.config != "" {
 				require.NoError(t, os.WriteFile(configFilePath, []byte(tt.config), 0o644))
 			}
-			cfg := deployer.NewConfig()
-			cmd := newDeployCmd(&cfg)
-			require.NoError(t, cmd.ParseFlags(tt.args))
-			tt.assert(t, cfg)
+			deploySettingsFromArgs = deployer.NewConfig() // Need to reset this global after each test.
+			deployCmd, _, err := rootCmd.Find([]string{"deploy"})
+			require.NoError(t, err)
+			require.NoError(t, deployCmd.ParseFlags(tt.args))
+			tt.assert(t, deploySettingsFromArgs)
 		})
 	}
 }
@@ -302,9 +303,10 @@ func TestNewDeployCmd_SetRejectsSpec(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := deployer.NewConfig()
-			cmd := newDeployCmd(&cfg)
-			err := cmd.ParseFlags(tt.args)
+			deploySettingsFromArgs = deployer.NewConfig() // Need to reset this global after each test.
+			cmd, _, err := rootCmd.Find([]string{"deploy"})
+			require.NoError(t, err)
+			err = cmd.ParseFlags(tt.args)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "spec")
 		})
@@ -391,7 +393,7 @@ func TestApplyUserDefaults(t *testing.T) {
 			t.Setenv("HOME", tmpDir) // For non-Unix systems.
 
 			if !reflect.DeepEqual(tt.user, deployer.Config{}) {
-				configPath, err := paths.UserConfigPath()
+				configPath, err := paths.UserConfigPath(false)
 				require.NoError(t, err)
 				require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
 				data, err := yaml.Marshal(tt.user)
@@ -415,7 +417,7 @@ func TestApplyUserDefaults(t *testing.T) {
 		t.Setenv("XDG_CONFIG_HOME", tmpDir)
 		t.Setenv("HOME", tmpDir) // For non-Unix systems.
 
-		configPath, err := paths.UserConfigPath()
+		configPath, err := paths.UserConfigPath(false)
 		require.NoError(t, err)
 		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
 		require.NoError(t, os.WriteFile(configPath, []byte(`invalid: [yaml`), 0o644))

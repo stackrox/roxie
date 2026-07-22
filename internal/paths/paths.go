@@ -8,7 +8,31 @@ import (
 
 const appName = "roxie"
 
-func UserConfigPath() (string, error) {
+const envUserConfigPath = "ROXIE_USER_CONFIG_PATH"
+
+func UserConfigPath(validateUserConfig bool) (string, error) {
+	if overwrittenPath := os.Getenv(envUserConfigPath); overwrittenPath != "" {
+		if validateUserConfig {
+			if err := fileIsReadable(overwrittenPath); err != nil {
+				return "", fmt.Errorf("checking if user config file %q from environment variable %s is readable: %w",
+					overwrittenPath, envUserConfigPath, err)
+			}
+		}
+		return overwrittenPath, nil
+	}
+	return getDefaultUserConfigPath()
+}
+
+func fileIsReadable(path string) error {
+	fd, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	_ = fd.Close()
+	return nil
+}
+
+func getDefaultUserConfigPath() (string, error) {
 	dir, err := configDir()
 	if err != nil {
 		return "", fmt.Errorf("retrieving user config path: %w", err)
@@ -17,7 +41,7 @@ func UserConfigPath() (string, error) {
 }
 
 func UserConfigPathString() string {
-	path, err := UserConfigPath()
+	path, err := UserConfigPath(false)
 	if err != nil {
 		return "(UNAVAILABLE)"
 	}
