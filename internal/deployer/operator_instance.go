@@ -51,22 +51,28 @@ func (o OperatorInstance) ClusterRoleBindingName() string {
 }
 
 // EffectiveCentralVersion returns the main image tag used for Central.
+// If central.operator.version is set, it is converted back to a main tag;
+// otherwise falls back to roxie.version.
 func (c *Config) EffectiveCentralVersion() string {
-	if c.Central.Version != "" {
-		return c.Central.Version
+	if c.Central.Operator != nil && c.Central.Operator.Version != "" {
+		return c.Central.Operator.Version
 	}
 	return c.Roxie.Version
 }
 
 // EffectiveSecuredClusterVersion returns the main image tag used for SecuredCluster.
+// If securedCluster.operator.version is set, it is converted back to a main tag;
+// otherwise falls back to roxie.version.
 func (c *Config) EffectiveSecuredClusterVersion() string {
-	if c.SecuredCluster.Version != "" {
-		return c.SecuredCluster.Version
+	if c.SecuredCluster.Operator != nil && c.SecuredCluster.Operator.Version != "" {
+		return c.SecuredCluster.Operator.Version
 	}
 	return c.Roxie.Version
 }
 
-// HasMixedVersions reports whether Central and SecuredCluster use different versions.
+// HasMixedVersions reports whether Central and SecuredCluster use different operator versions.
+// This is true when at least one component has a per-component operator config with a version
+// that differs from the other component's effective version.
 func (c *Config) HasMixedVersions() bool {
 	return c.EffectiveCentralVersion() != c.EffectiveSecuredClusterVersion()
 }
@@ -80,17 +86,33 @@ func (c *Config) OperatorInstances() []OperatorInstance {
 		if version == "" {
 			version = c.Operator.Version
 		}
+		envVars := copyStringMap(c.Operator.EnvVars)
+		if c.Central.Operator != nil {
+			for k, v := range c.Central.Operator.EnvVars {
+				envVars[k] = v
+			}
+		}
 		return []OperatorInstance{{
 			Version:   version,
 			Namespace: operatorNamespaceSystem,
-			EnvVars:   copyStringMap(c.Operator.EnvVars),
+			EnvVars:   envVars,
 		}}
 	}
 
 	centralEnvVars := copyStringMap(c.Operator.EnvVars)
+	if c.Central.Operator != nil {
+		for k, v := range c.Central.Operator.EnvVars {
+			centralEnvVars[k] = v
+		}
+	}
 	centralEnvVars[envSecuredClusterReconcilerEnabled] = "false"
 
 	sensorEnvVars := copyStringMap(c.Operator.EnvVars)
+	if c.SecuredCluster.Operator != nil {
+		for k, v := range c.SecuredCluster.Operator.EnvVars {
+			sensorEnvVars[k] = v
+		}
+	}
 	sensorEnvVars[envCentralReconcilerEnabled] = "false"
 
 	return []OperatorInstance{

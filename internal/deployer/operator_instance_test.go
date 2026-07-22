@@ -19,7 +19,7 @@ func TestEffectiveVersions_DefaultToRoxieVersion(t *testing.T) {
 func TestEffectiveVersions_CentralOverride(t *testing.T) {
 	cfg := Config{
 		Roxie:   RoxieConfig{Version: "4.9.0"},
-		Central: CentralConfig{Version: "4.8.0"},
+		Central: CentralConfig{Operator: &OperatorConfig{Version: "4.8.0"}},
 	}
 	assert.Equal(t, "4.8.0", cfg.EffectiveCentralVersion())
 	assert.Equal(t, "4.9.0", cfg.EffectiveSecuredClusterVersion())
@@ -29,7 +29,7 @@ func TestEffectiveVersions_CentralOverride(t *testing.T) {
 func TestEffectiveVersions_SecuredClusterOverride(t *testing.T) {
 	cfg := Config{
 		Roxie:          RoxieConfig{Version: "4.9.0"},
-		SecuredCluster: SecuredClusterConfig{Version: "4.7.0"},
+		SecuredCluster: SecuredClusterConfig{Operator: &OperatorConfig{Version: "4.7.0"}},
 	}
 	assert.Equal(t, "4.9.0", cfg.EffectiveCentralVersion())
 	assert.Equal(t, "4.7.0", cfg.EffectiveSecuredClusterVersion())
@@ -39,8 +39,8 @@ func TestEffectiveVersions_SecuredClusterOverride(t *testing.T) {
 func TestEffectiveVersions_BothOverridesSame_NoMixed(t *testing.T) {
 	cfg := Config{
 		Roxie:          RoxieConfig{Version: "4.9.0"},
-		Central:        CentralConfig{Version: "4.8.0"},
-		SecuredCluster: SecuredClusterConfig{Version: "4.8.0"},
+		Central:        CentralConfig{Operator: &OperatorConfig{Version: "4.8.0"}},
+		SecuredCluster: SecuredClusterConfig{Operator: &OperatorConfig{Version: "4.8.0"}},
 	}
 	assert.Equal(t, "4.8.0", cfg.EffectiveCentralVersion())
 	assert.Equal(t, "4.8.0", cfg.EffectiveSecuredClusterVersion())
@@ -75,10 +75,10 @@ func TestOperatorInstances_MixedVersions(t *testing.T) {
 	cfg := Config{
 		Roxie: RoxieConfig{Version: "4.9.0"},
 		Central: CentralConfig{
-			Version: "4.8.0",
+			Operator: &OperatorConfig{Version: "4.8.0"},
 		},
 		SecuredCluster: SecuredClusterConfig{
-			Version: "4.9.0",
+			Operator: &OperatorConfig{Version: "4.9.0"},
 		},
 		Operator: OperatorConfig{
 			EnvVars: map[string]string{"CUSTOM": "1"},
@@ -114,6 +114,38 @@ func TestOperatorInstances_MixedVersions(t *testing.T) {
 	assert.Equal(t, "1", cfg.Operator.EnvVars["CUSTOM"])
 }
 
+func TestOperatorInstances_PerComponentEnvVars(t *testing.T) {
+	cfg := Config{
+		Roxie: RoxieConfig{Version: "4.9.0"},
+		Central: CentralConfig{
+			Operator: &OperatorConfig{
+				Version: "4.8.0",
+				EnvVars: map[string]string{"CENTRAL_ONLY": "yes"},
+			},
+		},
+		SecuredCluster: SecuredClusterConfig{
+			Operator: &OperatorConfig{
+				Version: "4.9.0",
+				EnvVars: map[string]string{"SC_ONLY": "yes"},
+			},
+		},
+		Operator: OperatorConfig{
+			EnvVars: map[string]string{"SHARED": "1"},
+		},
+	}
+
+	instances := cfg.OperatorInstances()
+	require.Len(t, instances, 2)
+
+	assert.Equal(t, "1", instances[0].EnvVars["SHARED"])
+	assert.Equal(t, "yes", instances[0].EnvVars["CENTRAL_ONLY"])
+	assert.NotContains(t, instances[0].EnvVars, "SC_ONLY")
+
+	assert.Equal(t, "1", instances[1].EnvVars["SHARED"])
+	assert.Equal(t, "yes", instances[1].EnvVars["SC_ONLY"])
+	assert.NotContains(t, instances[1].EnvVars, "CENTRAL_ONLY")
+}
+
 func TestNewestOperatorVersion(t *testing.T) {
 	t.Run("single version", func(t *testing.T) {
 		cfg := Config{Roxie: RoxieConfig{Version: "4.9.0"}}
@@ -123,8 +155,8 @@ func TestNewestOperatorVersion(t *testing.T) {
 	t.Run("secured cluster newer", func(t *testing.T) {
 		cfg := Config{
 			Roxie:          RoxieConfig{Version: "4.11.1"},
-			Central:        CentralConfig{Version: "4.10.0"},
-			SecuredCluster: SecuredClusterConfig{Version: "4.11.1"},
+			Central:        CentralConfig{Operator: &OperatorConfig{Version: "4.10.0"}},
+			SecuredCluster: SecuredClusterConfig{Operator: &OperatorConfig{Version: "4.11.1"}},
 		}
 		assert.Equal(t, "4.11.1", cfg.NewestOperatorVersion())
 	})
@@ -132,8 +164,8 @@ func TestNewestOperatorVersion(t *testing.T) {
 	t.Run("central newer", func(t *testing.T) {
 		cfg := Config{
 			Roxie:          RoxieConfig{Version: "4.11.1"},
-			Central:        CentralConfig{Version: "4.11.1"},
-			SecuredCluster: SecuredClusterConfig{Version: "4.10.0"},
+			Central:        CentralConfig{Operator: &OperatorConfig{Version: "4.11.1"}},
+			SecuredCluster: SecuredClusterConfig{Operator: &OperatorConfig{Version: "4.10.0"}},
 		}
 		assert.Equal(t, "4.11.1", cfg.NewestOperatorVersion())
 	})
@@ -141,8 +173,8 @@ func TestNewestOperatorVersion(t *testing.T) {
 	t.Run("build suffix uses leading semver", func(t *testing.T) {
 		cfg := Config{
 			Roxie:          RoxieConfig{Version: "4.10.0"},
-			Central:        CentralConfig{Version: "4.10.0"},
-			SecuredCluster: SecuredClusterConfig{Version: "4.11.0-937-gf0da38f1a"},
+			Central:        CentralConfig{Operator: &OperatorConfig{Version: "4.10.0"}},
+			SecuredCluster: SecuredClusterConfig{Operator: &OperatorConfig{Version: "4.11.0-937-gf0da38f1a"}},
 		}
 		assert.Equal(t, "4.11.0-937-gf0da38f1a", cfg.NewestOperatorVersion())
 	})
@@ -151,8 +183,8 @@ func TestNewestOperatorVersion(t *testing.T) {
 func TestImagesForConfig_MixedVersions(t *testing.T) {
 	cfg := Config{
 		Roxie:          RoxieConfig{Version: "4.9.0"},
-		Central:        CentralConfig{Version: "4.8.0"},
-		SecuredCluster: SecuredClusterConfig{Version: "4.9.0"},
+		Central:        CentralConfig{Operator: &OperatorConfig{Version: "4.8.0"}},
+		SecuredCluster: SecuredClusterConfig{Operator: &OperatorConfig{Version: "4.9.0"}},
 	}
 
 	images := imagesForConfig(cfg)
