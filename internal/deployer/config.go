@@ -115,6 +115,9 @@ type WaitConfig struct {
 
 // CentralConfig holds deployment settings for the Central component.
 type CentralConfig struct {
+	// Operator, when set, provides a per-component operator config for Central.
+	// Its presence (with a version) triggers dual-operator mode.
+	Operator            *OperatorConfig        `yaml:"operator,omitempty"`
 	Namespace           string                 `yaml:"namespace,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
 	PauseReconciliation *bool                  `yaml:"pauseReconciliation,omitempty"`
@@ -262,6 +265,9 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 
 // SecuredClusterConfig holds deployment settings for the SecuredCluster component.
 type SecuredClusterConfig struct {
+	// Operator, when set, provides a per-component operator config for SecuredCluster.
+	// Its presence (with a version) triggers dual-operator mode.
+	Operator            *OperatorConfig        `yaml:"operator,omitempty"`
 	Namespace           string                 `yaml:"namespace,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
 	PauseReconciliation *bool                  `yaml:"pauseReconciliation,omitempty"`

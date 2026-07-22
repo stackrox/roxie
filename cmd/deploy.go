@@ -135,6 +135,26 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 		}),
 	)
 
+	registerFlag(cmd, settings, "central-tag", "Image tag for Central (overrides --tag for Central)",
+		withApplyFn("version", func(config *deployer.Config, tag string) error {
+			if config.Central.Operator == nil {
+				config.Central.Operator = &deployer.OperatorConfig{}
+			}
+			config.Central.Operator.Version = tag
+			return nil
+		}),
+	)
+
+	registerFlag(cmd, settings, "secured-cluster-tag", "Image tag for SecuredCluster (overrides --tag for SecuredCluster)",
+		withApplyFn("version", func(config *deployer.Config, tag string) error {
+			if config.SecuredCluster.Operator == nil {
+				config.SecuredCluster.Operator = &deployer.OperatorConfig{}
+			}
+			config.SecuredCluster.Operator.Version = tag
+			return nil
+		}),
+	)
+
 	registerFlag(cmd, settings, "operator-env", "Operator environment variables (e.g., RELATED_IMAGE_MAIN=quay.io/...)",
 		withApplyFn("env-var", func(config *deployer.Config, envExpr string) error {
 			key, value, err := deployer.ParseOperatorEnvVar(envExpr)
@@ -251,12 +271,19 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		// storing of the derived operator version within the operator configuration.
 		//
 		// This is why we use the operator version here when checking version constraints.
-		hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(deploySettings.Operator.Version)
-		if err != nil {
-			return fmt.Errorf("checking version constraint on main image tag %s: %w", deploySettings.Roxie.Version, err)
+		// Check every operator instance that will be deployed.
+		var versionsToCheck []string
+		for _, instance := range deploySettings.OperatorInstances() {
+			versionsToCheck = append(versionsToCheck, instance.Version)
 		}
-		if !hasSupport {
-			return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
+		for _, opVersion := range versionsToCheck {
+			hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(opVersion)
+			if err != nil {
+				return fmt.Errorf("checking version constraint on operator version %s: %w", opVersion, err)
+			}
+			if !hasSupport {
+				return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
+			}
 		}
 	}
 
@@ -390,7 +417,10 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		return fmt.Errorf("configuring operator configuration: %w", err)
 	}
 
-	if deploySettings.Roxie.KonfluxImagesEnabled() {
+	// For the single-operator path (including OLM), populate RELATED_IMAGE_* on the
+	// top-level OperatorConfig. Mixed-version deployments apply Konflux env vars
+	// per OperatorInstance during deployment instead.
+	if deploySettings.Roxie.KonfluxImagesEnabled() && !deploySettings.HasMixedVersions() {
 		deployer.PopulateKonfluxEnvVars(deploySettings)
 	}
 
@@ -456,6 +486,23 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
 		}
+	}
+
+	if deploySettings.HasMixedVersions() {
+		if components.IncludesOperatorExplicitly() {
+			return errors.New("mixed versions (--central-tag / --secured-cluster-tag / central.operator / securedCluster.operator) are not supported with operator-only deploy")
+		}
+		if deploySettings.Operator.DeployViaOlmEnabled() {
+			return errors.New("mixed versions (--central-tag / --secured-cluster-tag / central.operator / securedCluster.operator) are not supported with OLM deployment mode")
+		}
+	}
+
+	centralVer := deploySettings.EffectiveCentralVersion()
+	scVer := deploySettings.EffectiveSecuredClusterVersion()
+	if centralVer == scVer && centralVer != deploySettings.Roxie.Version &&
+		deploySettings.Central.Operator != nil && deploySettings.SecuredCluster.Operator != nil {
+		return fmt.Errorf("both --central-tag and --secured-cluster-tag are set to %s which differs from --tag %s; use --tag %s instead",
+			centralVer, deploySettings.Roxie.Version, centralVer)
 	}
 
 	return nil
