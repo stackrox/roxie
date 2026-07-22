@@ -123,6 +123,9 @@ type CentralConfig struct {
 	PortForwarding      *bool                  `yaml:"portForwarding,omitempty"`
 	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
 	Spec                map[string]interface{} `yaml:"spec,omitempty"`
+
+	AddOns          map[string]bool                   `yaml:"addOns,omitempty"`
+	AvailableAddOns map[string]CentralAddOnDefinition `yaml:"availableAddOns,omitempty"`
 }
 
 func (c *CentralConfig) EarlyReadinessEnabled() bool {
@@ -338,12 +341,6 @@ func (s *SecuredClusterConfig) CustomResource() (map[string]interface{}, error) 
 			"namespace": s.Namespace,
 			"labels": map[string]string{
 				"app": "stackrox-secured-cluster",
-			},
-		},
-		"spec": map[string]interface{}{
-			"clusterName": generateClusterName(),
-			"imagePullSecrets": []map[string]string{
-				{"name": "stackrox"},
 			},
 		},
 	}

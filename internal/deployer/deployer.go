@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -117,9 +118,6 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 		}
 	} else {
 		d.logger.Info("Deletion of Central resources requested, but Central CR is not present anymore")
-	}
-	if d.verbose {
-		d.logger.Dim("Deleted Central CR")
 	}
 
 	for _, resource := range []ResourceToDelete{
@@ -305,9 +303,20 @@ func (d *Deployer) stopDetachedPortForward() {
 // Deploy deploys the specified components to the cluster.
 func (d *Deployer) Deploy(ctx context.Context, components component.Component) error {
 	// Prepare and verify credentials early to fail fast.
-	if d.config.Roxie.ClusterType.NeedsPullSecrets() {
+	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
+	if needPullSecrets {
 		if err := d.prepareCredentials(); err != nil {
 			return fmt.Errorf("failed to prepare credentials: %w", err)
+		}
+	}
+
+	var enabledAddOns []AddOn
+	var err error
+
+	if components.IncludesAddOns() {
+		enabledAddOns, err = d.ResolveEnabledAddOns()
+		if err != nil {
+			return fmt.Errorf("resolving enabled add-ons: %w", err)
 		}
 	}
 
@@ -318,14 +327,21 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component) e
 		return d.deployOperatorOnly(ctx)
 	}
 
-	// Deploy operator first if needed.
-	if err := d.ensureOperatorDeployed(ctx); err != nil {
-		return fmt.Errorf("failed to deploy operator: %w", err)
+	if components.IncludesOperator() {
+		// Deploy operator first if needed.
+		if err := d.ensureOperatorDeployed(ctx); err != nil {
+			return fmt.Errorf("failed to deploy operator: %w", err)
+		}
 	}
 
 	if components.IncludesCentral() {
 		if err := d.deployCentral(ctx); err != nil {
 			return fmt.Errorf("failed to deploy central: %w", err)
+		}
+	}
+	if components.IncludesAddOns() {
+		if err := d.deployAddOns(ctx, enabledAddOns); err != nil {
+			return fmt.Errorf("deploying add-ons: %w", err)
 		}
 	}
 	if components.IncludesSensor() {
@@ -391,6 +407,15 @@ func (d *Deployer) deploySecuredCluster(ctx context.Context) error {
 func (d *Deployer) Teardown(ctx context.Context, components component.Component) error {
 	d.logger.Infof("Starting teardown of %s", components)
 
+	if components.IncludesAddOns() {
+		enabledAddOns, err := d.ResolveEnabledAddOns()
+		if err != nil {
+			return fmt.Errorf("resolving enabled add-ons: %w", err)
+		}
+		slices.Reverse(enabledAddOns) // Tearing down in opposite order as deploying.
+		d.teardownAddOns(ctx, enabledAddOns)
+	}
+
 	switch components {
 	case component.Central:
 		return d.teardownCentral(ctx)
@@ -426,7 +451,8 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 				d.logger.Warningf("Error tearing down operator: %v", err)
 			}
 		}
-
+		return nil
+	case component.AddOns:
 		return nil
 	default:
 		return fmt.Errorf("unknown component: %s", components)
@@ -452,8 +478,7 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 	}
 
 	d.logger.Info("⏳ Waiting for Central resources to be fully deleted...")
-	err := d.deleteCentralResources(ctx)
-	if err != nil {
+	if err := d.deleteCentralResources(ctx); err != nil {
 		return fmt.Errorf("failed to delete Central resources: %w", err)
 	}
 

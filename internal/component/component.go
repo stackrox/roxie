@@ -10,6 +10,7 @@ const (
 	Central
 	SecuredCluster
 	Operator
+	AddOns
 )
 
 func FromArgs(args []string) (Component, error) {
@@ -25,6 +26,8 @@ func FromArgs(args []string) (Component, error) {
 			return SecuredCluster, nil
 		case "operator":
 			return Operator, nil
+		case "addons", "add-ons":
+			return AddOns, nil
 		default:
 			return All, fmt.Errorf("unknown component: %s", args[0])
 		}
@@ -44,6 +47,8 @@ func (c Component) String() string {
 		return "Secured Cluster"
 	case Operator:
 		return "Operator"
+	case AddOns:
+		return "AddOns"
 	default:
 		return fmt.Sprintf("Unknown(%d)", c)
 	}
@@ -55,6 +60,15 @@ func (c Component) IncludesCentral() bool {
 
 func (c Component) IncludesSensor() bool {
 	return c == Both || c == All || c == SecuredCluster
+}
+
+func (c Component) IncludesAddOns() bool {
+	// Aligned with the central lifecycle, but can also be selected explicitly.
+	return c.IncludesCentral() || c == AddOns
+}
+
+func (c Component) IncludesOperator() bool {
+	return c.IncludesOperatorExplicitly() || c.IncludesCentral() || c.IncludesSensor()
 }
 
 func (c Component) IncludesOperatorExplicitly() bool {

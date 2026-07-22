@@ -350,7 +350,7 @@ func isStackRoxRepositoryRemote(remote string) bool {
 }
 
 func GetStackroxRepositoryTag(log *logger.Logger) (string, error) {
-	topLevelDir, err := getStackRoxTopLevelDir()
+	topLevelDir, err := GetStackRoxTopLevelDir()
 	if err != nil {
 		return "", fmt.Errorf("getting stackrox top level directory: %w", err)
 	}
@@ -367,7 +367,7 @@ func GetStackroxRepositoryTag(log *logger.Logger) (string, error) {
 	return tag, nil
 }
 
-func getStackRoxTopLevelDir() (string, error) {
+func GetStackRoxTopLevelDir() (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	outputBytes, err := cmd.Output()
 	if err != nil {

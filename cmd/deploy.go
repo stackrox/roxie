@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stackrox/roxie/internal/clusterdefaults"
@@ -14,6 +17,7 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
 	"github.com/stackrox/roxie/internal/roxieenv"
@@ -215,13 +219,15 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	deploySettings, err := assembleConfigForCommand(nil, deploySettingsFromArgs, skipUserConfig)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	clusterConfig := retrieveClusterConfigForComponents(ctx, log, components)
+
+	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
 	if err != nil {
 		return err
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
 
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
@@ -231,6 +237,12 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("looking up main image tag: %w", err)
 		}
 		deploySettings.Roxie.Version = mainImageTag
+	}
+
+	if components.IncludesSensor() {
+		if err := applySecuredClusterDefaults(&deploySettings.SecuredCluster); err != nil {
+			return fmt.Errorf("applying SecuredCluster defaults: %w", err)
+		}
 	}
 
 	if err := configureConfig(log, components, &deploySettings); err != nil {
@@ -325,7 +337,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		d.WaitForCentral(5 * time.Minute)
 	}
 
-	if components.IncludesCentral() && !dryRun {
+	if !dryRun {
 		roxieEnv := roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo())
 		m := manifest.RoxieManifest{
 			RoxieEnvironment: roxieEnv,
@@ -343,6 +355,31 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func retrieveClusterConfigForComponents(
+	ctx context.Context,
+	log *logger.Logger,
+	components component.Component,
+) *deployer.Config {
+	clusterManifest, err := manifest.LoadManifestSecret(ctx, log)
+	if err != nil {
+		if errors.Is(err, k8s.ErrResourceNotFound) {
+			log.Dim("No existing manifest found on cluster, starting from defaults")
+		} else {
+			log.Warningf("Failed to load manifest from cluster: %v", err)
+		}
+		return nil // Let's try to continue without manifest
+	}
+
+	if components == component.SecuredCluster && clusterManifest.Config.SecuredCluster.Spec != nil {
+		// Reusing these fields from the config stored on the cluster would cause problems
+		// during repeating sensor deploy & teardown cycles.
+		delete(clusterManifest.Config.SecuredCluster.Spec, "clusterName")
+		delete(clusterManifest.Config.SecuredCluster.Spec, "centralEndpoint")
+	}
+
+	return &clusterManifest.Config
 }
 
 func configureConfig(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
@@ -459,4 +496,29 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 	}
 
 	return nil
+}
+
+func applySecuredClusterDefaults(config *deployer.SecuredClusterConfig) error {
+	if config.Spec == nil {
+		config.Spec = make(map[string]any)
+	}
+	return mergo.Merge(&config.Spec, &map[string]any{
+		"clusterName": generateClusterName(),
+		"imagePullSecrets": []any{
+			map[string]any{
+				"name": "stackrox",
+			},
+		},
+	}, mergo.WithAppendSlice)
+}
+
+func generateClusterName() string {
+	var randInt int64
+	bigInt, err := rand.Int(rand.Reader, big.NewInt(9000))
+	if err == nil {
+		// Don't want to do error handling here.
+		randInt = bigInt.Int64() + 1000
+	}
+
+	return fmt.Sprintf("sensor-%d", randInt)
 }
