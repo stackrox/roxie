@@ -1,7 +1,9 @@
 package deployer
 
 import (
+	"cmp"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -24,7 +26,7 @@ var AllOperatorNamespaces = []string{
 	operatorNamespaceSensor,
 }
 
-// OperatorInstance describes one operator deployment (single- or mixed-version).
+// OperatorInstance describes a single operator instance (single- or mixed-version mode).
 type OperatorInstance struct {
 	Version   string
 	Namespace string
@@ -80,12 +82,8 @@ func (c *Config) HasMixedVersions() bool {
 // When they differ, two operators are deployed with reconciler toggles.
 func (c *Config) OperatorInstances() []OperatorInstance {
 	if !c.HasMixedVersions() {
-		version := helpers.ConvertMainTagToOperatorTag(c.CentralVersion())
-		if version == "" {
-			version = c.Operator.Version
-		}
 		return []OperatorInstance{{
-			Version:   version,
+			Version:   helpers.ConvertMainTagToOperatorTag(c.CentralVersion()),
 			Namespace: operatorNamespaceSystem,
 			EnvVars:   maps.Clone(c.Operator.EnvVars),
 		}}
@@ -122,28 +120,15 @@ func (c *Config) OperatorInstances() []OperatorInstance {
 // Ordering uses the leading semver of each tag (suffix after "-" is ignored), which
 // is sufficient for release-vs-release compat testing (e.g. 4.8.x vs 4.9.x).
 func (c *Config) NewestOperatorVersion() string {
-	instances := c.OperatorInstances()
-	if len(instances) == 0 {
-		return c.Operator.Version
-	}
-	newest := instances[0].Version
-	for _, inst := range instances[1:] {
-		if operatorVersionGreater(inst.Version, newest) {
-			newest = inst.Version
+	newest := slices.MaxFunc(c.OperatorInstances(), func(a, b OperatorInstance) int {
+		av, aerr := parseOperatorSemver(a.Version)
+		bv, berr := parseOperatorSemver(b.Version)
+		if aerr == nil && berr == nil {
+			return av.Compare(bv)
 		}
-	}
-	return newest
-}
-
-// operatorVersionGreater reports whether a is a newer operator tag than b.
-func operatorVersionGreater(a, b string) bool {
-	av, aerr := parseOperatorSemver(a)
-	bv, berr := parseOperatorSemver(b)
-	if aerr == nil && berr == nil {
-		return av.GreaterThan(bv)
-	}
-	// Fall back to lexicographic compare when tags are not parseable as semver.
-	return a > b
+		return cmp.Compare(a.Version, b.Version)
+	})
+	return newest.Version
 }
 
 func parseOperatorSemver(version string) (*semver.Version, error) {
