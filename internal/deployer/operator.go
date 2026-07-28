@@ -35,7 +35,7 @@ var requiredCRDs = []string{
 // deployOperatorNonOLM deploys one RHACS operator instance without OLM.
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context, instance OperatorInstance) error {
 	d.logger.Infof("Operator tag: %s (namespace %s)", instance.Version, instance.Namespace)
-	bundleImage := OperatorBundleImageForVersion(instance.Version, d.config.Roxie.KonfluxImagesEnabled())
+	bundleImage := OperatorBundleImage(instance.Version, d.config.Roxie.KonfluxImagesEnabled())
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
 	if err != nil {
@@ -170,7 +170,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 		if version == "" {
 			version = d.config.Operator.Version
 		}
-		bundleImage := OperatorBundleImageForVersion(version, d.config.Roxie.KonfluxImagesEnabled())
+		bundleImage := OperatorBundleImage(version, d.config.Roxie.KonfluxImagesEnabled())
 		d.logger.Warningf("Missing CRDs detected (%s)", strings.Join(missing, ", "))
 		d.logger.Warningf("Fetching bundle %s", bundleImage)
 

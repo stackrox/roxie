@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/helpers"
 )
 
 func imagesForConfig(config Config) []string {
@@ -37,7 +36,7 @@ func imagesForConfig(config Config) []string {
 	}
 	for _, instance := range config.OperatorInstances() {
 		add(fmt.Sprintf("%s/%s%s:%s", imageRegistry, operatorPrefix, "operator", instance.Version))
-		add(OperatorBundleImageForVersion(instance.Version, config.Roxie.KonfluxImagesEnabled()))
+		add(OperatorBundleImage(instance.Version, config.Roxie.KonfluxImagesEnabled()))
 	}
 
 	return images
@@ -60,17 +59,8 @@ func uniqueMainVersions(config Config) []string {
 	return unique
 }
 
-// OperatorBundleImage returns the operator bundle image for the top-level operator version.
-func OperatorBundleImage(config Config) string {
-	version := config.Operator.Version
-	if version == "" {
-		version = helpers.ConvertMainTagToOperatorTag(config.Roxie.Version)
-	}
-	return OperatorBundleImageForVersion(version, config.Roxie.KonfluxImagesEnabled())
-}
-
-// OperatorBundleImageForVersion returns the operator bundle image for a specific operator version.
-func OperatorBundleImageForVersion(operatorVersion string, konflux bool) string {
+// OperatorBundleImage returns the operator bundle image for a specific operator version.
+func OperatorBundleImage(operatorVersion string, konflux bool) string {
 	imageRegistry := constants.DefaultRegistry
 	if konflux {
 		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, operatorVersion)
