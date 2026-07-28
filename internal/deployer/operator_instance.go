@@ -54,7 +54,7 @@ func (o OperatorInstance) ClusterRoleBindingName() string {
 // If central.operator.version is set, it is converted back to a main tag;
 // otherwise falls back to roxie.version.
 func (c *Config) EffectiveCentralVersion() string {
-	if c.Central.Operator != nil && c.Central.Operator.Version != "" {
+	if c.Central.Operator.Version != "" {
 		return c.Central.Operator.Version
 	}
 	return c.Roxie.Version
@@ -64,7 +64,7 @@ func (c *Config) EffectiveCentralVersion() string {
 // If securedCluster.operator.version is set, it is converted back to a main tag;
 // otherwise falls back to roxie.version.
 func (c *Config) EffectiveSecuredClusterVersion() string {
-	if c.SecuredCluster.Operator != nil && c.SecuredCluster.Operator.Version != "" {
+	if c.SecuredCluster.Operator.Version != "" {
 		return c.SecuredCluster.Operator.Version
 	}
 	return c.Roxie.Version
@@ -86,33 +86,19 @@ func (c *Config) OperatorInstances() []OperatorInstance {
 		if version == "" {
 			version = c.Operator.Version
 		}
-		envVars := copyStringMap(c.Operator.EnvVars)
-		if c.Central.Operator != nil {
-			for k, v := range c.Central.Operator.EnvVars {
-				envVars[k] = v
-			}
-		}
 		return []OperatorInstance{{
 			Version:   version,
 			Namespace: operatorNamespaceSystem,
-			EnvVars:   envVars,
+			EnvVars:   maps.Clone(c.Operator.EnvVars),
 		}}
 	}
 
-	centralEnvVars := copyStringMap(c.Operator.EnvVars)
-	if c.Central.Operator != nil {
-		for k, v := range c.Central.Operator.EnvVars {
-			centralEnvVars[k] = v
-		}
-	}
+	centralEnvVars := make(map[string]string, len(c.Central.Operator.EnvVars)+1)
+	maps.Copy(centralEnvVars, c.Central.Operator.EnvVars)
 	centralEnvVars[envSecuredClusterReconcilerEnabled] = "false"
 
-	sensorEnvVars := copyStringMap(c.Operator.EnvVars)
-	if c.SecuredCluster.Operator != nil {
-		for k, v := range c.SecuredCluster.Operator.EnvVars {
-			sensorEnvVars[k] = v
-		}
-	}
+	sensorEnvVars := make(map[string]string, len(c.SecuredCluster.Operator.EnvVars)+1)
+	maps.Copy(sensorEnvVars, c.SecuredCluster.Operator.EnvVars)
 	sensorEnvVars[envCentralReconcilerEnabled] = "false"
 
 	return []OperatorInstance{
@@ -166,11 +152,4 @@ func parseOperatorSemver(version string) (*semver.Version, error) {
 	// Leading semver only; see NewestOperatorVersion.
 	version, _, _ = strings.Cut(version, "-")
 	return semver.NewVersion(version)
-}
-
-func copyStringMap(m map[string]string) map[string]string {
-	if m == nil {
-		return make(map[string]string)
-	}
-	return maps.Clone(m)
 }

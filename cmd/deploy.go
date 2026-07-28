@@ -141,9 +141,6 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 
 	registerFlag(cmd, settings, "central-tag", "Image tag for Central (overrides --tag for Central)",
 		withApplyFn("version", func(config *deployer.Config, tag string) error {
-			if config.Central.Operator == nil {
-				config.Central.Operator = &deployer.OperatorConfig{}
-			}
 			config.Central.Operator.Version = tag
 			return nil
 		}),
@@ -151,9 +148,6 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 
 	registerFlag(cmd, settings, "secured-cluster-tag", "Image tag for SecuredCluster (overrides --tag for SecuredCluster)",
 		withApplyFn("version", func(config *deployer.Config, tag string) error {
-			if config.SecuredCluster.Operator == nil {
-				config.SecuredCluster.Operator = &deployer.OperatorConfig{}
-			}
 			config.SecuredCluster.Operator.Version = tag
 			return nil
 		}),
