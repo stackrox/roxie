@@ -19,7 +19,7 @@ var konfluxRelatedImages = map[string]string{
 	"RELATED_IMAGE_FACT":            "fact",
 }
 
-// KonfluxOperatorImage returns the Konflux-built operator image reference for a version.
+// KonfluxOperatorImage returns the Konflux-built operator image reference for an operator version.
 func KonfluxOperatorImage(operatorVersion string) string {
 	return fmt.Sprintf("%s/release-operator:%s", constants.DefaultRegistry, operatorVersion)
 }
