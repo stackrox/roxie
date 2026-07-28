@@ -267,32 +267,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !deploySettings.Central.EarlyReadinessEnabled() || !deploySettings.SecuredCluster.EarlyReadinessEnabled() {
-		// Explanation on the versions involved here:
-		// Deploying StackRox begins with picking a "main image tag" -- this is a version identifier, which cannot be reliably parsed as a semver.
-		// But there is a derived version from that -- the operator version -- which can be parsed as a semver.
-		//
-		// The invocation of deploySettings.Operator.Configure() above in this function prepares the operator deployment config in the sense
-		// that top-level roxie configuration options are propagated to the concrete operator deployment configuration. This includes also
-		// storing of the derived operator version within the operator configuration.
-		//
-		// This is why we use the operator version here when checking version constraints.
-		// Check every operator instance that will be deployed.
-		var versionsToCheck []string
-		for _, instance := range deploySettings.OperatorInstances() {
-			versionsToCheck = append(versionsToCheck, instance.Version)
-		}
-		for _, opVersion := range versionsToCheck {
-			hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(opVersion)
-			if err != nil {
-				return fmt.Errorf("checking version constraint on operator version %s: %w", opVersion, err)
-			}
-			if !hasSupport {
-				return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
-			}
-		}
-	}
-
 	d, err := deployer.New(log)
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
@@ -518,6 +492,28 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		}
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("mixed versions (--central-tag / --secured-cluster-tag / central.operator / securedCluster.operator) are not supported with OLM deployment mode")
+		}
+	}
+
+	if !deploySettings.Central.EarlyReadinessEnabled() || !deploySettings.SecuredCluster.EarlyReadinessEnabled() {
+		// Explanation on the versions involved here:
+		// Deploying StackRox begins with picking a "main image tag" -- this is a version identifier, which cannot be reliably parsed as a semver.
+		// But there is a derived version from that -- the operator version -- which can be parsed as a semver.
+		//
+		// The invocation of deploySettings.Operator.Configure() above in this function prepares the operator deployment config in the sense
+		// that top-level roxie configuration options are propagated to the concrete operator deployment configuration. This includes also
+		// storing of the derived operator version within the operator configuration.
+		//
+		// This is why we use the operator version here when checking version constraints.
+		// Check every operator instance that will be deployed.
+		for _, instance := range deploySettings.OperatorInstances() {
+			hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(instance.Version)
+			if err != nil {
+				return fmt.Errorf("checking version constraint on operator version %s: %w", instance.Version, err)
+			}
+			if !hasSupport {
+				return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
+			}
 		}
 	}
 
