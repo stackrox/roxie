@@ -24,27 +24,19 @@ func KonfluxOperatorImage(operatorVersion string) string {
 	return fmt.Sprintf("%s/release-operator:%s", constants.DefaultRegistry, operatorVersion)
 }
 
-// MergeKonfluxEnvVars returns a copy of envVars with RELATED_IMAGE_* entries filled
-// for the given operator version. Explicitly-provided env vars take precedence.
-func MergeKonfluxEnvVars(envVars map[string]string, operatorVersion string) map[string]string {
-	result := copyStringMap(envVars)
+// PopulateKonfluxEnvVars adds RELATED_IMAGE_* entries to envVars for the given
+// operator version. Explicitly-provided env vars (e.g. from --operator-env)
+// take precedence and are not overwritten.
+func PopulateKonfluxEnvVars(envVars map[string]string, operatorVersion string) {
 	for envName, imageSuffix := range konfluxRelatedImages {
-		if _, exists := result[envName]; exists {
+		if _, exists := envVars[envName]; exists {
 			continue
 		}
-		result[envName] = fmt.Sprintf(
+		envVars[envName] = fmt.Sprintf(
 			"%s/release-%s:%s",
 			constants.DefaultRegistry,
 			imageSuffix,
-			operatorVersion, // Konflux built images use the "operator tag".
+			operatorVersion,
 		)
 	}
-	return result
-}
-
-// PopulateKonfluxEnvVars populates config.Operator.EnvVars with RELATED_IMAGE_*
-// entries for Konflux image rewriting. Used for the single-operator / OLM path
-// where env vars live on the top-level OperatorConfig.
-func PopulateKonfluxEnvVars(config *Config) {
-	config.Operator.EnvVars = MergeKonfluxEnvVars(config.Operator.EnvVars, config.Operator.Version)
 }

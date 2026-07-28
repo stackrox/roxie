@@ -96,7 +96,7 @@ func (d *Deployer) preparedOperatorInstances() []OperatorInstance {
 		return instances
 	}
 	for i := range instances {
-		instances[i].EnvVars = MergeKonfluxEnvVars(instances[i].EnvVars, instances[i].Version)
+		PopulateKonfluxEnvVars(instances[i].EnvVars, instances[i].Version)
 	}
 	return instances
 }

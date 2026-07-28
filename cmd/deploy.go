@@ -454,13 +454,6 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		return fmt.Errorf("configuring operator configuration: %w", err)
 	}
 
-	// For the single-operator path (including OLM), populate RELATED_IMAGE_* on the
-	// top-level OperatorConfig. Mixed-version deployments apply Konflux env vars
-	// per OperatorInstance during deployment instead.
-	if deploySettings.Roxie.KonfluxImagesEnabled() && !deploySettings.HasMixedVersions() {
-		deployer.PopulateKonfluxEnvVars(deploySettings)
-	}
-
 	if components.IncludesCentral() {
 		if err := deploySettings.Central.ConfigureSpec(&deploySettings.Roxie); err != nil {
 			return fmt.Errorf("configuring Central spec: %w", err)
@@ -532,14 +525,6 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("mixed versions (--central-tag / --secured-cluster-tag / central.operator / securedCluster.operator) are not supported with OLM deployment mode")
 		}
-	}
-
-	centralVer := deploySettings.EffectiveCentralVersion()
-	scVer := deploySettings.EffectiveSecuredClusterVersion()
-	if centralVer == scVer && centralVer != deploySettings.Roxie.Version &&
-		deploySettings.Central.Operator != nil && deploySettings.SecuredCluster.Operator != nil {
-		return fmt.Errorf("both --central-tag and --secured-cluster-tag are set to %s which differs from --tag %s; use --tag %s instead",
-			centralVer, deploySettings.Roxie.Version, centralVer)
 	}
 
 	return nil
