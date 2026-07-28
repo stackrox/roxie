@@ -44,7 +44,7 @@ func imagesForConfig(config Config) []string {
 }
 
 func uniqueMainVersions(config Config) []string {
-	versions := []string{config.EffectiveCentralVersion(), config.EffectiveSecuredClusterVersion()}
+	versions := []string{config.CentralVersion(), config.SecuredClusterVersion()}
 	seen := make(map[string]bool)
 	var unique []string
 	for _, v := range versions {

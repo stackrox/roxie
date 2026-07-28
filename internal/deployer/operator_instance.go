@@ -50,20 +50,18 @@ func (o OperatorInstance) ClusterRoleBindingName() string {
 	return "rhacs-operator-manager-rolebinding-" + o.RoleNameSuffix
 }
 
-// EffectiveCentralVersion returns the main image tag used for Central.
-// If central.operator.version is set, it is converted back to a main tag;
-// otherwise falls back to roxie.version.
-func (c *Config) EffectiveCentralVersion() string {
+// CentralVersion returns the main image tag used for Central.
+// Uses central.operator.version if set, otherwise falls back to roxie.version.
+func (c *Config) CentralVersion() string {
 	if c.Central.Operator.Version != "" {
 		return c.Central.Operator.Version
 	}
 	return c.Roxie.Version
 }
 
-// EffectiveSecuredClusterVersion returns the main image tag used for SecuredCluster.
-// If securedCluster.operator.version is set, it is converted back to a main tag;
-// otherwise falls back to roxie.version.
-func (c *Config) EffectiveSecuredClusterVersion() string {
+// SecuredClusterVersion returns the main image tag used for SecuredCluster.
+// Uses securedCluster.operator.version if set, otherwise falls back to roxie.version.
+func (c *Config) SecuredClusterVersion() string {
 	if c.SecuredCluster.Operator.Version != "" {
 		return c.SecuredCluster.Operator.Version
 	}
@@ -74,7 +72,7 @@ func (c *Config) EffectiveSecuredClusterVersion() string {
 // This is true when at least one component has a per-component operator config with a version
 // that differs from the other component's effective version.
 func (c *Config) HasMixedVersions() bool {
-	return c.EffectiveCentralVersion() != c.EffectiveSecuredClusterVersion()
+	return c.CentralVersion() != c.SecuredClusterVersion()
 }
 
 // OperatorInstances builds the operator deployment plan for this config.
@@ -82,7 +80,7 @@ func (c *Config) HasMixedVersions() bool {
 // When they differ, two operators are deployed with reconciler toggles.
 func (c *Config) OperatorInstances() []OperatorInstance {
 	if !c.HasMixedVersions() {
-		version := helpers.ConvertMainTagToOperatorTag(c.EffectiveCentralVersion())
+		version := helpers.ConvertMainTagToOperatorTag(c.CentralVersion())
 		if version == "" {
 			version = c.Operator.Version
 		}
@@ -103,13 +101,13 @@ func (c *Config) OperatorInstances() []OperatorInstance {
 
 	return []OperatorInstance{
 		{
-			Version:        helpers.ConvertMainTagToOperatorTag(c.EffectiveCentralVersion()),
+			Version:        helpers.ConvertMainTagToOperatorTag(c.CentralVersion()),
 			Namespace:      operatorNamespaceCentral,
 			EnvVars:        centralEnvVars,
 			RoleNameSuffix: "central",
 		},
 		{
-			Version:        helpers.ConvertMainTagToOperatorTag(c.EffectiveSecuredClusterVersion()),
+			Version:        helpers.ConvertMainTagToOperatorTag(c.SecuredClusterVersion()),
 			Namespace:      operatorNamespaceSensor,
 			EnvVars:        sensorEnvVars,
 			RoleNameSuffix: "sensor",

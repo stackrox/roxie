@@ -7,43 +7,43 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEffectiveVersions_DefaultToRoxieVersion(t *testing.T) {
+func TestVersions_DefaultToRoxieVersion(t *testing.T) {
 	cfg := Config{
 		Roxie: RoxieConfig{Version: "4.9.0"},
 	}
-	assert.Equal(t, "4.9.0", cfg.EffectiveCentralVersion())
-	assert.Equal(t, "4.9.0", cfg.EffectiveSecuredClusterVersion())
+	assert.Equal(t, "4.9.0", cfg.CentralVersion())
+	assert.Equal(t, "4.9.0", cfg.SecuredClusterVersion())
 	assert.False(t, cfg.HasMixedVersions())
 }
 
-func TestEffectiveVersions_CentralOverride(t *testing.T) {
+func TestVersions_CentralOverride(t *testing.T) {
 	cfg := Config{
 		Roxie:   RoxieConfig{Version: "4.9.0"},
 		Central: CentralConfig{Operator: OperatorConfig{Version: "4.8.0"}},
 	}
-	assert.Equal(t, "4.8.0", cfg.EffectiveCentralVersion())
-	assert.Equal(t, "4.9.0", cfg.EffectiveSecuredClusterVersion())
+	assert.Equal(t, "4.8.0", cfg.CentralVersion())
+	assert.Equal(t, "4.9.0", cfg.SecuredClusterVersion())
 	assert.True(t, cfg.HasMixedVersions())
 }
 
-func TestEffectiveVersions_SecuredClusterOverride(t *testing.T) {
+func TestVersions_SecuredClusterOverride(t *testing.T) {
 	cfg := Config{
 		Roxie:          RoxieConfig{Version: "4.9.0"},
 		SecuredCluster: SecuredClusterConfig{Operator: OperatorConfig{Version: "4.7.0"}},
 	}
-	assert.Equal(t, "4.9.0", cfg.EffectiveCentralVersion())
-	assert.Equal(t, "4.7.0", cfg.EffectiveSecuredClusterVersion())
+	assert.Equal(t, "4.9.0", cfg.CentralVersion())
+	assert.Equal(t, "4.7.0", cfg.SecuredClusterVersion())
 	assert.True(t, cfg.HasMixedVersions())
 }
 
-func TestEffectiveVersions_BothOverridesSame_NoMixed(t *testing.T) {
+func TestVersions_BothOverridesSame_NoMixed(t *testing.T) {
 	cfg := Config{
 		Roxie:          RoxieConfig{Version: "4.9.0"},
 		Central:        CentralConfig{Operator: OperatorConfig{Version: "4.8.0"}},
 		SecuredCluster: SecuredClusterConfig{Operator: OperatorConfig{Version: "4.8.0"}},
 	}
-	assert.Equal(t, "4.8.0", cfg.EffectiveCentralVersion())
-	assert.Equal(t, "4.8.0", cfg.EffectiveSecuredClusterVersion())
+	assert.Equal(t, "4.8.0", cfg.CentralVersion())
+	assert.Equal(t, "4.8.0", cfg.SecuredClusterVersion())
 	assert.False(t, cfg.HasMixedVersions())
 
 	instances := cfg.OperatorInstances()

@@ -754,7 +754,7 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
 
 func (d *Deployer) PrintCentralDeploymentSummary() {
 	component := "Central"
-	mainImageTag := d.config.EffectiveCentralVersion()
+	mainImageTag := d.config.CentralVersion()
 	olm := d.config.Operator.DeployViaOlmEnabled()
 	exposure := d.config.Central.GetExposure()
 	portForwarding := d.config.Central.PortForwardingEnabled()
@@ -935,7 +935,7 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 // extracted
 func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	component := "Secured Cluster"
-	mainImageTag := d.config.EffectiveSecuredClusterVersion()
+	mainImageTag := d.config.SecuredClusterVersion()
 	olm := d.config.Operator.DeployViaOlmEnabled()
 	log := d.logger
 	kubeContext := d.kubeContext
