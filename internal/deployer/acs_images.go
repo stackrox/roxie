@@ -7,27 +7,21 @@ import (
 )
 
 func imagesForConfig(config Config) []string {
-	images := make([]string, 0)
+	var images []string
 	prefix := ""
 	if config.Roxie.KonfluxImagesEnabled() {
 		prefix = "release-"
 	}
 
 	imageRegistry := constants.DefaultRegistry
-	seen := make(map[string]bool)
-	add := func(image string) {
-		if seen[image] {
-			return
-		}
-		seen[image] = true
-		images = append(images, image)
-	}
 
 	for _, mainTag := range uniqueMainVersions(config) {
-		add(fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "main", mainTag))
-		add(fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "central-db", mainTag))
-		add(fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4-db", mainTag))
-		add(fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4", mainTag))
+		images = append(images,
+			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "main", mainTag),
+			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "central-db", mainTag),
+			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4-db", mainTag),
+			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4", mainTag),
+		)
 	}
 
 	operatorPrefix := prefix
@@ -35,28 +29,22 @@ func imagesForConfig(config Config) []string {
 		operatorPrefix = "stackrox-"
 	}
 	for _, instance := range config.OperatorInstances() {
-		add(fmt.Sprintf("%s/%s%s:%s", imageRegistry, operatorPrefix, "operator", instance.Version))
-		add(OperatorBundleImage(instance.Version, config.Roxie.KonfluxImagesEnabled()))
+		images = append(images,
+			fmt.Sprintf("%s/%s%s:%s", imageRegistry, operatorPrefix, "operator", instance.Version),
+			OperatorBundleImage(instance.Version, config.Roxie.KonfluxImagesEnabled()),
+		)
 	}
 
 	return images
 }
 
 func uniqueMainVersions(config Config) []string {
-	versions := []string{config.CentralVersion(), config.SecuredClusterVersion()}
-	seen := make(map[string]bool)
-	var unique []string
-	for _, v := range versions {
-		if v == "" || seen[v] {
-			continue
-		}
-		seen[v] = true
-		unique = append(unique, v)
+	central := config.CentralVersion()
+	sc := config.SecuredClusterVersion()
+	if central == sc {
+		return []string{central}
 	}
-	if len(unique) == 0 && config.Roxie.Version != "" {
-		unique = append(unique, config.Roxie.Version)
-	}
-	return unique
+	return []string{central, sc}
 }
 
 // OperatorBundleImage returns the operator bundle image for a specific operator version.
