@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/logger"
 )
@@ -68,8 +69,9 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 			}
 		}
 
-		// Include attempt in name for uniqueness, in case a failure is between addition to DB and reading response.
-		crsName := fmt.Sprintf("%s-crs-%d", clusterName, attempt)
+		// Include random string for uniqueness, also enabling repeating deploy&teardown cycles for sensor.
+		randomSuffix := helpers.InsecureRandomString(4)
+		crsName := fmt.Sprintf("%s-crs-%s", clusterName, randomSuffix)
 
 		crsContent, err := d.generateCRSOnce(ctx, client, crsName)
 		if err != nil {
