@@ -176,6 +176,8 @@ central:
         repo: https://prometheus-community.github.io/helm-charts
         chart: kube-state-metrics
         version: "5.27.0"
+      optional: true # If true, install on best-effort basis without failing the deployment of ACS itself.
+      priority: 5 # Use the priority field for controlling add on install & teardown order.
 ```
 
 Charts from a local stackrox repo checkout are also supported:
