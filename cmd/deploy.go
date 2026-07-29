@@ -513,7 +513,8 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 				return fmt.Errorf("checking version constraint on operator version %s: %w", instance.Version, err)
 			}
 			if !hasSupport {
-				return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
+				return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s (operator version %s in %s does not)",
+					stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String(), instance.Version, instance.Namespace)
 			}
 		}
 	}
