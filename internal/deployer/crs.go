@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"slices"
@@ -18,11 +17,7 @@ import (
 
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/k8s"
-)
-
-const (
-	ServiceCACommonName string = `StackRox Certificate Authority`
-	CentralCommonName   string = `CENTRAL_SERVICE: Central`
+	"github.com/stackrox/roxie/internal/logger"
 )
 
 var (
@@ -96,6 +91,9 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 }
 
 // centralHTTPClient returns an HTTP client configured for talking to Central.
+// When a CA cert file is available, it uses a narrow trust pool with a custom
+// chain-only verifier (see centralVerifyFunc). Otherwise it falls back to Go's
+// default TLS verification with the system root CAs and full hostname checking.
 func (d *Deployer) centralHTTPClient() (*http.Client, error) {
 	tlsConfig := &tls.Config{}
 
@@ -113,15 +111,12 @@ func (d *Deployer) centralHTTPClient() (*http.Client, error) {
 			}
 			pool.AddCert(cert)
 			caCertsAdded++
+			d.logger.Dimf("CA cert #%d: Subject.CN=%q, Issuer.CN=%q, SubjectKeyId=%x", caCertsAdded, cert.Subject.CommonName, cert.Issuer.CommonName, cert.SubjectKeyId)
 		}
 		d.logger.Infof("Loaded %d CA certificate(s) from %q", caCertsAdded, d.roxCACertFile)
 		tlsConfig.RootCAs = pool
 		tlsConfig.InsecureSkipVerify = true
-		host, _, err := net.SplitHostPort(d.centralEndpoint)
-		if err != nil {
-			return nil, fmt.Errorf("parsing central endpoint %q: %w", d.centralEndpoint, err)
-		}
-		tlsConfig.VerifyPeerCertificate = centralVerifyFunc(host, tlsConfig)
+		tlsConfig.VerifyPeerCertificate = centralVerifyFunc(d.logger, tlsConfig)
 	}
 
 	return &http.Client{
@@ -189,15 +184,22 @@ func (d *Deployer) isRetryableError(err error) bool {
 }
 
 // centralVerifyFunc returns a custom TLS peer certificate verifier for Central.
-// Central's self-signed serving cert uses IP SANs and the internal DNS name
-// "central.stackrox" rather than the external hostname roxie connects to (e.g.
-// a port-forwarded localhost or LoadBalancer IP). Go's default TLS verification
-// rejects the cert because the hostname doesn't match any SAN. We work around
-// this by setting InsecureSkipVerify and performing chain verification ourselves:
-// first against the actual hostname (which may work if the user added a matching
-// SAN), then falling back to "central.stackrox" for certs issued by Central's
-// own service CA.
-func centralVerifyFunc(hostname string, conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
+//
+// Go's default TLS verifier is disabled (InsecureSkipVerify) because roxie
+// often connects via port-forward to 127.0.0.1, which never matches any SAN.
+// This function performs certificate chain verification in its place.
+//
+// We deliberately do not check the DNSName, because the user can configure
+// custom TLS certificates for Central and in several scenarios (port-forwarding,
+// GKE load balancers) roxie only has an IP address -- no hostname to check against.
+//
+// Why chain-only is sufficient: the trust pool is narrow and cluster-scoped. It
+// contains the internal StackRox CA (from central-tls) plus, when a custom
+// defaultTLSSecret is configured, all certs from that secret (including the leaf).
+// Forging a certificate trusted by this pool requires the CA private key, which
+// is stored in the central-tls secret on the cluster. Reading that secret requires
+// kubectl access — at which point the attacker can read the admin password directly.
+func centralVerifyFunc(log *logger.Logger, conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 		if len(rawCerts) == 0 {
 			return errors.New("remote peer presented no certificates")
@@ -218,40 +220,17 @@ func centralVerifyFunc(hostname string, conf *tls.Config) func([][]byte, [][]*x5
 			intermediates.AddCert(cert)
 		}
 
-		systemVerifyOpts := x509.VerifyOptions{
-			DNSName:       hostname,
+		log.Dimf("Leaf cert: Subject.CN=%q, Issuer.CN=%q, AuthorityKeyId=%x",
+			leaf.Subject.CommonName, leaf.Issuer.CommonName, leaf.AuthorityKeyId)
+		log.Dim("Verifying certificate chain only")
+
+		_, err := leaf.Verify(x509.VerifyOptions{
+			// We deliberately do not check the DNSName here, see comment above.
 			Intermediates: intermediates,
 			Roots:         conf.RootCAs,
-		}
-
-		_, systemVerifyErr := leaf.Verify(systemVerifyOpts)
-		if systemVerifyErr == nil || !isACentralCert(leaf) {
-			return systemVerifyErr
-		}
-
-		serviceVerifyOpts := x509.VerifyOptions{
-			DNSName:       "central.stackrox",
-			Intermediates: intermediates,
-			Roots:         conf.RootCAs,
-		}
-
-		_, serviceVerifyErr := leaf.Verify(serviceVerifyOpts)
-		if serviceVerifyErr == nil {
-			return nil
-		}
-		return errors.Join(systemVerifyErr, serviceVerifyErr)
+		})
+		return err
 	}
-}
-
-// isACentralCert returns true if the cert's issuer and subject CNs claim look like central's.
-func isACentralCert(cert *x509.Certificate) bool {
-	if cert.Issuer.CommonName != ServiceCACommonName {
-		return false
-	}
-	if cert.Subject.CommonName == CentralCommonName {
-		return true
-	}
-	return false
 }
 
 // applyCRS applies the CRS content to the sensor namespace

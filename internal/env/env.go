@@ -147,6 +147,9 @@ func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterTy
 	if strings.HasPrefix(config.CurrentContext, "gke_acs-team-temp-dev") {
 		return types.ClusterTypeInfraGKE
 	}
+	if strings.HasPrefix(config.CurrentContext, "gke_") {
+		return types.ClusterTypeGKE
+	}
 
 	// Minikube clusters typically have context name "minikube".
 	if contextLower == "minikube" || strings.HasPrefix(contextLower, "minikube-") {

@@ -73,8 +73,18 @@ func TestClusterDefaults(t *testing.T) {
 			},
 		},
 		{
-			name:        "gke cluster",
+			name:        "infra gke cluster",
 			clusterType: types.ClusterTypeInfraGKE,
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       ptr.To(types.ExposureLoadBalancer),
+					PortForwarding: ptr.To(false),
+				},
+			},
+		},
+		{
+			name:        "gke cluster",
+			clusterType: types.ClusterTypeGKE,
 			wantConfig: deployer.Config{
 				Central: deployer.CentralConfig{
 					Exposure:       ptr.To(types.ExposureLoadBalancer),

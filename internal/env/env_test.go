@@ -8,7 +8,7 @@ import (
 	"github.com/stackrox/roxie/internal/types"
 )
 
-func TestDetectClusterType_GKE(t *testing.T) {
+func TestDetectClusterType_InfraGKE(t *testing.T) {
 	config := KubeConfig{
 		CurrentContext: "gke_acs-team-temp-dev_us-central1-a_my-cluster",
 		Clusters: []KubeCluster{
@@ -26,7 +26,7 @@ func TestDetectClusterType_GKE(t *testing.T) {
 	}
 }
 
-func TestDetectClusterType_GKE_ExactMatch(t *testing.T) {
+func TestDetectClusterType_InfraGKE_ExactMatch(t *testing.T) {
 	config := KubeConfig{
 		CurrentContext: "gke_acs-team-temp-dev",
 		Clusters: []KubeCluster{
@@ -172,20 +172,33 @@ func TestDetectClusterType_Minikube(t *testing.T) {
 }
 
 func TestDetectClusterType_GKE_DifferentProject(t *testing.T) {
-	config := KubeConfig{
-		CurrentContext: "gke_other-project_us-west1_cluster",
-		Clusters: []KubeCluster{
-			{
-				Name:   "gke_cluster",
-				Server: "https://34.1.2.3",
-			},
+	tests := []struct {
+		name    string
+		context string
+	}{
+		{
+			name:    "arbitrary project",
+			context: "gke_other-project_us-west1_cluster",
+		},
+		{
+			name:    "CI direct-gke via gke.sh (acs-san-stackroxci)",
+			context: "gke_acs-san-stackroxci_us-east4-b_rox-ci-qa-e2e-12345678",
 		},
 	}
-	apiResources := []string{"pods"}
-
-	result := DetectClusterType(config, apiResources)
-	if result != types.ClusterTypeUnknown {
-		t.Errorf("DetectClusterType() = %v (%s), want %v", result, result.String(), types.ClusterTypeUnknown)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := KubeConfig{
+				CurrentContext: tt.context,
+				Clusters: []KubeCluster{
+					{
+						Name:   "gke_cluster",
+						Server: "https://34.1.2.3",
+					},
+				},
+			}
+			result := DetectClusterType(config, []string{"pods"})
+			assert.Equal(t, types.ClusterTypeGKE, result)
+		})
 	}
 }
 
@@ -288,6 +301,11 @@ func TestClusterTypeString(t *testing.T) {
 		clusterType types.ClusterType
 		want        string
 	}{
+		{
+			name:        "types.ClusterTypeGKE",
+			clusterType: types.ClusterTypeGKE,
+			want:        "GKE",
+		},
 		{
 			name:        "types.ClusterTypeInfraGKE",
 			clusterType: types.ClusterTypeInfraGKE,

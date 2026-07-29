@@ -13,6 +13,7 @@ func TestClusterTypeMarshalYAML(t *testing.T) {
 		clusterType ClusterType
 		expected    string
 	}{
+		{ClusterTypeGKE, "GKE"},
 		{ClusterTypeInfraGKE, "InfraGKE"},
 		{ClusterTypeInfraOpenShift4, "InfraOpenShift4"},
 		{ClusterTypeOpenShift4, "OpenShift4"},
@@ -35,6 +36,7 @@ func TestClusterTypeUnmarshalYAML(t *testing.T) {
 		input    string
 		expected ClusterType
 	}{
+		{"GKE", ClusterTypeGKE},
 		{"InfraGKE", ClusterTypeInfraGKE},
 		{"InfraOpenShift4", ClusterTypeInfraOpenShift4},
 		{"OpenShift4", ClusterTypeOpenShift4},
@@ -42,7 +44,7 @@ func TestClusterTypeUnmarshalYAML(t *testing.T) {
 		{"Minikube", ClusterTypeMinikube},
 		{"K3s", ClusterTypeK3s},
 		{"CRC", ClusterTypeCRC},
-		{"", ClusterTypeUnknown},
+		{"Unknown", ClusterTypeUnknown},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
