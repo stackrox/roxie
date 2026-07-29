@@ -138,8 +138,6 @@ func doInstall(helmCtx HelmCtx, opts InstallOptions) error {
 	}
 	if helmCtx.Verbose {
 		helmCtx.Log.Dimf("resolved Helm chart for release %s as %q", opts.ReleaseName, chartPath)
-		helmCtx.Log.Dimf("values for Helm chart for release %s:", opts.ReleaseName)
-		helpers.LogMultilineYaml(helmCtx.Log, opts.Values)
 	}
 
 	if helmCtx.Verbose {
