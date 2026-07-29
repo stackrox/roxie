@@ -754,7 +754,7 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
 
 func (d *Deployer) PrintCentralDeploymentSummary() {
 	component := "Central"
-	mainImageTag := d.config.CentralVersion()
+	imageTag := d.config.CentralVersion()
 	olm := d.config.Operator.DeployViaOlmEnabled()
 	exposure := d.config.Central.GetExposure()
 	portForwarding := d.config.Central.PortForwardingEnabled()
@@ -809,7 +809,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
 	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
-	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
+	log.Info(cyan.Sprint("│") + createRow("Image Tag", imageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
 	if olm {
@@ -935,7 +935,7 @@ func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace st
 // extracted
 func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	component := "Secured Cluster"
-	mainImageTag := d.config.SecuredClusterVersion()
+	imageTag := d.config.SecuredClusterVersion()
 	olm := d.config.Operator.DeployViaOlmEnabled()
 	log := d.logger
 	kubeContext := d.kubeContext
@@ -988,7 +988,7 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
 	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
-	log.Info(cyan.Sprint("│") + createRow("Main Tag", mainImageTag))
+	log.Info(cyan.Sprint("│") + createRow("Image Tag", imageTag))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
 	if olm {

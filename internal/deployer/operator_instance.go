@@ -52,7 +52,7 @@ func (o OperatorInstance) ClusterRoleBindingName() string {
 	return "rhacs-operator-manager-rolebinding-" + o.RoleNameSuffix
 }
 
-// CentralVersion returns the main image tag used for Central.
+// CentralVersion returns the version tag for Central (may be a main tag or operator tag).
 // Uses central.operator.version if set, otherwise falls back to roxie.version.
 func (c *Config) CentralVersion() string {
 	if c.Central.Operator.Version != "" {
@@ -61,7 +61,7 @@ func (c *Config) CentralVersion() string {
 	return c.Roxie.Version
 }
 
-// SecuredClusterVersion returns the main image tag used for SecuredCluster.
+// SecuredClusterVersion returns the version tag for SecuredCluster (may be a main tag or operator tag).
 // Uses securedCluster.operator.version if set, otherwise falls back to roxie.version.
 func (c *Config) SecuredClusterVersion() string {
 	if c.SecuredCluster.Operator.Version != "" {
@@ -83,7 +83,7 @@ func (c *Config) HasMixedVersions() bool {
 func (c *Config) OperatorInstances() []OperatorInstance {
 	if !c.HasMixedVersions() {
 		return []OperatorInstance{{
-			Version:   helpers.ConvertMainTagToOperatorTag(c.CentralVersion()),
+			Version:   helpers.ConvertToOperatorTag(c.CentralVersion()),
 			Namespace: operatorNamespaceSystem,
 			EnvVars:   maps.Clone(c.Operator.EnvVars),
 		}}
@@ -99,13 +99,13 @@ func (c *Config) OperatorInstances() []OperatorInstance {
 
 	return []OperatorInstance{
 		{
-			Version:        helpers.ConvertMainTagToOperatorTag(c.CentralVersion()),
+			Version:        helpers.ConvertToOperatorTag(c.CentralVersion()),
 			Namespace:      operatorNamespaceCentral,
 			EnvVars:        centralEnvVars,
 			RoleNameSuffix: "central",
 		},
 		{
-			Version:        helpers.ConvertMainTagToOperatorTag(c.SecuredClusterVersion()),
+			Version:        helpers.ConvertToOperatorTag(c.SecuredClusterVersion()),
 			Namespace:      operatorNamespaceSensor,
 			EnvVars:        sensorEnvVars,
 			RoleNameSuffix: "sensor",

@@ -72,12 +72,15 @@ func LookupLatestTag(ctx context.Context, log *logger.Logger) (string, error) {
 	return "", fmt.Errorf("failed to verify main image existence for tags %s", strings.Join(tags, ", "))
 }
 
-func ConvertMainTagToOperatorTag(mainTag string) string {
-	if mainTag == "" {
+// ConvertToOperatorTag normalizes a tag to an operator-compatible form by
+// removing "-dirty" and replacing ".x" with ".0". The function is idempotent:
+// calling it on a tag that is already an operator tag returns it unchanged.
+func ConvertToOperatorTag(tag string) string {
+	if tag == "" {
 		return ""
 	}
 
-	operatorTag := strings.ReplaceAll(mainTag, "-dirty", "")
+	operatorTag := strings.ReplaceAll(tag, "-dirty", "")
 	operatorTag = strings.ReplaceAll(operatorTag, ".x", ".0")
 
 	return operatorTag

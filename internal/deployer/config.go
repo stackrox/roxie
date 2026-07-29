@@ -77,10 +77,12 @@ func NewRoxieConfig() RoxieConfig {
 
 // OperatorConfig controls how the ACS operator is deployed.
 type OperatorConfig struct {
-	SkipDeployment *bool             `yaml:"skipDeployment,omitempty"`
-	DeployViaOlm   *bool             `yaml:"deployViaOlm,omitempty"`
-	Version        string            `yaml:"version,omitempty"`
-	EnvVars        map[string]string `yaml:"envVars,omitempty"`
+	SkipDeployment *bool `yaml:"skipDeployment,omitempty"`
+	DeployViaOlm   *bool `yaml:"deployViaOlm,omitempty"`
+	// Version can hold either a main image tag or an operator tag. It should be normalized to an
+	// operator tag via ConvertToOperatorTag before use (the function is idempotent, so either form is accepted).
+	Version string            `yaml:"version,omitempty"`
+	EnvVars map[string]string `yaml:"envVars,omitempty"`
 }
 
 func (c *OperatorConfig) SkipDeploymentSet() bool {
@@ -101,7 +103,7 @@ func (c *OperatorConfig) DeployViaOlmEnabled() bool {
 
 // Configure derives the operator version from the roxie configuration.
 func (c *OperatorConfig) Configure(roxieConfig *RoxieConfig) error {
-	c.Version = helpers.ConvertMainTagToOperatorTag(roxieConfig.Version)
+	c.Version = helpers.ConvertToOperatorTag(roxieConfig.Version)
 	return nil
 }
 
