@@ -90,6 +90,26 @@ func TestResolveAddOns(t *testing.T) {
 			},
 		},
 		{
+			name: "both HelmChart and StackRoxRepoHelmChart set returns error",
+			cfg: CentralConfig{
+				AddOns: map[string]bool{"dual": true},
+				AvailableAddOns: map[string]CentralAddOnDefinition{
+					"dual": {
+						HelmChart: &HelmChartRepoAddOn{
+							Repo:  "https://example.com/charts",
+							Chart: "example",
+						},
+						StackRoxRepoHelmChart: &StackRoxRepoHelmChartAddOn{
+							Path: "charts/example",
+						},
+					},
+				},
+			},
+			assert: func(t *testing.T, _ []AddOn, err error) {
+				require.ErrorContains(t, err, "multiple add-on backends simultaneously")
+			},
+		},
+		{
 			name: "missing chart source returns error",
 			cfg: CentralConfig{
 				AddOns: map[string]bool{"broken": true},
