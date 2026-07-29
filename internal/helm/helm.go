@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/logger"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -187,11 +186,6 @@ func doUpgrade(helmCtx HelmCtx, cfg *action.Configuration, opts InstallOptions, 
 	chart, err := loader.Load(chartPath)
 	if err != nil {
 		return fmt.Errorf("loading chart from %q: %w", chartPath, err)
-	}
-
-	if helmCtx.Verbose {
-		helmCtx.Log.Dimf("values for Helm chart for release %s:", opts.ReleaseName)
-		helpers.LogMultilineYaml(helmCtx.Log, opts.Values)
 	}
 
 	_, err = upgrade.RunWithContext(helmCtx.Ctx, opts.ReleaseName, chart, opts.Values)

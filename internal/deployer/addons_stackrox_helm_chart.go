@@ -7,7 +7,6 @@ import (
 
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helm"
-	"github.com/stackrox/roxie/internal/helpers"
 )
 
 // New creates a helmAddOn that installs a chart from a local stackrox repository checkout.
@@ -46,11 +45,6 @@ func (h *StackRoxRepoHelmChartAddOn) New(
 		return nil, fmt.Errorf("retrieving values for Helm chart add-on %q: %w", name, err)
 	}
 	opts.Values = values
-
-	if addOnCfg.verbose {
-		addOnCfg.log.Dimf("values for Helm chart add-on %q evaluated:", name)
-		helpers.LogMultilineYaml(addOnCfg.log, opts.Values)
-	}
 
 	return newHelmAddOn(addOnCfg, commonProperties, name, namespace, opts)
 }
