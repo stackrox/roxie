@@ -102,7 +102,7 @@ func TestResolveAddOns(t *testing.T) {
 			},
 		},
 		{
-			name: "switch key mismatch returns error",
+			name: "enabling unknown add-on returns error",
 			cfg: CentralConfig{
 				AddOns: map[string]bool{"other-key": true},
 				AvailableAddOns: map[string]CentralAddOnDefinition{
