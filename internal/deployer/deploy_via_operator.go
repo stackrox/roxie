@@ -90,10 +90,10 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 }
 
 // preparedOperatorInstances returns OperatorInstances with Konflux env vars applied when enabled.
-func (d *Deployer) preparedOperatorInstances() []OperatorInstance {
+func (d *Deployer) preparedOperatorInstances() []OperatorInstanceConfig {
 	instances := d.config.OperatorInstances()
 	for i := range instances {
-		if instances[i].KonfluxImages {
+		if instances[i].KonfluxImagesEnabled() {
 			PopulateKonfluxEnvVars(instances[i].EnvVars, instances[i].Version)
 		}
 	}
@@ -102,7 +102,7 @@ func (d *Deployer) preparedOperatorInstances() []OperatorInstance {
 
 // teardownStaleOperatorNamespaces removes operators from namespaces that are no longer
 // part of the desired deployment plan (e.g. switching between single and mixed versions).
-func (d *Deployer) teardownStaleOperatorNamespaces(ctx context.Context, desired []OperatorInstance) error {
+func (d *Deployer) teardownStaleOperatorNamespaces(ctx context.Context, desired []OperatorInstanceConfig) error {
 	desiredNS := make(map[string]bool, len(desired))
 	for _, inst := range desired {
 		desiredNS[inst.Namespace] = true
@@ -116,7 +116,7 @@ func (d *Deployer) teardownStaleOperatorNamespaces(ctx context.Context, desired 
 			continue
 		}
 		d.logger.Infof("🔄 Removing previous operator from %s (no longer needed)...", ns)
-		instance := OperatorInstance{Namespace: ns}
+		instance := OperatorInstanceConfig{Namespace: ns}
 		switch ns {
 		case operatorNamespaceCentral:
 			instance.RoleNameSuffix = "central"
@@ -131,7 +131,7 @@ func (d *Deployer) teardownStaleOperatorNamespaces(ctx context.Context, desired 
 }
 
 // ensureOperatorInstanceNonOLM ensures one non-OLM operator instance matches the desired version.
-func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance OperatorInstance) error {
+func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance OperatorInstanceConfig) error {
 	exists := d.operatorDeploymentExists(ctx, instance.Namespace)
 	needsDeployment := !exists
 	needsTeardown := false
@@ -164,7 +164,7 @@ func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance Op
 // ensureOperatorDeployedOLM is the single-operator OLM path (mixed versions are rejected in validation).
 func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 	// Remove any leftover dual-operator namespaces before installing via OLM.
-	desired := []OperatorInstance{{Namespace: operatorNamespaceSystem}}
+	desired := []OperatorInstanceConfig{{Namespace: operatorNamespaceSystem}}
 	if err := d.teardownStaleOperatorNamespaces(ctx, desired); err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 		needsTeardown = true
 		needsDeployment = true
 	} else {
-		instance := OperatorInstance{
+		instance := OperatorInstanceConfig{
 			Version:   d.config.Operator.Version,
 			Namespace: operatorNamespaceSystem,
 			EnvVars:   d.config.Operator.EnvVars,
@@ -256,7 +256,7 @@ func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 }
 
 // isOperatorVersionCorrect checks if the deployed operator matches the desired version.
-func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance OperatorInstance) bool {
+func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance OperatorInstanceConfig) bool {
 	currentImage, err := d.getDeployedOperatorImage(ctx, instance.Namespace)
 	if err != nil {
 		d.logger.Warningf("Could not retrieve operator image: %v", err)

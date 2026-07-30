@@ -26,33 +26,6 @@ var AllOperatorNamespaces = []string{
 	operatorNamespaceSensor,
 }
 
-// OperatorInstance describes a single operator instance (single- or mixed-version mode).
-type OperatorInstance struct {
-	Version   string
-	Namespace string
-	EnvVars   map[string]string
-	// RoleNameSuffix is appended to cluster-scoped RBAC resource names.
-	// Empty for the single-operator (rhacs-operator-system) case.
-	RoleNameSuffix string
-	KonfluxImages  bool
-}
-
-// ClusterRoleName returns the ClusterRole name for this operator instance.
-func (o OperatorInstance) ClusterRoleName() string {
-	if o.RoleNameSuffix == "" {
-		return "rhacs-operator-manager-role"
-	}
-	return "rhacs-operator-manager-role-" + o.RoleNameSuffix
-}
-
-// ClusterRoleBindingName returns the ClusterRoleBinding name for this operator instance.
-func (o OperatorInstance) ClusterRoleBindingName() string {
-	if o.RoleNameSuffix == "" {
-		return "rhacs-operator-manager-rolebinding"
-	}
-	return "rhacs-operator-manager-rolebinding-" + o.RoleNameSuffix
-}
-
 // CentralVersion returns the version tag for Central (may be a main tag or operator tag).
 // Uses central.operator.version if set, otherwise falls back to roxie.version.
 func (c *Config) CentralVersion() string {
@@ -81,13 +54,13 @@ func (c *Config) HasMixedVersions() bool {
 // OperatorInstances builds the operator deployment plan for this config.
 // When versions match, a single operator is deployed to rhacs-operator-system.
 // When they differ, two operators are deployed with reconciler toggles.
-func (c *Config) OperatorInstances() []OperatorInstance {
+func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 	if !c.HasMixedVersions() {
-		return []OperatorInstance{{
+		return []OperatorInstanceConfig{{
 			Version:       helpers.ConvertToOperatorTag(c.CentralVersion()),
 			Namespace:     operatorNamespaceSystem,
 			EnvVars:       maps.Clone(c.Operator.EnvVars),
-			KonfluxImages: c.Operator.KonfluxImagesEnabled(),
+			KonfluxImages: c.resolveKonfluxImages(&c.Operator.OperatorInstanceConfig),
 		}}
 	}
 
@@ -99,7 +72,7 @@ func (c *Config) OperatorInstances() []OperatorInstance {
 	maps.Copy(sensorEnvVars, c.SecuredCluster.Operator.EnvVars)
 	sensorEnvVars[envCentralReconcilerEnabled] = "false"
 
-	return []OperatorInstance{
+	return []OperatorInstanceConfig{
 		{
 			Version:        helpers.ConvertToOperatorTag(c.CentralVersion()),
 			Namespace:      operatorNamespaceCentral,
@@ -119,11 +92,11 @@ func (c *Config) OperatorInstances() []OperatorInstance {
 
 // resolveKonfluxImages returns the effective KonfluxImages setting for a per-component
 // operator config, falling back to Roxie.KonfluxImages if not set at the component level.
-func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) bool {
+func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) *bool {
 	if instanceCfg.KonfluxImagesSet() {
-		return instanceCfg.KonfluxImagesEnabled()
+		return instanceCfg.KonfluxImages
 	}
-	return c.Roxie.KonfluxImagesEnabled()
+	return c.Roxie.KonfluxImages
 }
 
 // NewestOperatorVersion returns the highest operator version among planned instances.
@@ -133,7 +106,7 @@ func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) bool 
 // Ordering uses the leading semver of each tag (suffix after "-" is ignored), which
 // is sufficient for release-vs-release compat testing (e.g. 4.8.x vs 4.9.x).
 func (c *Config) NewestOperatorVersion() string {
-	newest := slices.MaxFunc(c.OperatorInstances(), func(a, b OperatorInstance) int {
+	newest := slices.MaxFunc(c.OperatorInstances(), func(a, b OperatorInstanceConfig) int {
 		av, aerr := parseOperatorSemver(a.Version)
 		bv, berr := parseOperatorSemver(b.Version)
 		if aerr == nil && berr == nil {

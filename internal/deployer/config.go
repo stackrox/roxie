@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
@@ -95,6 +96,31 @@ func (c *OperatorInstanceConfig) KonfluxImagesSet() bool {
 
 func (c *OperatorInstanceConfig) KonfluxImagesEnabled() bool {
 	return c.KonfluxImages != nil && *c.KonfluxImages
+}
+
+// ClusterRoleName returns the ClusterRole name for this operator instance.
+func (c *OperatorInstanceConfig) ClusterRoleName() string {
+	if c.RoleNameSuffix == "" {
+		return "rhacs-operator-manager-role"
+	}
+	return "rhacs-operator-manager-role-" + c.RoleNameSuffix
+}
+
+// ClusterRoleBindingName returns the ClusterRoleBinding name for this operator instance.
+func (c *OperatorInstanceConfig) ClusterRoleBindingName() string {
+	if c.RoleNameSuffix == "" {
+		return "rhacs-operator-manager-rolebinding"
+	}
+	return "rhacs-operator-manager-rolebinding-" + c.RoleNameSuffix
+}
+
+// BundleImage returns the operator bundle image for this operator instance.
+func (c *OperatorInstanceConfig) BundleImage() string {
+	imageRegistry := constants.DefaultRegistry
+	if c.KonfluxImagesEnabled() {
+		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, c.Version)
+	}
+	return fmt.Sprintf("%s/stackrox-operator-bundle:v%s", imageRegistry, c.Version)
 }
 
 // OperatorConfig is the top-level operator configuration used in single-operator mode.
