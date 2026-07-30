@@ -12,10 +12,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stackrox/roxie/internal/helm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -104,7 +106,6 @@ func runCommand(t *testing.T, timeout time.Duration, env map[string]string, args
 
 	err := cmd.Run()
 	if err != nil {
-		t.Logf("Command failed: %v", err)
 		t.Fatalf("Command failed: %v", err)
 	}
 	t.Logf("Command completed successfully")
@@ -369,6 +370,26 @@ func testCentralAPI(t *testing.T, endpoint, caCertFile string) {
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Central API returned unexpected status")
 	t.Logf("Central at %s responded with status: %d", endpoint, resp.StatusCode)
+}
+
+func verifyHelmReleaseExists(t *testing.T, helmCtx helm.HelmCtx, releaseName, namespace string) {
+	t.Helper()
+
+	releases, err := helm.ListByPrefix(helmCtx, releaseName, namespace)
+	require.NoError(t, err, "listing Helm releases in namespace %s", namespace)
+	if !slices.Contains(releases, releaseName) {
+		t.Fatalf("Helm release %s does not exist in namespace %s", releaseName, namespace)
+	}
+}
+
+func verifyHelmReleaseNotExists(t *testing.T, helmCtx helm.HelmCtx, releaseName, namespace string) {
+	t.Helper()
+
+	releases, err := helm.ListByPrefix(helmCtx, releaseName, namespace)
+	require.NoError(t, err, "listing Helm releases in namespace %s", namespace)
+	if slices.Contains(releases, releaseName) {
+		t.Fatalf("Helm release %s already exists in namespace %s", releaseName, namespace)
+	}
 }
 
 func verifyAnnotation(t *testing.T, resourceType, resourceName, namespace, annotationKey, expectedValue string) {
