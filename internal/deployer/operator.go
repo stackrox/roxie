@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
 )
@@ -47,7 +48,8 @@ func (d *Deployer) deployOperatorNonOLM(ctx context.Context, instance OperatorIn
 
 	// Only the newest planned operator version may apply CRDs, so an older
 	// companion operator cannot downgrade cluster CRD schemas.
-	if instance.Version == d.config.NewestOperatorVersion() {
+	operatorTag := helpers.ConvertToOperatorTag(instance.Version)
+	if operatorTag == d.config.NewestOperatorVersion() {
 		crdFiles, err := d.identifyCRDFileNames(bundleDir)
 		if err != nil {
 			return err
@@ -57,7 +59,7 @@ func (d *Deployer) deployOperatorNonOLM(ctx context.Context, instance OperatorIn
 		}
 	} else {
 		d.logger.Dimf("Skipping CRD apply for older operator version %s (newest is %s)",
-			instance.Version, d.config.NewestOperatorVersion())
+			operatorTag, d.config.NewestOperatorVersion())
 	}
 
 	if err := d.deployOperatorFromCSV(ctx, bundleDir, instance); err != nil {
@@ -448,7 +450,7 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, instance Operato
 
 	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
 	if instance.KonfluxImagesEnabled() {
-		d.rewriteKonfluxOperatorImage(managerContainer, instance.Version)
+		d.rewriteKonfluxOperatorImage(managerContainer, helpers.ConvertToOperatorTag(instance.Version))
 	}
 
 	if len(instance.EnvVars) > 0 {

@@ -94,7 +94,7 @@ func (d *Deployer) preparedOperatorInstances() []OperatorInstanceConfig {
 	instances := d.config.OperatorInstances()
 	for i := range instances {
 		if instances[i].KonfluxImagesEnabled() {
-			PopulateKonfluxEnvVars(instances[i].EnvVars, instances[i].Version)
+			PopulateKonfluxEnvVars(instances[i].EnvVars, helpers.ConvertToOperatorTag(instances[i].Version))
 		}
 	}
 	return instances
@@ -271,10 +271,11 @@ func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance Operat
 	}
 	currentTag := parts[1]
 
-	if currentTag != instance.Version {
+	desiredTag := helpers.ConvertToOperatorTag(instance.Version)
+	if currentTag != desiredTag {
 		d.logger.Info("Operator version mismatch detected:")
 		d.logger.Infof("  Current: %s", currentTag)
-		d.logger.Infof("  Desired: %s", instance.Version)
+		d.logger.Infof("  Desired: %s", desiredTag)
 		return false
 	}
 	return true

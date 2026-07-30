@@ -63,7 +63,7 @@ func TestOperatorInstances_SingleVersion(t *testing.T) {
 
 	instances := cfg.OperatorInstances()
 	require.Len(t, instances, 1)
-	assert.Equal(t, "4.9.0", instances[0].Version)
+	assert.Equal(t, "4.9.0-dirty", instances[0].Version)
 	assert.Equal(t, operatorNamespaceSystem, instances[0].Namespace)
 	assert.Equal(t, "", instances[0].RoleNameSuffix)
 	assert.Equal(t, "rhacs-operator-manager-role", instances[0].ClusterRoleName())

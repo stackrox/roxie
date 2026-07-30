@@ -26,7 +26,7 @@ var AllOperatorNamespaces = []string{
 	operatorNamespaceSensor,
 }
 
-// CentralVersion returns the version tag for Central (may be a main tag or operator tag).
+// CentralVersion returns the main image tag for Central.
 // Uses central.operator.version if set, otherwise falls back to roxie.version.
 func (c *Config) CentralVersion() string {
 	if c.Central.Operator.Version != "" {
@@ -35,7 +35,7 @@ func (c *Config) CentralVersion() string {
 	return c.Roxie.Version
 }
 
-// SecuredClusterVersion returns the version tag for SecuredCluster (may be a main tag or operator tag).
+// SecuredClusterVersion returns the main image tag for SecuredCluster.
 // Uses securedCluster.operator.version if set, otherwise falls back to roxie.version.
 func (c *Config) SecuredClusterVersion() string {
 	if c.SecuredCluster.Operator.Version != "" {
@@ -57,7 +57,7 @@ func (c *Config) HasMixedVersions() bool {
 func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 	if !c.HasMixedVersions() {
 		return []OperatorInstanceConfig{{
-			Version:       helpers.ConvertToOperatorTag(c.CentralVersion()),
+			Version:       c.CentralVersion(),
 			Namespace:     operatorNamespaceSystem,
 			EnvVars:       maps.Clone(c.Operator.EnvVars),
 			KonfluxImages: c.resolveKonfluxImages(&c.Operator.OperatorInstanceConfig),
@@ -74,14 +74,14 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 
 	return []OperatorInstanceConfig{
 		{
-			Version:        helpers.ConvertToOperatorTag(c.CentralVersion()),
+			Version:        c.CentralVersion(),
 			Namespace:      operatorNamespaceCentral,
 			EnvVars:        centralEnvVars,
 			RoleNameSuffix: "central",
 			KonfluxImages:  c.resolveKonfluxImages(&c.Central.Operator),
 		},
 		{
-			Version:        helpers.ConvertToOperatorTag(c.SecuredClusterVersion()),
+			Version:        c.SecuredClusterVersion(),
 			Namespace:      operatorNamespaceSensor,
 			EnvVars:        sensorEnvVars,
 			RoleNameSuffix: "sensor",
@@ -103,22 +103,23 @@ func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) *bool
 // CRDs should always be installed from this version so an older companion operator
 // cannot leave the cluster on a stale (or downgraded) CRD schema.
 //
-// Ordering uses the leading semver of each tag (suffix after "-" is ignored), which
-// is sufficient for release-vs-release compat testing (e.g. 4.8.x vs 4.9.x).
+// Comparison uses the leading semver (everything before the first "-" in the operator
+// tag), which is sufficient for release-vs-release compat testing (e.g. 4.8.x vs 4.9.x).
 func (c *Config) NewestOperatorVersion() string {
-	newest := slices.MaxFunc(c.OperatorInstances(), func(a, b OperatorInstanceConfig) int {
-		av, aerr := parseOperatorSemver(a.Version)
-		bv, berr := parseOperatorSemver(b.Version)
+	instances := c.OperatorInstances()
+	newest := slices.MaxFunc(instances, func(a, b OperatorInstanceConfig) int {
+		av, aerr := parseLeadingSemver(a.Version)
+		bv, berr := parseLeadingSemver(b.Version)
 		if aerr == nil && berr == nil {
 			return av.Compare(bv)
 		}
 		return cmp.Compare(a.Version, b.Version)
 	})
-	return newest.Version
+	return helpers.ConvertToOperatorTag(newest.Version)
 }
 
-func parseOperatorSemver(version string) (*semver.Version, error) {
-	// Leading semver only; see NewestOperatorVersion.
-	version, _, _ = strings.Cut(version, "-")
-	return semver.NewVersion(version)
+func parseLeadingSemver(version string) (*semver.Version, error) {
+	tag := helpers.ConvertToOperatorTag(version)
+	base, _, _ := strings.Cut(tag, "-")
+	return semver.NewVersion(base)
 }

@@ -81,8 +81,8 @@ func NewRoxieConfig() RoxieConfig {
 // is used directly. In mixed-operator mode, CentralConfig.Operator and
 // SecuredClusterConfig.Operator override the top-level defaults.
 type OperatorInstanceConfig struct {
-	// Version can hold either a main image tag or an operator tag. It should be normalized to an
-	// operator tag via ConvertToOperatorTag before use (the function is idempotent, so either form is accepted).
+	// Version holds a main image tag (e.g. "4.8.0", "4.8.0-dirty").
+	// Methods that need the operator tag (semver-only) convert via helpers.ConvertToOperatorTag.
 	Version        string            `yaml:"version,omitempty"`
 	EnvVars        map[string]string `yaml:"envVars,omitempty"`
 	Namespace      string            `yaml:"namespace,omitempty"`
@@ -117,10 +117,11 @@ func (c *OperatorInstanceConfig) ClusterRoleBindingName() string {
 // BundleImage returns the operator bundle image for this operator instance.
 func (c *OperatorInstanceConfig) BundleImage() string {
 	imageRegistry := constants.DefaultRegistry
+	operatorTag := helpers.ConvertToOperatorTag(c.Version)
 	if c.KonfluxImagesEnabled() {
-		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, c.Version)
+		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, operatorTag)
 	}
-	return fmt.Sprintf("%s/stackrox-operator-bundle:v%s", imageRegistry, c.Version)
+	return fmt.Sprintf("%s/stackrox-operator-bundle:v%s", imageRegistry, operatorTag)
 }
 
 // OperatorConfig is the top-level operator configuration used in single-operator mode.
