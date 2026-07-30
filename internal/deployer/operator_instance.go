@@ -34,6 +34,7 @@ type OperatorInstance struct {
 	// RoleNameSuffix is appended to cluster-scoped RBAC resource names.
 	// Empty for the single-operator (rhacs-operator-system) case.
 	RoleNameSuffix string
+	KonfluxImages  bool
 }
 
 // ClusterRoleName returns the ClusterRole name for this operator instance.
@@ -83,9 +84,10 @@ func (c *Config) HasMixedVersions() bool {
 func (c *Config) OperatorInstances() []OperatorInstance {
 	if !c.HasMixedVersions() {
 		return []OperatorInstance{{
-			Version:   helpers.ConvertToOperatorTag(c.CentralVersion()),
-			Namespace: operatorNamespaceSystem,
-			EnvVars:   maps.Clone(c.Operator.EnvVars),
+			Version:       helpers.ConvertToOperatorTag(c.CentralVersion()),
+			Namespace:     operatorNamespaceSystem,
+			EnvVars:       maps.Clone(c.Operator.EnvVars),
+			KonfluxImages: c.Operator.KonfluxImagesEnabled(),
 		}}
 	}
 
@@ -103,14 +105,25 @@ func (c *Config) OperatorInstances() []OperatorInstance {
 			Namespace:      operatorNamespaceCentral,
 			EnvVars:        centralEnvVars,
 			RoleNameSuffix: "central",
+			KonfluxImages:  c.resolveKonfluxImages(&c.Central.Operator),
 		},
 		{
 			Version:        helpers.ConvertToOperatorTag(c.SecuredClusterVersion()),
 			Namespace:      operatorNamespaceSensor,
 			EnvVars:        sensorEnvVars,
 			RoleNameSuffix: "sensor",
+			KonfluxImages:  c.resolveKonfluxImages(&c.SecuredCluster.Operator),
 		},
 	}
+}
+
+// resolveKonfluxImages returns the effective KonfluxImages setting for a per-component
+// operator config, falling back to Roxie.KonfluxImages if not set at the component level.
+func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) bool {
+	if instanceCfg.KonfluxImagesSet() {
+		return instanceCfg.KonfluxImagesEnabled()
+	}
+	return c.Roxie.KonfluxImagesEnabled()
 }
 
 // NewestOperatorVersion returns the highest operator version among planned instances.

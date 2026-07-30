@@ -92,11 +92,10 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 // preparedOperatorInstances returns OperatorInstances with Konflux env vars applied when enabled.
 func (d *Deployer) preparedOperatorInstances() []OperatorInstance {
 	instances := d.config.OperatorInstances()
-	if !d.config.Roxie.KonfluxImagesEnabled() {
-		return instances
-	}
 	for i := range instances {
-		PopulateKonfluxEnvVars(instances[i].EnvVars, instances[i].Version)
+		if instances[i].KonfluxImages {
+			PopulateKonfluxEnvVars(instances[i].EnvVars, instances[i].Version)
+		}
 	}
 	return instances
 }

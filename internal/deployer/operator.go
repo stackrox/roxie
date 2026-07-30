@@ -35,7 +35,7 @@ var requiredCRDs = []string{
 // deployOperatorNonOLM deploys one RHACS operator instance without OLM.
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context, instance OperatorInstance) error {
 	d.logger.Infof("Operator tag: %s (namespace %s)", instance.Version, instance.Namespace)
-	bundleImage := OperatorBundleImage(instance.Version, d.config.Roxie.KonfluxImagesEnabled())
+	bundleImage := OperatorBundleImage(instance.Version, instance.KonfluxImages)
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
 	if err != nil {
@@ -206,7 +206,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string, 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	d.useOperatorPullSecrets = d.config.Roxie.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsPullSecrets()
+	d.useOperatorPullSecrets = instance.KonfluxImages && d.config.Roxie.ClusterType.NeedsPullSecrets()
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dimf("  • Namespace: %s", instance.Namespace)
@@ -443,7 +443,7 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, instance Operato
 	}
 
 	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
-	if d.config.Roxie.KonfluxImagesEnabled() {
+	if instance.KonfluxImages {
 		d.rewriteKonfluxOperatorImage(managerContainer, instance.Version)
 	}
 
