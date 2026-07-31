@@ -7,6 +7,7 @@ import (
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 )
 
 func TestKonfluxOperatorImage(t *testing.T) {
@@ -15,29 +16,33 @@ func TestKonfluxOperatorImage(t *testing.T) {
 }
 
 func TestPopulateKonfluxEnvVars_AllEntries(t *testing.T) {
-	envVars := make(map[string]string)
-	PopulateKonfluxEnvVars(envVars, "4.9.2")
+	instance := &OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: ptr.To(true)}
+	PopulateKonfluxEnvVars(instance)
 
-	require.Len(t, envVars, len(konfluxRelatedImages))
+	require.Len(t, instance.EnvVars, len(konfluxRelatedImages))
 
 	for envName, imageSuffix := range konfluxRelatedImages {
 		expected := fmt.Sprintf("%s/release-%s:%s", constants.DefaultRegistry, imageSuffix, "4.9.2")
-		assert.Equal(t, expected, envVars[envName], "mismatch for %s", envName)
+		assert.Equal(t, expected, instance.EnvVars[envName], "mismatch for %s", envName)
 	}
 }
 
 func TestPopulateKonfluxEnvVars_UserOverridePreserved(t *testing.T) {
 	userValue := "quay.io/custom/my-main:latest"
-	envVars := map[string]string{
-		"RELATED_IMAGE_MAIN": userValue,
+	instance := &OperatorInstanceConfig{
+		Version:       "4.9.2",
+		KonfluxImages: ptr.To(true),
+		EnvVars: map[string]string{
+			"RELATED_IMAGE_MAIN": userValue,
+		},
 	}
 
-	PopulateKonfluxEnvVars(envVars, "4.9.2")
+	PopulateKonfluxEnvVars(instance)
 
-	assert.Equal(t, userValue, envVars["RELATED_IMAGE_MAIN"],
+	assert.Equal(t, userValue, instance.EnvVars["RELATED_IMAGE_MAIN"],
 		"user override should be preserved")
 
-	assert.Len(t, envVars, len(konfluxRelatedImages),
+	assert.Len(t, instance.EnvVars, len(konfluxRelatedImages),
 		"all other entries should be populated")
 
 	for envName, imageSuffix := range konfluxRelatedImages {
@@ -45,6 +50,12 @@ func TestPopulateKonfluxEnvVars_UserOverridePreserved(t *testing.T) {
 			continue
 		}
 		expected := fmt.Sprintf("%s/release-%s:%s", constants.DefaultRegistry, imageSuffix, "4.9.2")
-		assert.Equal(t, expected, envVars[envName], "mismatch for %s", envName)
+		assert.Equal(t, expected, instance.EnvVars[envName], "mismatch for %s", envName)
 	}
+}
+
+func TestPopulateKonfluxEnvVars_NoOpWhenDisabled(t *testing.T) {
+	instance := &OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: ptr.To(false)}
+	PopulateKonfluxEnvVars(instance)
+	assert.Nil(t, instance.EnvVars)
 }

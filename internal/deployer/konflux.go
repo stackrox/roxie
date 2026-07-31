@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/stackrox/roxie/internal/constants"
+	"github.com/stackrox/roxie/internal/helpers"
 )
 
 var konfluxRelatedImages = map[string]string{
@@ -24,19 +25,26 @@ func KonfluxOperatorImage(operatorVersion string) string {
 	return fmt.Sprintf("%s/release-operator:%s", constants.DefaultRegistry, operatorVersion)
 }
 
-// PopulateKonfluxEnvVars adds RELATED_IMAGE_* entries to envVars for the given
-// operator version. Explicitly-provided env vars (e.g. from --operator-env)
-// take precedence and are not overwritten.
-func PopulateKonfluxEnvVars(envVars map[string]string, operatorVersion string) {
+// PopulateKonfluxEnvVars adds RELATED_IMAGE_* entries to the instance's EnvVars
+// for its version. It is a no-op when Konflux images are not enabled for the instance.
+// Explicitly-provided env vars (e.g. from --operator-env) take precedence and are not overwritten.
+func PopulateKonfluxEnvVars(instance *OperatorInstanceConfig) {
+	if !instance.KonfluxImagesEnabled() {
+		return
+	}
+	if instance.EnvVars == nil {
+		instance.EnvVars = make(map[string]string, len(konfluxRelatedImages))
+	}
+	operatorTag := helpers.ConvertToOperatorTag(instance.Version)
 	for envName, imageSuffix := range konfluxRelatedImages {
-		if _, exists := envVars[envName]; exists {
+		if _, exists := instance.EnvVars[envName]; exists {
 			continue
 		}
-		envVars[envName] = fmt.Sprintf(
+		instance.EnvVars[envName] = fmt.Sprintf(
 			"%s/release-%s:%s",
 			constants.DefaultRegistry,
 			imageSuffix,
-			operatorVersion,
+			operatorTag,
 		)
 	}
 }

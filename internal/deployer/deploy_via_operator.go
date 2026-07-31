@@ -58,13 +58,10 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 		return fmt.Errorf("failed to ensure CRDs installed: %w", err)
 	}
 
-	instances := d.preparedOperatorInstances()
-
 	if d.config.Operator.DeployViaOlmEnabled() {
 		return d.ensureOperatorDeployedOLM(ctx)
 	}
 
-	// Switching from OLM to non-OLM in the system namespace.
 	operatorExists, currentMode, err := d.detectOperatorDeploymentMode(ctx)
 	if err != nil {
 		return fmt.Errorf("detecting operator deployment mode: %w", err)
@@ -76,28 +73,19 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 		}
 	}
 
+	instances := d.config.OperatorInstances()
 	if err := d.teardownStaleOperatorNamespaces(ctx, instances); err != nil {
 		return err
 	}
 
 	for _, instance := range instances {
+		PopulateKonfluxEnvVars(&instance)
 		if err := d.ensureOperatorInstanceNonOLM(ctx, instance); err != nil {
 			return fmt.Errorf("failed to deploy operator in %s: %w", instance.Namespace, err)
 		}
 	}
 
 	return nil
-}
-
-// preparedOperatorInstances returns OperatorInstances with Konflux env vars applied when enabled.
-func (d *Deployer) preparedOperatorInstances() []OperatorInstanceConfig {
-	instances := d.config.OperatorInstances()
-	for i := range instances {
-		if instances[i].KonfluxImagesEnabled() {
-			PopulateKonfluxEnvVars(instances[i].EnvVars, helpers.ConvertToOperatorTag(instances[i].Version))
-		}
-	}
-	return instances
 }
 
 // teardownStaleOperatorNamespaces removes operators from namespaces that are no longer
