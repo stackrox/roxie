@@ -496,29 +496,32 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		}
 	}
 
-	if !deploySettings.Central.EarlyReadinessEnabled() || !deploySettings.SecuredCluster.EarlyReadinessEnabled() {
-		// Explanation on the versions involved here:
-		// Deploying StackRox begins with picking a "main image tag" -- this is a version identifier, which cannot be reliably parsed as a semver.
-		// But there is a derived version from that -- the operator version -- which can be parsed as a semver.
-		//
-		// The invocation of deploySettings.Operator.Configure() above in this function prepares the operator deployment config in the sense
-		// that top-level roxie configuration options are propagated to the concrete operator deployment configuration. This includes also
-		// storing of the derived operator version within the operator configuration.
-		//
-		// This is why we use the operator version here when checking version constraints.
-		// Check every operator instance that will be deployed.
-		for _, instance := range deploySettings.OperatorInstances() {
-			hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(instance.Version)
-			if err != nil {
-				return fmt.Errorf("checking version constraint on operator version %s: %w", instance.Version, err)
-			}
-			if !hasSupport {
-				return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s (operator version %s in %s does not)",
-					stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String(), instance.Version, instance.Namespace)
-			}
+	if !deploySettings.Central.EarlyReadinessEnabled() {
+		if err := checkEarlyReadinessSupport("Central", deploySettings.CentralVersion()); err != nil {
+			return err
+		}
+	}
+	if !deploySettings.SecuredCluster.EarlyReadinessEnabled() {
+		if err := checkEarlyReadinessSupport("SecuredCluster", deploySettings.SecuredClusterVersion()); err != nil {
+			return err
 		}
 	}
 
+	return nil
+}
+
+func checkEarlyReadinessSupport(componentName, mainTag string) error {
+	// The main image tag is not reliably parsible as semver, so we derive the operator
+	// tag (via ConvertToOperatorTag) for the constraint check.
+	version := helpers.ConvertToOperatorTag(mainTag)
+	hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(version)
+	if err != nil {
+		return fmt.Errorf("checking version constraint on %s operator version %s: %w", componentName, version, err)
+	}
+	if !hasSupport {
+		return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s (%s version %s does not)",
+			stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String(), componentName, version)
+	}
 	return nil
 }
 
