@@ -102,15 +102,15 @@ func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) *bool
 	return c.Roxie.KonfluxImages
 }
 
-// NewestOperatorVersion returns the highest operator version among planned instances.
-// CRDs should always be installed from this version so an older companion operator
-// cannot leave the cluster on a stale (or downgraded) CRD schema.
+// NewestOperatorInstance returns the operator instance with the highest version.
+// This is used to determine which bundle to use for CRD installation, since CRDs
+// are cluster-scoped and must be at the newest version.
 //
 // Comparison uses the leading semver (everything before the first "-" in the operator
 // tag), which is sufficient for release-vs-release compat testing (e.g. 4.8.x vs 4.9.x).
-func (c *Config) NewestOperatorVersion() imagetag.OperatorTag {
+func (c *Config) NewestOperatorInstance() OperatorInstanceConfig {
 	instances := c.OperatorInstances()
-	newest := slices.MaxFunc(instances, func(a, b OperatorInstanceConfig) int {
+	return slices.MaxFunc(instances, func(a, b OperatorInstanceConfig) int {
 		av, aerr := parseLeadingSemver(a.Version)
 		bv, berr := parseLeadingSemver(b.Version)
 		if aerr == nil && berr == nil {
@@ -118,7 +118,11 @@ func (c *Config) NewestOperatorVersion() imagetag.OperatorTag {
 		}
 		return cmp.Compare(a.Version.ToOperatorTag().String(), b.Version.ToOperatorTag().String())
 	})
-	return newest.Version.ToOperatorTag()
+}
+
+// NewestOperatorVersion returns the highest operator tag across all planned instances.
+func (c *Config) NewestOperatorVersion() imagetag.OperatorTag {
+	return c.NewestOperatorInstance().Version.ToOperatorTag()
 }
 
 func parseLeadingSemver(version imagetag.MainTag) (*semver.Version, error) {

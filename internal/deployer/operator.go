@@ -13,7 +13,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
 )
@@ -168,14 +167,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	}
 
 	if len(missing) > 0 {
-		crdVersion := d.config.NewestOperatorVersion()
-		if crdVersion == "" {
-			crdVersion = d.config.Operator.Version.ToOperatorTag()
-		}
-		crdInstance := OperatorInstanceConfig{
-			Version:       imagetag.MainTag(crdVersion),
-			KonfluxImages: d.config.Roxie.KonfluxImages,
-		}
+		crdInstance := d.config.NewestOperatorInstance()
 		bundleImage := crdInstance.BundleImage()
 		d.logger.Warningf("Missing CRDs detected (%s)", strings.Join(missing, ", "))
 		d.logger.Warningf("Fetching bundle %s", bundleImage)
