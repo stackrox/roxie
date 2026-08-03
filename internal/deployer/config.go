@@ -54,7 +54,7 @@ func (c *Config) DeepCopy() (*Config, error) {
 
 // RoxieConfig holds roxie-level settings such as version and feature flags.
 type RoxieConfig struct {
-	Version       string            `yaml:"version,omitempty"`
+	Version       helpers.MainTag   `yaml:"version,omitempty"`
 	KonfluxImages *bool             `yaml:"konfluxImages,omitempty"`
 	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
 	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
@@ -81,9 +81,7 @@ func NewRoxieConfig() RoxieConfig {
 // is used directly. In mixed-operator mode, CentralConfig.Operator and
 // SecuredClusterConfig.Operator override the top-level defaults.
 type OperatorInstanceConfig struct {
-	// Version holds a main image tag (e.g. "4.8.0", "4.8.0-dirty").
-	// Methods that need the operator tag (semver-only) convert via helpers.ConvertToOperatorTag.
-	Version        string            `yaml:"version,omitempty"`
+	Version        helpers.MainTag   `yaml:"version,omitempty"`
 	EnvVars        map[string]string `yaml:"envVars,omitempty"`
 	Namespace      string            `yaml:"namespace,omitempty"`
 	RoleNameSuffix string            `yaml:"roleNameSuffix,omitempty"`
@@ -117,7 +115,7 @@ func (c *OperatorInstanceConfig) ClusterRoleBindingName() string {
 // BundleImage returns the operator bundle image for this operator instance.
 func (c *OperatorInstanceConfig) BundleImage() string {
 	imageRegistry := constants.DefaultRegistry
-	operatorTag := helpers.ConvertToOperatorTag(c.Version)
+	operatorTag := c.Version.ToOperatorTag()
 	if c.KonfluxImagesEnabled() {
 		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, operatorTag)
 	}
@@ -149,7 +147,7 @@ func (c *OperatorConfig) DeployViaOlmEnabled() bool {
 
 // Configure derives the operator version from the roxie configuration.
 func (c *OperatorConfig) Configure(roxieConfig *RoxieConfig) error {
-	c.Version = helpers.ConvertToOperatorTag(roxieConfig.Version)
+	c.Version = roxieConfig.Version
 	if c.KonfluxImages == nil {
 		c.KonfluxImages = roxieConfig.KonfluxImages
 	}

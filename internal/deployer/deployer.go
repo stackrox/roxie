@@ -809,7 +809,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
 	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
-	log.Info(cyan.Sprint("│") + createRow("Image Tag", imageTag))
+	log.Info(cyan.Sprint("│") + createRow("Image Tag", imageTag.String()))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
 	if olm {
@@ -988,7 +988,7 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
 	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
-	log.Info(cyan.Sprint("│") + createRow("Image Tag", imageTag))
+	log.Info(cyan.Sprint("│") + createRow("Image Tag", imageTag.String()))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
 	if olm {

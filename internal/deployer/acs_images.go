@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/helpers"
 )
 
 func imagesForConfig(config Config) []string {
@@ -18,13 +17,12 @@ func imagesForConfig(config Config) []string {
 			prefix = "release-"
 			operatorPrefix = "release-"
 		}
-		operatorTag := helpers.ConvertToOperatorTag(instance.Version)
 		images = append(images,
 			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "main", instance.Version),
 			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "central-db", instance.Version),
 			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4-db", instance.Version),
 			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4", instance.Version),
-			fmt.Sprintf("%s/%s%s:%s", imageRegistry, operatorPrefix, "operator", operatorTag),
+			fmt.Sprintf("%s/%s%s:%s", imageRegistry, operatorPrefix, "operator", instance.Version.ToOperatorTag().String()),
 			instance.BundleImage(),
 		)
 	}

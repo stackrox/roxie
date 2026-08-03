@@ -48,7 +48,7 @@ func (d *Deployer) deployOperatorNonOLM(ctx context.Context, instance OperatorIn
 
 	// Only the newest planned operator version may apply CRDs, so an older
 	// companion operator cannot downgrade cluster CRD schemas.
-	operatorTag := helpers.ConvertToOperatorTag(instance.Version)
+	operatorTag := instance.Version.ToOperatorTag()
 	if operatorTag == d.config.NewestOperatorVersion() {
 		crdFiles, err := d.identifyCRDFileNames(bundleDir)
 		if err != nil {
@@ -168,12 +168,12 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	}
 
 	if len(missing) > 0 {
-		version := d.config.NewestOperatorVersion()
-		if version == "" {
-			version = d.config.Operator.Version
+		crdVersion := d.config.NewestOperatorVersion()
+		if crdVersion == "" {
+			crdVersion = d.config.Operator.Version.ToOperatorTag()
 		}
 		crdInstance := OperatorInstanceConfig{
-			Version:       version,
+			Version:       helpers.MainTag(crdVersion),
 			KonfluxImages: d.config.Roxie.KonfluxImages,
 		}
 		bundleImage := crdInstance.BundleImage()
@@ -450,7 +450,7 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, instance Operato
 
 	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
 	if instance.KonfluxImagesEnabled() {
-		d.rewriteKonfluxOperatorImage(managerContainer, helpers.ConvertToOperatorTag(instance.Version))
+		d.rewriteKonfluxOperatorImage(managerContainer, instance.Version.ToOperatorTag().String())
 	}
 
 	if len(instance.EnvVars) > 0 {

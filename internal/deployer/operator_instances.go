@@ -28,7 +28,7 @@ var AllOperatorNamespaces = []string{
 
 // CentralVersion returns the main image tag for Central.
 // Uses central.operator.version if set, otherwise falls back to roxie.version.
-func (c *Config) CentralVersion() string {
+func (c *Config) CentralVersion() helpers.MainTag {
 	if c.Central.Operator.Version != "" {
 		return c.Central.Operator.Version
 	}
@@ -37,7 +37,7 @@ func (c *Config) CentralVersion() string {
 
 // SecuredClusterVersion returns the main image tag for SecuredCluster.
 // Uses securedCluster.operator.version if set, otherwise falls back to roxie.version.
-func (c *Config) SecuredClusterVersion() string {
+func (c *Config) SecuredClusterVersion() helpers.MainTag {
 	if c.SecuredCluster.Operator.Version != "" {
 		return c.SecuredCluster.Operator.Version
 	}
@@ -105,7 +105,7 @@ func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) *bool
 //
 // Comparison uses the leading semver (everything before the first "-" in the operator
 // tag), which is sufficient for release-vs-release compat testing (e.g. 4.8.x vs 4.9.x).
-func (c *Config) NewestOperatorVersion() string {
+func (c *Config) NewestOperatorVersion() helpers.OperatorTag {
 	instances := c.OperatorInstances()
 	newest := slices.MaxFunc(instances, func(a, b OperatorInstanceConfig) int {
 		av, aerr := parseLeadingSemver(a.Version)
@@ -113,13 +113,13 @@ func (c *Config) NewestOperatorVersion() string {
 		if aerr == nil && berr == nil {
 			return av.Compare(bv)
 		}
-		return cmp.Compare(a.Version, b.Version)
+		return cmp.Compare(a.Version.ToOperatorTag().String(), b.Version.ToOperatorTag().String())
 	})
-	return helpers.ConvertToOperatorTag(newest.Version)
+	return newest.Version.ToOperatorTag()
 }
 
-func parseLeadingSemver(version string) (*semver.Version, error) {
-	tag := helpers.ConvertToOperatorTag(version)
-	base, _, _ := strings.Cut(tag, "-")
+func parseLeadingSemver(version helpers.MainTag) (*semver.Version, error) {
+	tag := version.ToOperatorTag()
+	base, _, _ := strings.Cut(tag.String(), "-")
 	return semver.NewVersion(base)
 }

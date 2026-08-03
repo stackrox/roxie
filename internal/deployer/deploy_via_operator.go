@@ -259,7 +259,7 @@ func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance Operat
 	}
 	currentTag := parts[1]
 
-	desiredTag := helpers.ConvertToOperatorTag(instance.Version)
+	desiredTag := instance.Version.ToOperatorTag().String()
 	if currentTag != desiredTag {
 		d.logger.Info("Operator version mismatch detected:")
 		d.logger.Infof("  Current: %s", currentTag)

@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/helpers"
 )
 
 var konfluxRelatedImages = map[string]string{
@@ -35,7 +34,7 @@ func PopulateKonfluxEnvVars(instance *OperatorInstanceConfig) {
 	if instance.EnvVars == nil {
 		instance.EnvVars = make(map[string]string, len(konfluxRelatedImages))
 	}
-	operatorTag := helpers.ConvertToOperatorTag(instance.Version)
+	operatorTag := instance.Version.ToOperatorTag()
 	for envName, imageSuffix := range konfluxRelatedImages {
 		if _, exists := instance.EnvVars[envName]; exists {
 			continue
