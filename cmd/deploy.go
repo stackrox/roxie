@@ -497,12 +497,12 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 		}
 	}
 
-	if !deploySettings.Central.EarlyReadinessEnabled() {
+	if components.IncludesCentral() && !deploySettings.Central.EarlyReadinessEnabled() {
 		if err := checkEarlyReadinessSupport("Central", deploySettings.CentralVersion()); err != nil {
 			return err
 		}
 	}
-	if !deploySettings.SecuredCluster.EarlyReadinessEnabled() {
+	if components.IncludesSensor() && !deploySettings.SecuredCluster.EarlyReadinessEnabled() {
 		if err := checkEarlyReadinessSupport("SecuredCluster", deploySettings.SecuredClusterVersion()); err != nil {
 			return err
 		}
