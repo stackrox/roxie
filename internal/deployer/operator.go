@@ -593,8 +593,8 @@ func (d *Deployer) teardownOperatorNonOLMInNamespace(ctx context.Context, instan
 func (d *Deployer) teardownAllOperatorClusterRBAC(ctx context.Context) {
 	for _, instance := range []OperatorInstanceConfig{
 		{Namespace: operatorNamespaceSystem},
-		{Namespace: operatorNamespaceCentral, RoleNameSuffix: "central"},
-		{Namespace: operatorNamespaceSensor, RoleNameSuffix: "sensor"},
+		{Namespace: operatorNamespaceCentral, RoleNameSuffix: roleNameSuffixCentral},
+		{Namespace: operatorNamespaceSensor, RoleNameSuffix: roleNameSuffixSensor},
 	} {
 		d.runKubectl(ctx, k8s.KubectlOptions{
 			Args:         []string{"delete", "clusterrolebinding", instance.ClusterRoleBindingName(), "--ignore-not-found=true"},
@@ -618,9 +618,9 @@ func (d *Deployer) teardownOperatorNonOLM(ctx context.Context) error {
 		instance := OperatorInstanceConfig{Namespace: ns}
 		switch ns {
 		case operatorNamespaceCentral:
-			instance.RoleNameSuffix = "central"
+			instance.RoleNameSuffix = roleNameSuffixCentral
 		case operatorNamespaceSensor:
-			instance.RoleNameSuffix = "sensor"
+			instance.RoleNameSuffix = roleNameSuffixSensor
 		}
 		_ = d.teardownOperatorNonOLMInNamespace(ctx, instance)
 	}

@@ -97,7 +97,7 @@ func TestOperatorInstances_MixedVersions(t *testing.T) {
 	central := instances[0]
 	assert.Equal(t, imagetag.MainTag("4.8.0"), central.Version)
 	assert.Equal(t, operatorNamespaceCentral, central.Namespace)
-	assert.Equal(t, "central", central.RoleNameSuffix)
+	assert.Equal(t, roleNameSuffixCentral, central.RoleNameSuffix)
 	assert.Equal(t, "rhacs-operator-manager-role-central", central.ClusterRoleName())
 	assert.Equal(t, "rhacs-operator-manager-rolebinding-central", central.ClusterRoleBindingName())
 	assert.Equal(t, "1", central.EnvVars["CUSTOM"])
@@ -107,7 +107,7 @@ func TestOperatorInstances_MixedVersions(t *testing.T) {
 	sensor := instances[1]
 	assert.Equal(t, imagetag.MainTag("4.9.0"), sensor.Version)
 	assert.Equal(t, operatorNamespaceSensor, sensor.Namespace)
-	assert.Equal(t, "sensor", sensor.RoleNameSuffix)
+	assert.Equal(t, roleNameSuffixSensor, sensor.RoleNameSuffix)
 	assert.Equal(t, "rhacs-operator-manager-role-sensor", sensor.ClusterRoleName())
 	assert.Equal(t, "rhacs-operator-manager-rolebinding-sensor", sensor.ClusterRoleBindingName())
 	assert.Equal(t, "1", sensor.EnvVars["CUSTOM"])
