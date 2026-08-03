@@ -6,6 +6,7 @@ import (
 
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
 )
@@ -54,7 +55,7 @@ func (c *Config) DeepCopy() (*Config, error) {
 
 // RoxieConfig holds roxie-level settings such as version and feature flags.
 type RoxieConfig struct {
-	Version       helpers.MainTag   `yaml:"version,omitempty"`
+	Version       imagetag.MainTag  `yaml:"version,omitempty"`
 	KonfluxImages *bool             `yaml:"konfluxImages,omitempty"`
 	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
 	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
@@ -81,7 +82,7 @@ func NewRoxieConfig() RoxieConfig {
 // is used directly. In mixed-operator mode, CentralConfig.Operator and
 // SecuredClusterConfig.Operator override the top-level defaults.
 type OperatorInstanceConfig struct {
-	Version        helpers.MainTag   `yaml:"version,omitempty"`
+	Version        imagetag.MainTag  `yaml:"version,omitempty"`
 	EnvVars        map[string]string `yaml:"envVars,omitempty"`
 	Namespace      string            `yaml:"namespace,omitempty"`
 	RoleNameSuffix string            `yaml:"roleNameSuffix,omitempty"`

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/imagetag"
 )
 
 const (
@@ -31,7 +31,7 @@ var AllOperatorNamespaces = []string{
 
 // CentralVersion returns the main image tag for Central.
 // Uses central.operator.version if set, otherwise falls back to roxie.version.
-func (c *Config) CentralVersion() helpers.MainTag {
+func (c *Config) CentralVersion() imagetag.MainTag {
 	if c.Central.Operator.Version != "" {
 		return c.Central.Operator.Version
 	}
@@ -40,7 +40,7 @@ func (c *Config) CentralVersion() helpers.MainTag {
 
 // SecuredClusterVersion returns the main image tag for SecuredCluster.
 // Uses securedCluster.operator.version if set, otherwise falls back to roxie.version.
-func (c *Config) SecuredClusterVersion() helpers.MainTag {
+func (c *Config) SecuredClusterVersion() imagetag.MainTag {
 	if c.SecuredCluster.Operator.Version != "" {
 		return c.SecuredCluster.Operator.Version
 	}
@@ -108,7 +108,7 @@ func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) *bool
 //
 // Comparison uses the leading semver (everything before the first "-" in the operator
 // tag), which is sufficient for release-vs-release compat testing (e.g. 4.8.x vs 4.9.x).
-func (c *Config) NewestOperatorVersion() helpers.OperatorTag {
+func (c *Config) NewestOperatorVersion() imagetag.OperatorTag {
 	instances := c.OperatorInstances()
 	newest := slices.MaxFunc(instances, func(a, b OperatorInstanceConfig) int {
 		av, aerr := parseLeadingSemver(a.Version)
@@ -121,7 +121,7 @@ func (c *Config) NewestOperatorVersion() helpers.OperatorTag {
 	return newest.Version.ToOperatorTag()
 }
 
-func parseLeadingSemver(version helpers.MainTag) (*semver.Version, error) {
+func parseLeadingSemver(version imagetag.MainTag) (*semver.Version, error) {
 	tag := version.ToOperatorTag()
 	base, _, _ := strings.Cut(tag.String(), "-")
 	return semver.NewVersion(base)

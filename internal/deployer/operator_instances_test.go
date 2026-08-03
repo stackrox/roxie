@@ -3,7 +3,7 @@ package deployer
 import (
 	"testing"
 
-	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -12,8 +12,8 @@ func TestVersions_DefaultToRoxieVersion(t *testing.T) {
 	cfg := Config{
 		Roxie: RoxieConfig{Version: "4.9.0"},
 	}
-	assert.Equal(t, helpers.MainTag("4.9.0"), cfg.CentralVersion())
-	assert.Equal(t, helpers.MainTag("4.9.0"), cfg.SecuredClusterVersion())
+	assert.Equal(t, imagetag.MainTag("4.9.0"), cfg.CentralVersion())
+	assert.Equal(t, imagetag.MainTag("4.9.0"), cfg.SecuredClusterVersion())
 	assert.False(t, cfg.HasMixedVersions())
 }
 
@@ -22,8 +22,8 @@ func TestVersions_CentralOverride(t *testing.T) {
 		Roxie:   RoxieConfig{Version: "4.9.0"},
 		Central: CentralConfig{Operator: OperatorInstanceConfig{Version: "4.8.0"}},
 	}
-	assert.Equal(t, helpers.MainTag("4.8.0"), cfg.CentralVersion())
-	assert.Equal(t, helpers.MainTag("4.9.0"), cfg.SecuredClusterVersion())
+	assert.Equal(t, imagetag.MainTag("4.8.0"), cfg.CentralVersion())
+	assert.Equal(t, imagetag.MainTag("4.9.0"), cfg.SecuredClusterVersion())
 	assert.True(t, cfg.HasMixedVersions())
 }
 
@@ -32,8 +32,8 @@ func TestVersions_SecuredClusterOverride(t *testing.T) {
 		Roxie:          RoxieConfig{Version: "4.9.0"},
 		SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.7.0"}},
 	}
-	assert.Equal(t, helpers.MainTag("4.9.0"), cfg.CentralVersion())
-	assert.Equal(t, helpers.MainTag("4.7.0"), cfg.SecuredClusterVersion())
+	assert.Equal(t, imagetag.MainTag("4.9.0"), cfg.CentralVersion())
+	assert.Equal(t, imagetag.MainTag("4.7.0"), cfg.SecuredClusterVersion())
 	assert.True(t, cfg.HasMixedVersions())
 }
 
@@ -43,13 +43,13 @@ func TestVersions_BothOverridesSame_NoMixed(t *testing.T) {
 		Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.8.0"}},
 		SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.8.0"}},
 	}
-	assert.Equal(t, helpers.MainTag("4.8.0"), cfg.CentralVersion())
-	assert.Equal(t, helpers.MainTag("4.8.0"), cfg.SecuredClusterVersion())
+	assert.Equal(t, imagetag.MainTag("4.8.0"), cfg.CentralVersion())
+	assert.Equal(t, imagetag.MainTag("4.8.0"), cfg.SecuredClusterVersion())
 	assert.False(t, cfg.HasMixedVersions())
 
 	instances := cfg.OperatorInstances()
 	require.Len(t, instances, 1)
-	assert.Equal(t, helpers.MainTag("4.8.0"), instances[0].Version, "operator should use the override version, not Roxie.Version")
+	assert.Equal(t, imagetag.MainTag("4.8.0"), instances[0].Version, "operator should use the override version, not Roxie.Version")
 }
 
 func TestOperatorInstances_SingleVersion(t *testing.T) {
@@ -64,7 +64,7 @@ func TestOperatorInstances_SingleVersion(t *testing.T) {
 
 	instances := cfg.OperatorInstances()
 	require.Len(t, instances, 1)
-	assert.Equal(t, helpers.MainTag("4.9.0-dirty"), instances[0].Version)
+	assert.Equal(t, imagetag.MainTag("4.9.0-dirty"), instances[0].Version)
 	assert.Equal(t, operatorNamespaceSystem, instances[0].Namespace)
 	assert.Equal(t, "", instances[0].RoleNameSuffix)
 	assert.Equal(t, "rhacs-operator-manager-role", instances[0].ClusterRoleName())
@@ -95,7 +95,7 @@ func TestOperatorInstances_MixedVersions(t *testing.T) {
 	require.Len(t, instances, 2)
 
 	central := instances[0]
-	assert.Equal(t, helpers.MainTag("4.8.0"), central.Version)
+	assert.Equal(t, imagetag.MainTag("4.8.0"), central.Version)
 	assert.Equal(t, operatorNamespaceCentral, central.Namespace)
 	assert.Equal(t, "central", central.RoleNameSuffix)
 	assert.Equal(t, "rhacs-operator-manager-role-central", central.ClusterRoleName())
@@ -105,7 +105,7 @@ func TestOperatorInstances_MixedVersions(t *testing.T) {
 	assert.NotContains(t, central.EnvVars, envCentralReconcilerEnabled)
 
 	sensor := instances[1]
-	assert.Equal(t, helpers.MainTag("4.9.0"), sensor.Version)
+	assert.Equal(t, imagetag.MainTag("4.9.0"), sensor.Version)
 	assert.Equal(t, operatorNamespaceSensor, sensor.Namespace)
 	assert.Equal(t, "sensor", sensor.RoleNameSuffix)
 	assert.Equal(t, "rhacs-operator-manager-role-sensor", sensor.ClusterRoleName())
@@ -157,7 +157,7 @@ func TestOperatorInstances_PerComponentEnvVars(t *testing.T) {
 func TestNewestOperatorVersion(t *testing.T) {
 	t.Run("single version", func(t *testing.T) {
 		cfg := Config{Roxie: RoxieConfig{Version: "4.9.0"}}
-		assert.Equal(t, helpers.OperatorTag("4.9.0"), cfg.NewestOperatorVersion())
+		assert.Equal(t, imagetag.OperatorTag("4.9.0"), cfg.NewestOperatorVersion())
 	})
 
 	t.Run("secured cluster newer", func(t *testing.T) {
@@ -166,7 +166,7 @@ func TestNewestOperatorVersion(t *testing.T) {
 			Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.10.0"}},
 			SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.11.1"}},
 		}
-		assert.Equal(t, helpers.OperatorTag("4.11.1"), cfg.NewestOperatorVersion())
+		assert.Equal(t, imagetag.OperatorTag("4.11.1"), cfg.NewestOperatorVersion())
 	})
 
 	t.Run("central newer", func(t *testing.T) {
@@ -175,7 +175,7 @@ func TestNewestOperatorVersion(t *testing.T) {
 			Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.11.1"}},
 			SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.10.0"}},
 		}
-		assert.Equal(t, helpers.OperatorTag("4.11.1"), cfg.NewestOperatorVersion())
+		assert.Equal(t, imagetag.OperatorTag("4.11.1"), cfg.NewestOperatorVersion())
 	})
 
 	t.Run("build suffix uses leading semver", func(t *testing.T) {
@@ -184,7 +184,7 @@ func TestNewestOperatorVersion(t *testing.T) {
 			Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.10.0"}},
 			SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.11.0-937-gf0da38f1a"}},
 		}
-		assert.Equal(t, helpers.OperatorTag("4.11.0-937-gf0da38f1a"), cfg.NewestOperatorVersion())
+		assert.Equal(t, imagetag.OperatorTag("4.11.0-937-gf0da38f1a"), cfg.NewestOperatorVersion())
 	})
 }
 

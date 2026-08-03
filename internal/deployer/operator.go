@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
 )
@@ -173,7 +173,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 			crdVersion = d.config.Operator.Version.ToOperatorTag()
 		}
 		crdInstance := OperatorInstanceConfig{
-			Version:       helpers.MainTag(crdVersion),
+			Version:       imagetag.MainTag(crdVersion),
 			KonfluxImages: d.config.Roxie.KonfluxImages,
 		}
 		bundleImage := crdInstance.BundleImage()

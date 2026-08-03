@@ -17,6 +17,7 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
@@ -134,21 +135,21 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 	registerFlag(cmd, settings, "tag", "Main image tag to use for deployment (takes precedence over MAIN_IMAGE_TAG environment variable)",
 		withShortName("t"),
 		withApplyFn("version", func(config *deployer.Config, mainImageTag string) error {
-			config.Roxie.Version = helpers.MainTag(mainImageTag)
+			config.Roxie.Version = imagetag.MainTag(mainImageTag)
 			return nil
 		}),
 	)
 
 	registerFlag(cmd, settings, "central-tag", "Image tag for Central (overrides --tag for Central)",
 		withApplyFn("version", func(config *deployer.Config, tag string) error {
-			config.Central.Operator.Version = helpers.MainTag(tag)
+			config.Central.Operator.Version = imagetag.MainTag(tag)
 			return nil
 		}),
 	)
 
 	registerFlag(cmd, settings, "secured-cluster-tag", "Image tag for SecuredCluster (overrides --tag for SecuredCluster)",
 		withApplyFn("version", func(config *deployer.Config, tag string) error {
-			config.SecuredCluster.Operator.Version = helpers.MainTag(tag)
+			config.SecuredCluster.Operator.Version = imagetag.MainTag(tag)
 			return nil
 		}),
 	)
@@ -250,7 +251,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("looking up main image tag: %w", err)
 		}
-		deploySettings.Roxie.Version = helpers.MainTag(mainImageTag)
+		deploySettings.Roxie.Version = imagetag.MainTag(mainImageTag)
 	}
 
 	if components.IncludesSensor() {
@@ -510,7 +511,7 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 	return nil
 }
 
-func checkEarlyReadinessSupport(componentName string, tag helpers.MainTag) error {
+func checkEarlyReadinessSupport(componentName string, tag imagetag.MainTag) error {
 	// The main image tag is not reliably parseable as semver, so we derive the operator
 	// tag (via ToOperator) for the constraint check.
 	version := tag.ToOperatorTag().String()
