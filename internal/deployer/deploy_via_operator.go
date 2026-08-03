@@ -107,9 +107,9 @@ func (d *Deployer) teardownStaleOperatorNamespaces(ctx context.Context, desired 
 		instance := OperatorInstanceConfig{Namespace: ns}
 		switch ns {
 		case operatorNamespaceCentral:
-			instance.RoleNameSuffix = "central"
+			instance.RoleNameSuffix = roleNameSuffixCentral
 		case operatorNamespaceSensor:
-			instance.RoleNameSuffix = "sensor"
+			instance.RoleNameSuffix = roleNameSuffixSensor
 		}
 		if err := d.teardownOperatorNonOLMInNamespace(ctx, instance); err != nil {
 			return fmt.Errorf("tearing down unwanted operator in %s: %w", ns, err)

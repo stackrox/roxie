@@ -15,6 +15,9 @@ const (
 	operatorNamespaceCentral = "rhacs-operator-central"
 	operatorNamespaceSensor  = "rhacs-operator-sensor"
 
+	roleNameSuffixCentral = "central"
+	roleNameSuffixSensor  = "sensor"
+
 	envCentralReconcilerEnabled        = "CENTRAL_RECONCILER_ENABLED"
 	envSecuredClusterReconcilerEnabled = "SECURED_CLUSTER_RECONCILER_ENABLED"
 )
@@ -77,14 +80,14 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 			Version:        c.CentralVersion(),
 			Namespace:      operatorNamespaceCentral,
 			EnvVars:        centralEnvVars,
-			RoleNameSuffix: "central",
+			RoleNameSuffix: roleNameSuffixCentral,
 			KonfluxImages:  c.resolveKonfluxImages(&c.Central.Operator),
 		},
 		{
 			Version:        c.SecuredClusterVersion(),
 			Namespace:      operatorNamespaceSensor,
 			EnvVars:        sensorEnvVars,
-			RoleNameSuffix: "sensor",
+			RoleNameSuffix: roleNameSuffixSensor,
 			KonfluxImages:  c.resolveKonfluxImages(&c.SecuredCluster.Operator),
 		},
 	}
