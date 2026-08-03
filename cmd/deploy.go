@@ -263,7 +263,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := deployValidate(components, &deploySettings); err != nil {
+	if err := deployValidate(log, components, &deploySettings); err != nil {
 		return err
 	}
 
@@ -445,7 +445,7 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 	return nil
 }
 
-func deployValidate(components component.Component, deploySettings *deployer.Config) error {
+func deployValidate(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
 	if components.IncludesCentral() && os.Getenv("ROXIE_SHELL") != "" {
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
 	}
@@ -487,7 +487,7 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 	}
 
 	if deploySettings.HasMixedVersions() {
-		globalLogger.Dimf("Mixed versions detected (configured via --central-tag / --secured-cluster-tag or central.operator / securedCluster.operator)")
+		log.Dimf("Mixed versions detected (configured via --central-tag / --secured-cluster-tag or central.operator / securedCluster.operator)")
 		if components.IncludesOperatorExplicitly() {
 			return errors.New("mixed versions are not supported with operator-only deploy")
 		}
