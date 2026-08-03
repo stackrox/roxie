@@ -123,6 +123,15 @@ func (c *OperatorInstanceConfig) BundleImage() string {
 	return fmt.Sprintf("%s/stackrox-operator-bundle:v%s", imageRegistry, operatorTag)
 }
 
+func (c *OperatorInstanceConfig) OperatorImage() string {
+	imageRegistry := constants.DefaultRegistry
+	operatorTag := c.Version.ToOperatorTag()
+	if c.KonfluxImagesEnabled() {
+		return fmt.Sprintf("%s/release-operator:%s", imageRegistry, operatorTag)
+	}
+	return fmt.Sprintf("%s/stackrox-operator:%s", imageRegistry, operatorTag)
+}
+
 // OperatorConfig is the top-level operator configuration used in single-operator mode.
 type OperatorConfig struct {
 	SkipDeployment         *bool `yaml:"skipDeployment,omitempty"`
