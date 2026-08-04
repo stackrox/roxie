@@ -8,9 +8,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestConfigure_PropagatesRoxieVersion(t *testing.T) {
+	cfg := Config{
+		Roxie: RoxieConfig{Version: "4.11.1"},
+	}
+	err := cfg.Operator.Configure(&cfg.Roxie)
+	require.NoError(t, err)
+
+	assert.Equal(t, imagetag.MainTag("4.11.1"), cfg.Operator.Version)
+	assert.Equal(t, imagetag.MainTag("4.11.1"), cfg.CentralVersion())
+	assert.Equal(t, imagetag.MainTag("4.11.1"), cfg.SecuredClusterVersion())
+}
+
 func TestVersions_DefaultToRoxieVersion(t *testing.T) {
 	cfg := Config{
-		Roxie: RoxieConfig{Version: "4.9.0"},
+		Roxie:    RoxieConfig{Version: "4.9.0"},
+		Operator: OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.9.0"}},
 	}
 	assert.Equal(t, imagetag.MainTag("4.9.0"), cfg.CentralVersion())
 	assert.Equal(t, imagetag.MainTag("4.9.0"), cfg.SecuredClusterVersion())
@@ -19,8 +32,9 @@ func TestVersions_DefaultToRoxieVersion(t *testing.T) {
 
 func TestVersions_CentralOverride(t *testing.T) {
 	cfg := Config{
-		Roxie:   RoxieConfig{Version: "4.9.0"},
-		Central: CentralConfig{Operator: OperatorInstanceConfig{Version: "4.8.0"}},
+		Roxie:    RoxieConfig{Version: "4.9.0"},
+		Operator: OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.9.0"}},
+		Central:  CentralConfig{Operator: OperatorInstanceConfig{Version: "4.8.0"}},
 	}
 	assert.Equal(t, imagetag.MainTag("4.8.0"), cfg.CentralVersion())
 	assert.Equal(t, imagetag.MainTag("4.9.0"), cfg.SecuredClusterVersion())
@@ -30,6 +44,7 @@ func TestVersions_CentralOverride(t *testing.T) {
 func TestVersions_SecuredClusterOverride(t *testing.T) {
 	cfg := Config{
 		Roxie:          RoxieConfig{Version: "4.9.0"},
+		Operator:       OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.9.0"}},
 		SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.7.0"}},
 	}
 	assert.Equal(t, imagetag.MainTag("4.9.0"), cfg.CentralVersion())
@@ -57,6 +72,7 @@ func TestOperatorInstances_SingleVersion(t *testing.T) {
 		Roxie: RoxieConfig{Version: "4.9.0-dirty"},
 		Operator: OperatorConfig{
 			OperatorInstanceConfig: OperatorInstanceConfig{
+				Version: "4.9.0-dirty",
 				EnvVars: map[string]string{"FOO": "bar"},
 			},
 		},
@@ -156,13 +172,17 @@ func TestOperatorInstances_PerComponentEnvVars(t *testing.T) {
 
 func TestNewestOperatorVersion(t *testing.T) {
 	t.Run("single version", func(t *testing.T) {
-		cfg := Config{Roxie: RoxieConfig{Version: "4.9.0"}}
+		cfg := Config{
+			Roxie:    RoxieConfig{Version: "4.9.0"},
+			Operator: OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.9.0"}},
+		}
 		assert.Equal(t, imagetag.OperatorTag("4.9.0"), cfg.NewestOperatorVersion())
 	})
 
 	t.Run("secured cluster newer", func(t *testing.T) {
 		cfg := Config{
 			Roxie:          RoxieConfig{Version: "4.11.1"},
+			Operator:       OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.11.1"}},
 			Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.10.0"}},
 			SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.11.1"}},
 		}
@@ -172,6 +192,7 @@ func TestNewestOperatorVersion(t *testing.T) {
 	t.Run("central newer", func(t *testing.T) {
 		cfg := Config{
 			Roxie:          RoxieConfig{Version: "4.11.1"},
+			Operator:       OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.11.1"}},
 			Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.11.1"}},
 			SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.10.0"}},
 		}
@@ -181,6 +202,7 @@ func TestNewestOperatorVersion(t *testing.T) {
 	t.Run("build suffix uses leading semver", func(t *testing.T) {
 		cfg := Config{
 			Roxie:          RoxieConfig{Version: "4.10.0"},
+			Operator:       OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.10.0"}},
 			Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.10.0"}},
 			SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.11.0-937-gf0da38f1a"}},
 		}

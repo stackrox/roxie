@@ -30,21 +30,21 @@ var AllOperatorNamespaces = []string{
 }
 
 // CentralVersion returns the main image tag for Central.
-// Uses central.operator.version if set, otherwise falls back to roxie.version.
+// Uses central.operator.version if set, otherwise falls back to operator.version.
 func (c *Config) CentralVersion() imagetag.MainTag {
 	if c.Central.Operator.Version != "" {
 		return c.Central.Operator.Version
 	}
-	return c.Roxie.Version
+	return c.Operator.Version
 }
 
 // SecuredClusterVersion returns the main image tag for SecuredCluster.
-// Uses securedCluster.operator.version if set, otherwise falls back to roxie.version.
+// Uses securedCluster.operator.version if set, otherwise falls back to operator.version.
 func (c *Config) SecuredClusterVersion() imagetag.MainTag {
 	if c.SecuredCluster.Operator.Version != "" {
 		return c.SecuredCluster.Operator.Version
 	}
-	return c.Roxie.Version
+	return c.Operator.Version
 }
 
 // HasMixedVersions reports whether Central and SecuredCluster use different operator versions.
@@ -67,26 +67,26 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 		}}
 	}
 
-	centralEnvVars := make(map[string]string, len(c.Central.Operator.EnvVars)+1)
-	maps.Copy(centralEnvVars, c.Central.Operator.EnvVars)
-	centralEnvVars[envSecuredClusterReconcilerEnabled] = "false"
+	centralOperatorEnvVars := make(map[string]string, len(c.Central.Operator.EnvVars)+1)
+	maps.Copy(centralOperatorEnvVars, c.Central.Operator.EnvVars)
+	centralOperatorEnvVars[envSecuredClusterReconcilerEnabled] = "false"
 
-	sensorEnvVars := make(map[string]string, len(c.SecuredCluster.Operator.EnvVars)+1)
-	maps.Copy(sensorEnvVars, c.SecuredCluster.Operator.EnvVars)
-	sensorEnvVars[envCentralReconcilerEnabled] = "false"
+	sensorOperatorEnvVars := make(map[string]string, len(c.SecuredCluster.Operator.EnvVars)+1)
+	maps.Copy(sensorOperatorEnvVars, c.SecuredCluster.Operator.EnvVars)
+	sensorOperatorEnvVars[envCentralReconcilerEnabled] = "false"
 
 	return []OperatorInstanceConfig{
 		{
 			Version:        c.CentralVersion(),
 			Namespace:      operatorNamespaceCentral,
-			EnvVars:        centralEnvVars,
+			EnvVars:        centralOperatorEnvVars,
 			RoleNameSuffix: roleNameSuffixCentral,
 			KonfluxImages:  c.resolveKonfluxImages(&c.Central.Operator),
 		},
 		{
 			Version:        c.SecuredClusterVersion(),
 			Namespace:      operatorNamespaceSensor,
-			EnvVars:        sensorEnvVars,
+			EnvVars:        sensorOperatorEnvVars,
 			RoleNameSuffix: roleNameSuffixSensor,
 			KonfluxImages:  c.resolveKonfluxImages(&c.SecuredCluster.Operator),
 		},
@@ -94,12 +94,12 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 }
 
 // resolveKonfluxImages returns the effective KonfluxImages setting for a per-component
-// operator config, falling back to Roxie.KonfluxImages if not set at the component level.
+// operator config, falling back to Operator.KonfluxImages if not set at the component level.
 func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) *bool {
 	if instanceCfg.KonfluxImagesSet() {
 		return instanceCfg.KonfluxImages
 	}
-	return c.Roxie.KonfluxImages
+	return c.Operator.KonfluxImages
 }
 
 // NewestOperatorInstance returns the operator instance with the highest version.
