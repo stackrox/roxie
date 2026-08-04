@@ -19,11 +19,6 @@ var konfluxRelatedImages = map[string]string{
 	"RELATED_IMAGE_FACT":            "fact",
 }
 
-// KonfluxOperatorImage returns the Konflux-built operator image reference for an operator version.
-func KonfluxOperatorImage(operatorVersion string) string {
-	return fmt.Sprintf("%s/release-operator:%s", constants.DefaultRegistry, operatorVersion)
-}
-
 // PopulateKonfluxEnvVars adds RELATED_IMAGE_* entries to the instance's EnvVars
 // for its version. It is a no-op when Konflux images are not enabled for the instance.
 // Explicitly-provided env vars (e.g. from --operator-env) take precedence and are not overwritten.

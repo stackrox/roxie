@@ -441,8 +441,9 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, instance Operato
 	}
 
 	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
-	if instance.KonfluxImagesEnabled() {
-		d.rewriteKonfluxOperatorImage(managerContainer, instance.Version.ToOperatorTag().String())
+	if current, _ := managerContainer["image"].(string); current != instance.OperatorImage() {
+		d.logger.Infof("Rewriting operator image to %s", instance.OperatorImage())
+		managerContainer["image"] = instance.OperatorImage()
 	}
 
 	if len(instance.EnvVars) > 0 {
@@ -505,14 +506,6 @@ func injectEnvVarsIntoManagerContainer(container map[string]any, envVars map[str
 	}
 
 	container["env"] = envList
-}
-
-// rewriteKonfluxOperatorImage replaces the manager container's image with the
-// Konflux-built operator image for the given operator version.
-func (d *Deployer) rewriteKonfluxOperatorImage(container map[string]any, operatorVersion string) {
-	newImage := KonfluxOperatorImage(operatorVersion)
-	d.logger.Infof("Rewriting operator image to %s", newImage)
-	container["image"] = newImage
 }
 
 func (d *Deployer) applyBundleServiceResources(ctx context.Context, bundleDir, namespace string) error {

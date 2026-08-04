@@ -10,9 +10,16 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-func TestKonfluxOperatorImage(t *testing.T) {
+func TestOperatorImage_Konflux(t *testing.T) {
+	instance := OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: ptr.To(true)}
 	expected := fmt.Sprintf("%s/release-operator:4.9.2", constants.DefaultRegistry)
-	assert.Equal(t, expected, KonfluxOperatorImage("4.9.2"))
+	assert.Equal(t, expected, instance.OperatorImage())
+}
+
+func TestOperatorImage_NonKonflux(t *testing.T) {
+	instance := OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: ptr.To(false)}
+	expected := fmt.Sprintf("%s/stackrox-operator:4.9.2", constants.DefaultRegistry)
+	assert.Equal(t, expected, instance.OperatorImage())
 }
 
 func TestPopulateKonfluxEnvVars_AllEntries(t *testing.T) {
