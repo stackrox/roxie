@@ -38,7 +38,7 @@ func PopulateKonfluxEnvVars(instance *OperatorInstanceConfig) {
 			"%s/release-%s:%s",
 			constants.DefaultRegistry,
 			imageSuffix,
-			operatorTag,
+			operatorTag, // Konflux built images use the "operator tag"
 		)
 	}
 }
