@@ -23,7 +23,7 @@ func TestOperatorImage_NonKonflux(t *testing.T) {
 
 func TestPopulateKonfluxEnvVars_AllEntries(t *testing.T) {
 	instance := &OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: new(true)}
-	PopulateKonfluxEnvVars(instance)
+	populateKonfluxEnvVars(instance)
 
 	require.Len(t, instance.EnvVars, len(konfluxRelatedImages))
 
@@ -43,7 +43,7 @@ func TestPopulateKonfluxEnvVars_UserOverridePreserved(t *testing.T) {
 		},
 	}
 
-	PopulateKonfluxEnvVars(instance)
+	populateKonfluxEnvVars(instance)
 
 	assert.Equal(t, userValue, instance.EnvVars["RELATED_IMAGE_MAIN"],
 		"user override should be preserved")
@@ -62,6 +62,6 @@ func TestPopulateKonfluxEnvVars_UserOverridePreserved(t *testing.T) {
 
 func TestPopulateKonfluxEnvVars_NoOpWhenDisabled(t *testing.T) {
 	instance := &OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: new(false)}
-	PopulateKonfluxEnvVars(instance)
+	populateKonfluxEnvVars(instance)
 	assert.Nil(t, instance.EnvVars)
 }

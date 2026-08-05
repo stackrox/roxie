@@ -19,10 +19,10 @@ var konfluxRelatedImages = map[string]string{
 	"RELATED_IMAGE_FACT":            "fact",
 }
 
-// PopulateKonfluxEnvVars adds RELATED_IMAGE_* entries to the instance's EnvVars
+// populateKonfluxEnvVars adds RELATED_IMAGE_* entries to the instance's EnvVars
 // for its version. It is a no-op when Konflux images are not enabled for the instance.
 // Explicitly-provided env vars (e.g. from --operator-env) take precedence and are not overwritten.
-func PopulateKonfluxEnvVars(instance *OperatorInstanceConfig) {
+func populateKonfluxEnvVars(instance *OperatorInstanceConfig) {
 	if !instance.KonfluxImagesEnabled() {
 		return
 	}

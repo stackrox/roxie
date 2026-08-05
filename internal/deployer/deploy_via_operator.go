@@ -81,7 +81,7 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	}
 
 	for _, instance := range instances {
-		PopulateKonfluxEnvVars(&instance)
+		populateKonfluxEnvVars(&instance)
 		if err := d.ensureOperatorInstanceNonOLM(ctx, instance); err != nil {
 			return fmt.Errorf("failed to deploy operator in namespace %s: %w", instance.Namespace, err)
 		}
