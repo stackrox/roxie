@@ -13,9 +13,6 @@ type OperatorTag string
 // ToOperatorTag converts a MainTag to an OperatorTag by removing "-dirty" and
 // replacing ".x" with ".0". The conversion is idempotent.
 func (t MainTag) ToOperatorTag() OperatorTag {
-	if t == "" {
-		return ""
-	}
 	s := strings.ReplaceAll(string(t), "-dirty", "")
 	s = strings.ReplaceAll(s, ".x", ".0")
 	return OperatorTag(s)

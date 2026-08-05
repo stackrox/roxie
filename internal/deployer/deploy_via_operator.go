@@ -62,6 +62,8 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 		return d.ensureOperatorDeployedOLM(ctx)
 	}
 
+	// Non-OLM case.
+
 	operatorExists, currentMode, err := d.detectOperatorDeploymentMode(ctx)
 	if err != nil {
 		return fmt.Errorf("detecting operator deployment mode: %w", err)
@@ -81,7 +83,7 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	for _, instance := range instances {
 		PopulateKonfluxEnvVars(&instance)
 		if err := d.ensureOperatorInstanceNonOLM(ctx, instance); err != nil {
-			return fmt.Errorf("failed to deploy operator in %s: %w", instance.Namespace, err)
+			return fmt.Errorf("failed to deploy operator in namespace %s: %w", instance.Namespace, err)
 		}
 	}
 
@@ -103,7 +105,7 @@ func (d *Deployer) teardownStaleOperatorNamespaces(ctx context.Context, desired 
 		if !d.operatorDeploymentExists(ctx, ns) && !d.namespaceExists(ns) {
 			continue
 		}
-		d.logger.Infof("🔄 Removing previous operator from %s (no longer needed)...", ns)
+		d.logger.Infof("🔄 Removing previous operator from namespace %s (no longer needed)...", ns)
 		instance := OperatorInstanceConfig{Namespace: ns}
 		switch ns {
 		case operatorNamespaceCentral:
@@ -112,7 +114,7 @@ func (d *Deployer) teardownStaleOperatorNamespaces(ctx context.Context, desired 
 			instance.RoleNameSuffix = roleNameSuffixSensor
 		}
 		if err := d.teardownOperatorNonOLMInNamespace(ctx, instance); err != nil {
-			return fmt.Errorf("tearing down unwanted operator in %s: %w", ns, err)
+			return fmt.Errorf("tearing down operator in namespace %s: %w", ns, err)
 		}
 	}
 	return nil
@@ -126,7 +128,7 @@ func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance Op
 
 	if exists {
 		if d.isOperatorVersionCorrect(ctx, instance) {
-			d.logger.Infof("✓ Operator already deployed with correct version in %s", instance.Namespace)
+			d.logger.Infof("✓ Operator already deployed with correct version in namespace %s", instance.Namespace)
 			return nil
 		}
 		d.logger.Infof("🔄 Operator version mismatch in %s, redeploying...", instance.Namespace)
