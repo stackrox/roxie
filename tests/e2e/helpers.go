@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	deployTimeout   = 30 * time.Minute
-	teardownTimeout = 10 * time.Minute
+	deployTimeout         = 30 * time.Minute
+	operatorDeployTimeout = 10 * time.Minute
+	teardownTimeout       = 10 * time.Minute
 
 	operatorDeploymentName   = "rhacs-operator-controller-manager"
 	operatorSystemNamespace  = "rhacs-operator-system"

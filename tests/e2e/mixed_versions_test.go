@@ -54,8 +54,6 @@ func TestMixedVersionOperatorDeploy(t *testing.T) {
 
 	t.Logf("Using --tag=%s (SecuredCluster), --central-tag=%s (Central)", mainTag, centralTag)
 
-	operatorDeployTimeout := 5 * teardownTimeout
-
 	// Step 1: Deploy operator with mixed versions
 	t.Log("=== Step 1: Deploy operator with mixed versions ===")
 	args := append([]string{roxieBinary, "deploy", "operator", "--tag", mainTag, "--central-tag", centralTag}, commonDeployArgs...)
