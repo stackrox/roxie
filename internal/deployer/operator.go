@@ -210,7 +210,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string, 
 	d.logger.Dimf("  • Namespace: %s", instance.Namespace)
 	d.logger.Dimf("  • ServiceAccount: %s", serviceAccountName)
 	d.logger.Dimf("  • Setting up pull secrets: %v", d.useOperatorPullSecrets)
-	if len(instance.EnvVars) > 0 {
+	if d.verbose && len(instance.EnvVars) > 0 {
 		d.logger.Dimf("  • Custom operator env vars: %d", len(instance.EnvVars))
 		for _, envVar := range envVarsToSortedList(instance.EnvVars) {
 			ev := envVar.(map[string]any)

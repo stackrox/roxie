@@ -52,7 +52,7 @@ func TestMixedVersionOperatorDeploy(t *testing.T) {
 
 	mainTag, centralTag := lookupTwoReleasedTags(t)
 
-	t.Logf("Using --tag=%s (SecuredCluster), --central-tag=%s (Central)", mainTag, centralTag)
+	t.Logf("Using --tag=%s --central-tag=%s", mainTag, centralTag)
 
 	// Step 1: Deploy operator with mixed versions
 	t.Log("=== Step 1: Deploy operator with mixed versions ===")
