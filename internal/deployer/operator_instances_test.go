@@ -199,14 +199,24 @@ func TestNewestOperatorVersion(t *testing.T) {
 		assert.Equal(t, imagetag.OperatorTag("4.11.1"), cfg.NewestOperatorVersion())
 	})
 
-	t.Run("build suffix uses leading semver", func(t *testing.T) {
+	t.Run("dev build vs release with same base version", func(t *testing.T) {
 		cfg := Config{
-			Roxie:          RoxieConfig{Version: "4.10.0"},
-			Operator:       OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.10.0"}},
-			Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.10.0"}},
-			SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.11.0-937-gf0da38f1a"}},
+			Roxie:          RoxieConfig{Version: "4.12.0"},
+			Operator:       OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.12.0"}},
+			Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.12.0-662-g105e0e4a0a"}},
+			SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.12.0"}},
 		}
-		assert.Equal(t, imagetag.OperatorTag("4.11.0-937-gf0da38f1a"), cfg.NewestOperatorVersion())
+		assert.Equal(t, imagetag.OperatorTag("4.12.0"), cfg.NewestOperatorVersion())
+	})
+
+	t.Run("two dev builds with same base version", func(t *testing.T) {
+		cfg := Config{
+			Roxie:          RoxieConfig{Version: "4.12.0"},
+			Operator:       OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.12.0"}},
+			Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.12.0-662-g105e0e4a0a"}},
+			SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.12.0-9-gdeadbeef"}},
+		}
+		assert.Equal(t, imagetag.OperatorTag("4.12.0-662-g105e0e4a0a"), cfg.NewestOperatorVersion())
 	})
 }
 

@@ -105,14 +105,11 @@ func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) *bool
 // NewestOperatorInstance returns the operator instance with the highest version.
 // This is used to determine which bundle to use for CRD installation, since CRDs
 // are cluster-scoped and must be at the newest version.
-//
-// Comparison uses the leading semver (everything before the first "-" in the operator
-// tag), which is sufficient for release-vs-release compat testing (e.g. 4.8.x vs 4.9.x).
 func (c *Config) NewestOperatorInstance() OperatorInstanceConfig {
 	instances := c.OperatorInstances()
 	return slices.MaxFunc(instances, func(a, b OperatorInstanceConfig) int {
-		av, aerr := parseLeadingSemver(a.Version)
-		bv, berr := parseLeadingSemver(b.Version)
+		av, aerr := parseSemver(a.Version)
+		bv, berr := parseSemver(b.Version)
 		if aerr == nil && berr == nil {
 			return av.Compare(bv)
 		}
@@ -125,8 +122,15 @@ func (c *Config) NewestOperatorVersion() imagetag.OperatorTag {
 	return c.NewestOperatorInstance().Version.ToOperatorTag()
 }
 
-func parseLeadingSemver(version imagetag.MainTag) (*semver.Version, error) {
-	tag := version.ToOperatorTag()
-	base, _, _ := strings.Cut(tag.String(), "-")
-	return semver.NewVersion(base)
+// parseSemver parses an operator tag as a semver version. Dev tags like
+// "4.12.0-662-g105e0e4a0a" use hyphens between pre-release identifiers,
+// but the semver spec requires dots. We normalize before parsing so that
+// numeric identifiers (like the commit count) compare correctly.
+func parseSemver(version imagetag.MainTag) (*semver.Version, error) {
+	tag := version.ToOperatorTag().String()
+	base, prerelease, hasPrerelease := strings.Cut(tag, "-")
+	if hasPrerelease {
+		tag = base + "-" + strings.ReplaceAll(prerelease, "-", ".")
+	}
+	return semver.NewVersion(tag)
 }
