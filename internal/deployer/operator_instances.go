@@ -60,7 +60,7 @@ func (c *Config) HasMixedVersions() bool {
 func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 	if !c.HasMixedVersions() {
 		return []OperatorInstanceConfig{{
-			Version:       c.CentralVersion(),
+			Version:       c.CentralVersion(), // Per-component overrides may both equal each other but differ from Operator.Version.
 			Namespace:     operatorNamespaceSystem,
 			EnvVars:       maps.Clone(c.Operator.EnvVars),
 			KonfluxImages: c.resolveKonfluxImages(&c.Operator.OperatorInstanceConfig),

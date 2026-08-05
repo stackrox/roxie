@@ -131,7 +131,7 @@ func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance Op
 			d.logger.Infof("✓ Operator already deployed with correct version in namespace %s", instance.Namespace)
 			return nil
 		}
-		d.logger.Infof("🔄 Operator version mismatch in %s, redeploying...", instance.Namespace)
+		d.logger.Infof("🔄 Operator version mismatch in namespace %s, redeploying...", instance.Namespace)
 		needsTeardown = true
 		needsDeployment = true
 	}
