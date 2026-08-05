@@ -488,10 +488,7 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 	}
 
 	if deploySettings.HasMixedVersions() {
-		log.Dimf("Mixed versions detected (configured via --central-tag / --secured-cluster-tag or central.operator / securedCluster.operator)")
-		if components.IncludesOperatorExplicitly() {
-			return errors.New("mixed versions are not supported with operator-only deploy")
-		}
+		log.Dimf("Mixed versions detected (configured via --central-tag / --secured-cluster-tag or central.version / securedCluster.version)")
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("mixed versions are not supported with OLM deployment mode")
 		}

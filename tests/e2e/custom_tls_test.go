@@ -24,10 +24,7 @@ import (
 func TestDeployWithCustomTLSCert(t *testing.T) {
 	dumpClusterStateOnFailure(t)
 
-	const (
-		sharedNamespace = "stackrox"
-		secretName      = "custom-central-tls"
-	)
+	const secretName = "custom-central-tls"
 
 	caCertPEM, certChainPEM, keyPEM := generateCentralTLSCert(t)
 

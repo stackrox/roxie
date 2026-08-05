@@ -25,6 +25,15 @@ import (
 const (
 	deployTimeout   = 30 * time.Minute
 	teardownTimeout = 10 * time.Minute
+
+	operatorDeploymentName   = "rhacs-operator-controller-manager"
+	operatorSystemNamespace  = "rhacs-operator-system"
+	operatorCentralNamespace = "rhacs-operator-central"
+	operatorSensorNamespace  = "rhacs-operator-sensor"
+
+	centralNamespace = "acs-central"
+	sensorNamespace  = "acs-sensor"
+	sharedNamespace  = "stackrox"
 )
 
 var (
@@ -240,10 +249,12 @@ func verifySecuredClusterNotInstalled(t *testing.T, namespace string) {
 }
 
 var clusterDumpNamespaces = []string{
-	"rhacs-operator-system",
-	"acs-central",
-	"acs-sensor",
-	"stackrox",
+	operatorSystemNamespace,
+	operatorCentralNamespace,
+	operatorSensorNamespace,
+	centralNamespace,
+	sensorNamespace,
+	sharedNamespace,
 }
 
 func dumpClusterStateOnFailure(t *testing.T) {
@@ -297,17 +308,16 @@ func dumpOLMResources() {
 	}
 
 	fmt.Fprintln(os.Stderr, "--- OLM Resources ---")
-	operatorNamespace := "rhacs-operator-system"
-	runKubectlDump("get", "subscriptions.operators.coreos.com", "-n", operatorNamespace, "-o", "wide")
-	runKubectlDump("describe", "subscriptions.operators.coreos.com", "-n", operatorNamespace)
-	runKubectlDump("get", "installplans.operators.coreos.com", "-n", operatorNamespace, "-o", "wide")
-	runKubectlDump("describe", "installplans.operators.coreos.com", "-n", operatorNamespace)
-	runKubectlDump("get", "catalogsources.operators.coreos.com", "-n", operatorNamespace, "-o", "wide")
-	runKubectlDump("describe", "catalogsources.operators.coreos.com", "-n", operatorNamespace)
-	runKubectlDump("get", "clusterserviceversions.operators.coreos.com", "-n", operatorNamespace, "-o", "wide")
-	runKubectlDump("describe", "clusterserviceversions.operators.coreos.com", "-n", operatorNamespace)
-	runKubectlDump("get", "operatorgroups.operators.coreos.com", "-n", operatorNamespace, "-o", "wide")
-	runKubectlDump("describe", "operatorgroups.operators.coreos.com", "-n", operatorNamespace)
+	runKubectlDump("get", "subscriptions.operators.coreos.com", "-n", operatorSystemNamespace, "-o", "wide")
+	runKubectlDump("describe", "subscriptions.operators.coreos.com", "-n", operatorSystemNamespace)
+	runKubectlDump("get", "installplans.operators.coreos.com", "-n", operatorSystemNamespace, "-o", "wide")
+	runKubectlDump("describe", "installplans.operators.coreos.com", "-n", operatorSystemNamespace)
+	runKubectlDump("get", "catalogsources.operators.coreos.com", "-n", operatorSystemNamespace, "-o", "wide")
+	runKubectlDump("describe", "catalogsources.operators.coreos.com", "-n", operatorSystemNamespace)
+	runKubectlDump("get", "clusterserviceversions.operators.coreos.com", "-n", operatorSystemNamespace, "-o", "wide")
+	runKubectlDump("describe", "clusterserviceversions.operators.coreos.com", "-n", operatorSystemNamespace)
+	runKubectlDump("get", "operatorgroups.operators.coreos.com", "-n", operatorSystemNamespace, "-o", "wide")
+	runKubectlDump("describe", "operatorgroups.operators.coreos.com", "-n", operatorSystemNamespace)
 }
 
 func runKubectlDump(args ...string) {
@@ -413,4 +423,61 @@ func verifyAnnotation(t *testing.T, resourceType, resourceName, namespace, annot
 	}
 
 	t.Logf("✓ Annotation %s=%s verified on %s/%s", annotationKey, expectedValue, resourceType, resourceName)
+}
+
+func verifyOperatorDeploymentExists(t *testing.T, namespace string) {
+	t.Helper()
+
+	if !doesDeploymentExist(t, namespace, operatorDeploymentName) {
+		t.Fatalf("Operator deployment not found in namespace %s", namespace)
+	}
+
+	cmd := exec.Command("kubectl", "get", "deployment", operatorDeploymentName, "-n", namespace,
+		"-o", "jsonpath={.status.readyReplicas}")
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to check operator readiness in %s: %v", namespace, err)
+	}
+
+	readyReplicas := strings.TrimSpace(string(output))
+	if readyReplicas == "" || readyReplicas == "0" {
+		t.Fatalf("Operator deployment in %s has no ready replicas", namespace)
+	}
+
+	t.Logf("✓ Operator deployed and ready in %s (%s replicas)", namespace, readyReplicas)
+}
+
+func verifyOperatorNotInNamespace(t *testing.T, namespace string) {
+	t.Helper()
+
+	cmd := exec.Command("kubectl", "get", "namespace", namespace)
+	if err := cmd.Run(); err != nil {
+		t.Logf("✓ No operator in %s (namespace does not exist)", namespace)
+		return
+	}
+
+	if doesDeploymentExist(t, namespace, operatorDeploymentName) {
+		t.Fatalf("Operator deployment should not exist in namespace %s", namespace)
+	}
+
+	t.Logf("✓ No operator in %s", namespace)
+}
+
+func verifyOperatorVersion(t *testing.T, namespace, expectedTag string) {
+	t.Helper()
+
+	cmd := exec.Command("kubectl", "get", "deployment", operatorDeploymentName, "-n", namespace,
+		"-o", "jsonpath={.spec.template.spec.containers[0].image}")
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("Failed to get operator image in %s: %v", namespace, err)
+	}
+
+	image := strings.TrimSpace(string(output))
+	if !strings.HasSuffix(image, ":"+expectedTag) {
+		t.Fatalf("Operator image in %s doesn't match expected version.\n  Got:      %s\n  Expected: suffix :%s",
+			namespace, image, expectedTag)
+	}
+
+	t.Logf("✓ Operator image in %s: %s", namespace, image)
 }
