@@ -442,6 +442,7 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, instance Operato
 
 	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
 	if current, _ := managerContainer["image"].(string); current != instance.OperatorImage() {
+		// Currently this should only happen in Konflux mode.
 		d.logger.Infof("Rewriting operator image to %s", instance.OperatorImage())
 		managerContainer["image"] = instance.OperatorImage()
 	}
