@@ -437,15 +437,15 @@ func verifyOperatorDeploymentExists(t *testing.T, namespace string) {
 		"-o", "jsonpath={.status.readyReplicas}")
 	output, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("Failed to check operator readiness in %s: %v", namespace, err)
+		t.Fatalf("Failed to check operator readiness in namespace %s: %v", namespace, err)
 	}
 
 	readyReplicas := strings.TrimSpace(string(output))
 	if readyReplicas == "" || readyReplicas == "0" {
-		t.Fatalf("Operator deployment in %s has no ready replicas", namespace)
+		t.Fatalf("Operator deployment in namespace %s has no ready replicas", namespace)
 	}
 
-	t.Logf("✓ Operator deployed and ready in %s (%s replicas)", namespace, readyReplicas)
+	t.Logf("✓ Operator deployed and ready in namespace %s (%s replicas)", namespace, readyReplicas)
 }
 
 func verifyOperatorNotInNamespace(t *testing.T, namespace string) {
@@ -461,7 +461,7 @@ func verifyOperatorNotInNamespace(t *testing.T, namespace string) {
 		t.Fatalf("Operator deployment should not exist in namespace %s", namespace)
 	}
 
-	t.Logf("✓ No operator in %s", namespace)
+	t.Logf("✓ No operator in namespace %s", namespace)
 }
 
 func verifyOperatorVersion(t *testing.T, namespace, expectedTag string) {
@@ -471,14 +471,11 @@ func verifyOperatorVersion(t *testing.T, namespace, expectedTag string) {
 		"-o", "jsonpath={.spec.template.spec.containers[0].image}")
 	output, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("Failed to get operator image in %s: %v", namespace, err)
+		t.Fatalf("Failed to get operator image in namespace %s: %v", namespace, err)
 	}
 
 	image := strings.TrimSpace(string(output))
-	if !strings.HasSuffix(image, ":"+expectedTag) {
-		t.Fatalf("Operator image in %s doesn't match expected version.\n  Got:      %s\n  Expected: suffix :%s",
-			namespace, image, expectedTag)
-	}
-
-	t.Logf("✓ Operator image in %s: %s", namespace, image)
+	actualTag := image[strings.LastIndex(image, ":")+1:]
+	assert.Equalf(t, expectedTag, actualTag, "Operator image tag mismatch in namespace %s", namespace)
+	t.Logf("✓ Operator image in namespace %s: %s", namespace, image)
 }
