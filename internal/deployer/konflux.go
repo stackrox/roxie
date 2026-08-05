@@ -20,12 +20,9 @@ var konfluxRelatedImages = map[string]string{
 }
 
 // populateKonfluxEnvVars adds RELATED_IMAGE_* entries to the instance's EnvVars
-// for its version. It is a no-op when Konflux images are not enabled for the instance.
-// Explicitly-provided env vars (e.g. from --operator-env) take precedence and are not overwritten.
+// for its version. Explicitly-provided env vars (e.g. from --operator-env) take
+// precedence and are not overwritten.
 func populateKonfluxEnvVars(instance *OperatorInstanceConfig) {
-	if !instance.KonfluxImagesEnabled() {
-		return
-	}
 	if instance.EnvVars == nil {
 		instance.EnvVars = make(map[string]string, len(konfluxRelatedImages))
 	}

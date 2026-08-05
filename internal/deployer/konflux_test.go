@@ -59,9 +59,3 @@ func TestPopulateKonfluxEnvVars_UserOverridePreserved(t *testing.T) {
 		assert.Equal(t, expected, instance.EnvVars[envName], "mismatch for %s", envName)
 	}
 }
-
-func TestPopulateKonfluxEnvVars_NoOpWhenDisabled(t *testing.T) {
-	instance := &OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: new(false)}
-	populateKonfluxEnvVars(instance)
-	assert.Nil(t, instance.EnvVars)
-}
