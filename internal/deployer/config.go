@@ -82,11 +82,13 @@ func NewRoxieConfig() RoxieConfig {
 // is used directly. In mixed-operator mode, CentralConfig.Operator and
 // SecuredClusterConfig.Operator override the top-level defaults.
 type OperatorInstanceConfig struct {
-	Version        imagetag.MainTag  `yaml:"version,omitempty"`
-	EnvVars        map[string]string `yaml:"envVars,omitempty"`
-	Namespace      string            `yaml:"namespace,omitempty"`
-	RoleNameSuffix string            `yaml:"roleNameSuffix,omitempty"`
-	KonfluxImages  *bool             `yaml:"konfluxImages,omitempty"`
+	Version       imagetag.MainTag  `yaml:"version,omitempty"`
+	EnvVars       map[string]string `yaml:"envVars,omitempty"`
+	KonfluxImages *bool             `yaml:"konfluxImages,omitempty"`
+
+	// The following fields are computed internally and are not user-configurable.
+	Namespace      string `yaml:"-"`
+	RoleNameSuffix string `yaml:"-"`
 }
 
 func (c *OperatorInstanceConfig) KonfluxImagesSet() bool {
