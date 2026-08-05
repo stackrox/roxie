@@ -17,6 +17,7 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
@@ -134,7 +135,21 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 	registerFlag(cmd, settings, "tag", "Main image tag to use for deployment (takes precedence over MAIN_IMAGE_TAG environment variable)",
 		withShortName("t"),
 		withApplyFn("version", func(config *deployer.Config, mainImageTag string) error {
-			config.Roxie.Version = mainImageTag
+			config.Roxie.Version = imagetag.MainTag(mainImageTag)
+			return nil
+		}),
+	)
+
+	registerFlag(cmd, settings, "central-tag", "Image tag for Central (overrides --tag for Central)",
+		withApplyFn("version", func(config *deployer.Config, tag string) error {
+			config.Central.Operator.Version = imagetag.MainTag(tag)
+			return nil
+		}),
+	)
+
+	registerFlag(cmd, settings, "secured-cluster-tag", "Image tag for SecuredCluster (overrides --tag for SecuredCluster)",
+		withApplyFn("version", func(config *deployer.Config, tag string) error {
+			config.SecuredCluster.Operator.Version = imagetag.MainTag(tag)
 			return nil
 		}),
 	)
@@ -236,7 +251,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("looking up main image tag: %w", err)
 		}
-		deploySettings.Roxie.Version = mainImageTag
+		deploySettings.Roxie.Version = imagetag.MainTag(mainImageTag)
 	}
 
 	if components.IncludesSensor() {
@@ -249,27 +264,8 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := deployValidate(components, &deploySettings); err != nil {
+	if err := deployValidate(log, components, &deploySettings); err != nil {
 		return err
-	}
-
-	if !deploySettings.Central.EarlyReadinessEnabled() || !deploySettings.SecuredCluster.EarlyReadinessEnabled() {
-		// Explanation on the versions involved here:
-		// Deploying StackRox begins with picking a "main image tag" -- this is a version identifier, which cannot be reliably parsed as a semver.
-		// But there is a derived version from that -- the operator version -- which can be parsed as a semver.
-		//
-		// The invocation of deploySettings.Operator.Configure() above in this function prepares the operator deployment config in the sense
-		// that top-level roxie configuration options are propagated to the concrete operator deployment configuration. This includes also
-		// storing of the derived operator version within the operator configuration.
-		//
-		// This is why we use the operator version here when checking version constraints.
-		hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(deploySettings.Operator.Version)
-		if err != nil {
-			return fmt.Errorf("checking version constraint on main image tag %s: %w", deploySettings.Roxie.Version, err)
-		}
-		if !hasSupport {
-			return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s", stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String())
-		}
 	}
 
 	d, err := deployer.New(log)
@@ -427,10 +423,6 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 		return fmt.Errorf("configuring operator configuration: %w", err)
 	}
 
-	if deploySettings.Roxie.KonfluxImagesEnabled() {
-		deployer.PopulateKonfluxEnvVars(deploySettings)
-	}
-
 	if components.IncludesCentral() {
 		if err := deploySettings.Central.ConfigureSpec(&deploySettings.Roxie); err != nil {
 			return fmt.Errorf("configuring Central spec: %w", err)
@@ -454,7 +446,7 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 	return nil
 }
 
-func deployValidate(components component.Component, deploySettings *deployer.Config) error {
+func deployValidate(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
 	if components.IncludesCentral() && os.Getenv("ROXIE_SHELL") != "" {
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
 	}
@@ -495,6 +487,39 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		}
 	}
 
+	if deploySettings.HasMixedVersions() {
+		log.Dimf("Mixed versions detected (configured via --central-tag / --secured-cluster-tag or central.version / securedCluster.version)")
+		if deploySettings.Operator.DeployViaOlmEnabled() {
+			return errors.New("mixed versions are not supported with OLM deployment mode")
+		}
+	}
+
+	if components.IncludesCentral() && !deploySettings.Central.EarlyReadinessEnabled() {
+		if err := checkEarlyReadinessSupport("Central", deploySettings.CentralVersion()); err != nil {
+			return err
+		}
+	}
+	if components.IncludesSensor() && !deploySettings.SecuredCluster.EarlyReadinessEnabled() {
+		if err := checkEarlyReadinessSupport("SecuredCluster", deploySettings.SecuredClusterVersion()); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func checkEarlyReadinessSupport(componentName string, tag imagetag.MainTag) error {
+	// The main image tag is not reliably parseable as semver, so we derive the operator
+	// tag (via ToOperator) for the constraint check.
+	version := tag.ToOperatorTag().String()
+	hasSupport, err := stackroxversions.SupportsAdditionalPrinterColumns(version)
+	if err != nil {
+		return fmt.Errorf("checking version constraint on %s operator version %s: %w", componentName, version, err)
+	}
+	if !hasSupport {
+		return fmt.Errorf("--early-readiness=false can only be used for StackRox versions satisfying %s (%s version %s does not)",
+			stackroxversions.SupportsAdditionalPrinterColumnsConstraint.String(), componentName, version)
+	}
 	return nil
 }
 

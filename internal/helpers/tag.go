@@ -71,14 +71,3 @@ func LookupLatestTag(ctx context.Context, log *logger.Logger) (string, error) {
 
 	return "", fmt.Errorf("failed to verify main image existence for tags %s", strings.Join(tags, ", "))
 }
-
-func ConvertMainTagToOperatorTag(mainTag string) string {
-	if mainTag == "" {
-		return ""
-	}
-
-	operatorTag := strings.ReplaceAll(mainTag, "-dirty", "")
-	operatorTag = strings.ReplaceAll(operatorTag, ".x", ".0")
-
-	return operatorTag
-}
