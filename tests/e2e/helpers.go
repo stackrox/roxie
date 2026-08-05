@@ -429,21 +429,17 @@ func verifyAnnotation(t *testing.T, resourceType, resourceName, namespace, annot
 func verifyOperatorDeploymentExists(t *testing.T, namespace string) {
 	t.Helper()
 
-	if !doesDeploymentExist(t, namespace, operatorDeploymentName) {
-		t.Fatalf("Operator deployment not found in namespace %s", namespace)
-	}
+	require.Truef(t, doesDeploymentExist(t, namespace, operatorDeploymentName),
+		"Operator deployment not found in namespace %s", namespace)
 
 	cmd := exec.Command("kubectl", "get", "deployment", operatorDeploymentName, "-n", namespace,
 		"-o", "jsonpath={.status.readyReplicas}")
 	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("Failed to check operator readiness in namespace %s: %v", namespace, err)
-	}
+	require.NoErrorf(t, err, "Failed to check operator readiness in namespace %s", namespace)
 
 	readyReplicas := strings.TrimSpace(string(output))
-	if readyReplicas == "" || readyReplicas == "0" {
-		t.Fatalf("Operator deployment in namespace %s has no ready replicas", namespace)
-	}
+	require.Truef(t, readyReplicas != "" && readyReplicas != "0",
+		"Operator deployment in namespace %s has no ready replicas", namespace)
 
 	t.Logf("✓ Operator deployed and ready in namespace %s (%s replicas)", namespace, readyReplicas)
 }
@@ -457,9 +453,8 @@ func verifyOperatorNotInNamespace(t *testing.T, namespace string) {
 		return
 	}
 
-	if doesDeploymentExist(t, namespace, operatorDeploymentName) {
-		t.Fatalf("Operator deployment should not exist in namespace %s", namespace)
-	}
+	require.Falsef(t, doesDeploymentExist(t, namespace, operatorDeploymentName),
+		"Operator deployment should not exist in namespace %s", namespace)
 
 	t.Logf("✓ No operator in namespace %s", namespace)
 }
@@ -470,9 +465,7 @@ func verifyOperatorVersion(t *testing.T, namespace, expectedTag string) {
 	cmd := exec.Command("kubectl", "get", "deployment", operatorDeploymentName, "-n", namespace,
 		"-o", "jsonpath={.spec.template.spec.containers[0].image}")
 	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("Failed to get operator image in namespace %s: %v", namespace, err)
-	}
+	require.NoErrorf(t, err, "Failed to get operator image in namespace %s", namespace)
 
 	image := strings.TrimSpace(string(output))
 	actualTag := image[strings.LastIndex(image, ":")+1:]
