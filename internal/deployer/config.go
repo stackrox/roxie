@@ -99,18 +99,20 @@ func (c *OperatorInstanceConfig) KonfluxImagesEnabled() bool {
 
 // ClusterRoleName returns the ClusterRole name for this operator instance.
 func (c *OperatorInstanceConfig) ClusterRoleName() string {
+	const base = "rhacs-operator-manager-role"
 	if c.RoleNameSuffix == "" {
-		return "rhacs-operator-manager-role"
+		return base
 	}
-	return "rhacs-operator-manager-role-" + c.RoleNameSuffix
+	return base + "-" + c.RoleNameSuffix
 }
 
 // ClusterRoleBindingName returns the ClusterRoleBinding name for this operator instance.
 func (c *OperatorInstanceConfig) ClusterRoleBindingName() string {
+	const base = "rhacs-operator-manager-rolebinding"
 	if c.RoleNameSuffix == "" {
-		return "rhacs-operator-manager-rolebinding"
+		return base
 	}
-	return "rhacs-operator-manager-rolebinding-" + c.RoleNameSuffix
+	return base + "-" + c.RoleNameSuffix
 }
 
 // BundleImage returns the operator bundle image for this operator instance.
