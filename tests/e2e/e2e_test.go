@@ -74,13 +74,13 @@ func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
 	args := append([]string{roxieBinary, "deploy", "both", "--single-namespace", "--early-readiness", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout*2, nil, args...)
 
-	verifyCentralInstalled(t, "stackrox")
-	verifySecuredClusterInstalled(t, "stackrox")
+	verifyCentralInstalled(t, sharedNamespace)
+	verifySecuredClusterInstalled(t, sharedNamespace)
 
 	t.Log("=== Tearing down both components in single namespace ===")
 	args = []string{roxieBinary, "teardown", "--skip-user-config", "--single-namespace"}
 	runCommand(t, teardownTimeout, nil, args...)
 
-	verifyCentralNotInstalled(t, "stackrox")
-	verifySecuredClusterNotInstalled(t, "stackrox")
+	verifyCentralNotInstalled(t, sharedNamespace)
+	verifySecuredClusterNotInstalled(t, sharedNamespace)
 }

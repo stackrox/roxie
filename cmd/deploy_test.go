@@ -9,6 +9,7 @@ import (
 
 	"dario.cat/mergo"
 	"github.com/stackrox/roxie/internal/deployer"
+	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/paths"
 	"github.com/stackrox/roxie/internal/types"
@@ -46,14 +47,14 @@ func TestNewDeployCmd_Flags(t *testing.T) {
 			name: "tag short flag",
 			args: []string{"-t", "4.7.0"},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.Equal(t, "4.7.0", cfg.Roxie.Version, "Roxie.Version mismatch")
+				assert.Equal(t, imagetag.MainTag("4.7.0"), cfg.Roxie.Version, "Roxie.Version mismatch")
 			},
 		},
 		{
 			name: "tag long flag",
 			args: []string{"--tag", "4.7.0"},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.Equal(t, "4.7.0", cfg.Roxie.Version, "Roxie.Version mismatch")
+				assert.Equal(t, imagetag.MainTag("4.7.0"), cfg.Roxie.Version, "Roxie.Version mismatch")
 			},
 		},
 		{
@@ -136,7 +137,7 @@ func TestNewDeployCmd_Flags(t *testing.T) {
 			name: "multiple flags combined",
 			args: []string{"--tag", "4.7.0", "--exposure", "loadbalancer", "--early-readiness", "--resources", "small"},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.Equal(t, "4.7.0", cfg.Roxie.Version, "Roxie.Version mismatch")
+				assert.Equal(t, imagetag.MainTag("4.7.0"), cfg.Roxie.Version, "Roxie.Version mismatch")
 				require.NotNil(t, cfg.Central.Exposure, "Central.Exposure should be set")
 				assert.Equal(t, types.ExposureLoadBalancer, *cfg.Central.Exposure, "Central.Exposure mismatch")
 				assert.True(t, cfg.Central.EarlyReadinessEnabled(), "Central.EarlyReadiness mismatch")
@@ -181,7 +182,7 @@ securedCluster:
 `,
 			args: []string{"--config", configFilePath},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.Equal(t, "1.2.3", cfg.Roxie.Version, "Roxie.Version mismatch")
+				assert.Equal(t, imagetag.MainTag("1.2.3"), cfg.Roxie.Version, "Roxie.Version mismatch")
 				assert.True(t,
 					reflect.DeepEqual(cfg.SecuredCluster.Spec,
 						map[string]interface{}{
@@ -239,7 +240,7 @@ central:
 			name: "set expressions can be used",
 			args: []string{"--set", "roxie.version=0.99.1", "--set", "central.deployTimeout=4m", "--set", "securedCluster.spec.clusterName=foo"},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.Equal(t, "0.99.1", cfg.Roxie.Version, "version mismatch")
+				assert.Equal(t, imagetag.MainTag("0.99.1"), cfg.Roxie.Version, "version mismatch")
 				assert.Equal(t, 4*time.Minute, cfg.Central.DeployTimeout, "Central.DeployTimeout mismatch")
 				assert.Equal(t,
 					map[string]interface{}{

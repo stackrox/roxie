@@ -9,46 +9,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestKonfluxOperatorImage(t *testing.T) {
-	config := &Config{
-		Operator: OperatorConfig{Version: "4.9.2"},
-	}
+func TestOperatorImage_Konflux(t *testing.T) {
+	instance := OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: new(true)}
 	expected := fmt.Sprintf("%s/release-operator:4.9.2", constants.DefaultRegistry)
-	assert.Equal(t, expected, KonfluxOperatorImage(config))
+	assert.Equal(t, expected, instance.OperatorImage())
+}
+
+func TestOperatorImage_NonKonflux(t *testing.T) {
+	instance := OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: new(false)}
+	expected := fmt.Sprintf("%s/stackrox-operator:4.9.2", constants.DefaultRegistry)
+	assert.Equal(t, expected, instance.OperatorImage())
 }
 
 func TestPopulateKonfluxEnvVars_AllEntries(t *testing.T) {
-	config := &Config{
-		Operator: OperatorConfig{Version: "4.9.2"},
-	}
+	instance := &OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: new(true)}
+	populateKonfluxEnvVars(instance)
 
-	PopulateKonfluxEnvVars(config)
-
-	require.Len(t, config.Operator.EnvVars, len(konfluxRelatedImages))
+	require.Len(t, instance.EnvVars, len(konfluxRelatedImages))
 
 	for envName, imageSuffix := range konfluxRelatedImages {
 		expected := fmt.Sprintf("%s/release-%s:%s", constants.DefaultRegistry, imageSuffix, "4.9.2")
-		assert.Equal(t, expected, config.Operator.EnvVars[envName], "mismatch for %s", envName)
+		assert.Equal(t, expected, instance.EnvVars[envName], "mismatch for %s", envName)
 	}
 }
 
 func TestPopulateKonfluxEnvVars_UserOverridePreserved(t *testing.T) {
 	userValue := "quay.io/custom/my-main:latest"
-	config := &Config{
-		Operator: OperatorConfig{
-			Version: "4.9.2",
-			EnvVars: map[string]string{
-				"RELATED_IMAGE_MAIN": userValue,
-			},
+	instance := &OperatorInstanceConfig{
+		Version:       "4.9.2",
+		KonfluxImages: new(true),
+		EnvVars: map[string]string{
+			"RELATED_IMAGE_MAIN": userValue,
 		},
 	}
 
-	PopulateKonfluxEnvVars(config)
+	populateKonfluxEnvVars(instance)
 
-	assert.Equal(t, userValue, config.Operator.EnvVars["RELATED_IMAGE_MAIN"],
+	assert.Equal(t, userValue, instance.EnvVars["RELATED_IMAGE_MAIN"],
 		"user override should be preserved")
 
-	assert.Len(t, config.Operator.EnvVars, len(konfluxRelatedImages),
+	assert.Len(t, instance.EnvVars, len(konfluxRelatedImages),
 		"all other entries should be populated")
 
 	for envName, imageSuffix := range konfluxRelatedImages {
@@ -56,18 +56,6 @@ func TestPopulateKonfluxEnvVars_UserOverridePreserved(t *testing.T) {
 			continue
 		}
 		expected := fmt.Sprintf("%s/release-%s:%s", constants.DefaultRegistry, imageSuffix, "4.9.2")
-		assert.Equal(t, expected, config.Operator.EnvVars[envName], "mismatch for %s", envName)
+		assert.Equal(t, expected, instance.EnvVars[envName], "mismatch for %s", envName)
 	}
-}
-
-func TestPopulateKonfluxEnvVars_NilEnvVarsMap(t *testing.T) {
-	config := &Config{
-		Operator: OperatorConfig{Version: "4.9.2"},
-	}
-	assert.Nil(t, config.Operator.EnvVars)
-
-	PopulateKonfluxEnvVars(config)
-
-	require.NotNil(t, config.Operator.EnvVars)
-	assert.Len(t, config.Operator.EnvVars, len(konfluxRelatedImages))
 }

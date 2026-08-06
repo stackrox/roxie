@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/helpers"
+	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
 )
@@ -53,7 +55,7 @@ func (c *Config) DeepCopy() (*Config, error) {
 
 // RoxieConfig holds roxie-level settings such as version and feature flags.
 type RoxieConfig struct {
-	Version       string            `yaml:"version,omitempty"`
+	Version       imagetag.MainTag  `yaml:"version,omitempty"`
 	KonfluxImages *bool             `yaml:"konfluxImages,omitempty"`
 	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
 	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
@@ -75,12 +77,70 @@ func NewRoxieConfig() RoxieConfig {
 	}
 }
 
-// OperatorConfig controls how the ACS operator is deployed.
+// OperatorInstanceConfig describes how to deploy a single operator instance.
+// In the common single-operator mode, the top-level OperatorConfig (which embeds this)
+// is used directly. In mixed-operator mode, CentralConfig.Operator and
+// SecuredClusterConfig.Operator override the top-level defaults.
+type OperatorInstanceConfig struct {
+	Version       imagetag.MainTag  `yaml:"version,omitempty"`
+	EnvVars       map[string]string `yaml:"envVars,omitempty"`
+	KonfluxImages *bool             `yaml:"konfluxImages,omitempty"`
+
+	// The following fields are computed internally and are not user-configurable.
+	Namespace      string `yaml:"-"`
+	RoleNameSuffix string `yaml:"-"`
+}
+
+func (c *OperatorInstanceConfig) KonfluxImagesSet() bool {
+	return c.KonfluxImages != nil
+}
+
+func (c *OperatorInstanceConfig) KonfluxImagesEnabled() bool {
+	return c.KonfluxImages != nil && *c.KonfluxImages
+}
+
+// ClusterRoleName returns the ClusterRole name for this operator instance.
+func (c *OperatorInstanceConfig) ClusterRoleName() string {
+	const base = "rhacs-operator-manager-role"
+	if c.RoleNameSuffix == "" {
+		return base
+	}
+	return base + "-" + c.RoleNameSuffix
+}
+
+// ClusterRoleBindingName returns the ClusterRoleBinding name for this operator instance.
+func (c *OperatorInstanceConfig) ClusterRoleBindingName() string {
+	const base = "rhacs-operator-manager-rolebinding"
+	if c.RoleNameSuffix == "" {
+		return base
+	}
+	return base + "-" + c.RoleNameSuffix
+}
+
+// BundleImage returns the operator bundle image for this operator instance.
+func (c *OperatorInstanceConfig) BundleImage() string {
+	imageRegistry := constants.DefaultRegistry
+	operatorTag := c.Version.ToOperatorTag()
+	if c.KonfluxImagesEnabled() {
+		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, operatorTag)
+	}
+	return fmt.Sprintf("%s/stackrox-operator-bundle:v%s", imageRegistry, operatorTag)
+}
+
+func (c *OperatorInstanceConfig) OperatorImage() string {
+	imageRegistry := constants.DefaultRegistry
+	operatorTag := c.Version.ToOperatorTag()
+	if c.KonfluxImagesEnabled() {
+		return fmt.Sprintf("%s/release-operator:%s", imageRegistry, operatorTag)
+	}
+	return fmt.Sprintf("%s/stackrox-operator:%s", imageRegistry, operatorTag)
+}
+
+// OperatorConfig is the top-level operator configuration used in single-operator mode.
 type OperatorConfig struct {
-	SkipDeployment *bool             `yaml:"skipDeployment,omitempty"`
-	DeployViaOlm   *bool             `yaml:"deployViaOlm,omitempty"`
-	Version        string            `yaml:"version,omitempty"`
-	EnvVars        map[string]string `yaml:"envVars,omitempty"`
+	SkipDeployment         *bool `yaml:"skipDeployment,omitempty"`
+	DeployViaOlm           *bool `yaml:"deployViaOlm,omitempty"`
+	OperatorInstanceConfig `yaml:",inline"`
 }
 
 func (c *OperatorConfig) SkipDeploymentSet() bool {
@@ -101,7 +161,10 @@ func (c *OperatorConfig) DeployViaOlmEnabled() bool {
 
 // Configure derives the operator version from the roxie configuration.
 func (c *OperatorConfig) Configure(roxieConfig *RoxieConfig) error {
-	c.Version = helpers.ConvertMainTagToOperatorTag(roxieConfig.Version)
+	c.Version = roxieConfig.Version
+	if c.KonfluxImages == nil {
+		c.KonfluxImages = roxieConfig.KonfluxImages
+	}
 	return nil
 }
 
@@ -115,6 +178,8 @@ type WaitConfig struct {
 
 // CentralConfig holds deployment settings for the Central component.
 type CentralConfig struct {
+	// Operator allows per-component operator overrides; only used in dual-operator mode.
+	Operator            OperatorInstanceConfig `yaml:"operator,omitempty"`
 	Namespace           string                 `yaml:"namespace,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
 	PauseReconciliation *bool                  `yaml:"pauseReconciliation,omitempty"`
@@ -265,6 +330,8 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 
 // SecuredClusterConfig holds deployment settings for the SecuredCluster component.
 type SecuredClusterConfig struct {
+	// Operator allows per-component operator overrides; only used in dual-operator mode.
+	Operator            OperatorInstanceConfig `yaml:"operator,omitempty"`
 	Namespace           string                 `yaml:"namespace,omitempty"`
 	ResourceProfile     types.ResourceProfile  `yaml:"resourceProfile,omitempty"`
 	PauseReconciliation *bool                  `yaml:"pauseReconciliation,omitempty"`
