@@ -19,27 +19,23 @@ var konfluxRelatedImages = map[string]string{
 	"RELATED_IMAGE_FACT":            "fact",
 }
 
-// KonfluxOperatorImage returns the Konflux-built operator image reference.
-func KonfluxOperatorImage(config *Config) string {
-	return fmt.Sprintf("%s/release-operator:%s", constants.DefaultRegistry, config.Operator.Version)
-}
-
-// PopulateKonfluxEnvVars populates config.Operator.EnvVars with RELATED_IMAGE_*
-// entries for Konflux image rewriting. Explicitly-provided env vars (e.g. from
-// --operator-env) take precedence and are not overwritten.
-func PopulateKonfluxEnvVars(config *Config) {
-	if config.Operator.EnvVars == nil {
-		config.Operator.EnvVars = make(map[string]string)
+// populateKonfluxEnvVars adds RELATED_IMAGE_* entries to the instance's EnvVars
+// for its version. Explicitly-provided env vars (e.g. from --operator-env) take
+// precedence and are not overwritten.
+func populateKonfluxEnvVars(instance *OperatorInstanceConfig) {
+	if instance.EnvVars == nil {
+		instance.EnvVars = make(map[string]string, len(konfluxRelatedImages))
 	}
+	operatorTag := instance.Version.ToOperatorTag()
 	for envName, imageSuffix := range konfluxRelatedImages {
-		if _, exists := config.Operator.EnvVars[envName]; exists {
+		if _, exists := instance.EnvVars[envName]; exists {
 			continue
 		}
-		config.Operator.EnvVars[envName] = fmt.Sprintf(
+		instance.EnvVars[envName] = fmt.Sprintf(
 			"%s/release-%s:%s",
 			constants.DefaultRegistry,
 			imageSuffix,
-			config.Operator.Version, // Konflux built images use the "operator tag".
+			operatorTag, // Konflux built images use the "operator tag"
 		)
 	}
 }

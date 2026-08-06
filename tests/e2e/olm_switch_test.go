@@ -17,7 +17,7 @@ import (
 func verifyOperatorMode(t *testing.T, expectOLM bool) {
 	t.Helper()
 
-	operatorNamespace := "rhacs-operator-system"
+	operatorNamespace := operatorSystemNamespace
 	subscriptionName := "stackrox-operator-subscription"
 
 	// Check for OLM Subscription (OLM-specific resource)
@@ -33,34 +33,6 @@ func verifyOperatorMode(t *testing.T, expectOLM bool) {
 	}
 
 	t.Logf("✓ Operator is deployed in expected mode (OLM: %v)", expectOLM)
-}
-
-// verifyOperatorDeploymentExists checks if the operator deployment exists
-func verifyOperatorDeploymentExists(t *testing.T) {
-	t.Helper()
-
-	operatorNamespace := "rhacs-operator-system"
-	deploymentName := "rhacs-operator-controller-manager"
-
-	cmd := exec.Command("kubectl", "get", "deployment", deploymentName, "-n", operatorNamespace)
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Operator deployment not found: %v", err)
-	}
-
-	// Also check if deployment is ready
-	cmd = exec.Command("kubectl", "get", "deployment", deploymentName, "-n", operatorNamespace,
-		"-o", "jsonpath={.status.readyReplicas}")
-	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("Failed to check operator deployment readiness: %v", err)
-	}
-
-	readyReplicas := strings.TrimSpace(string(output))
-	if readyReplicas == "" || readyReplicas == "0" {
-		t.Fatalf("Operator deployment exists but has no ready replicas")
-	}
-
-	t.Logf("✓ Operator deployment exists and is ready (%s replicas)", readyReplicas)
 }
 
 // TestOLMToNonOLMSwitch tests switching from OLM operator to non-OLM operator
@@ -87,10 +59,10 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 	// Verify operator is in OLM mode
 	t.Log("Verifying operator is in OLM mode")
 	verifyOperatorMode(t, true)
-	verifyOperatorDeploymentExists(t)
+	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
 
 	// Verify central namespace exists
-	verifyNamespaceExists(t, "acs-central")
+	verifyNamespaceExists(t, centralNamespace)
 
 	// Step 2: Deploy central again without OLM (should switch modes)
 	t.Log("=== Step 2: Redeploy central without OLM (triggering mode switch) ===")
@@ -100,17 +72,17 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 	// Verify operator switched to non-OLM mode
 	t.Log("Verifying operator switched to non-OLM mode")
 	verifyOperatorMode(t, false)
-	verifyOperatorDeploymentExists(t)
+	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
 
 	// Verify central namespace still exists
-	verifyNamespaceExists(t, "acs-central")
+	verifyNamespaceExists(t, centralNamespace)
 
 	// Cleanup
 	t.Log("=== Cleaning up ===")
 	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	verifyCentralNotInstalled(t, "acs-central")
+	verifyCentralNotInstalled(t, centralNamespace)
 }
 
 // TestNonOLMToOLMSwitch tests switching from non-OLM operator to OLM operator
@@ -137,10 +109,10 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 	// Verify operator is in non-OLM mode
 	t.Log("Verifying operator is in non-OLM mode")
 	verifyOperatorMode(t, false)
-	verifyOperatorDeploymentExists(t)
+	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
 
 	// Verify central namespace exists
-	verifyNamespaceExists(t, "acs-central")
+	verifyNamespaceExists(t, centralNamespace)
 
 	// Step 2: Deploy central again with OLM (should switch modes)
 	t.Log("=== Step 2: Redeploy central with OLM (triggering mode switch) ===")
@@ -150,17 +122,17 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 	// Verify operator switched to OLM mode
 	t.Log("Verifying operator switched to OLM mode")
 	verifyOperatorMode(t, true)
-	verifyOperatorDeploymentExists(t)
+	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
 
 	// Verify central namespace still exists
-	verifyNamespaceExists(t, "acs-central")
+	verifyNamespaceExists(t, centralNamespace)
 
 	// Cleanup
 	t.Log("=== Cleaning up ===")
 	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	verifyCentralNotInstalled(t, "acs-central")
+	verifyCentralNotInstalled(t, centralNamespace)
 }
 
 // TestOLMOperatorVersionUpgrade tests that OLM operator version mismatches trigger teardown and redeploy
@@ -191,11 +163,11 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	// Verify operator is in OLM mode
 	t.Log("Verifying initial OLM operator deployment")
 	verifyOperatorMode(t, true)
-	verifyOperatorDeploymentExists(t)
+	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
 
 	// Get the current operator version
-	operatorNamespace := "rhacs-operator-system"
-	deploymentName := "rhacs-operator-controller-manager"
+	operatorNamespace := operatorSystemNamespace
+	deploymentName := operatorDeploymentName
 	cmd := exec.Command("kubectl", "get", "deployment", deploymentName, "-n", operatorNamespace,
 		"-o", "jsonpath={.spec.template.spec.containers[0].image}")
 	output, err := cmd.Output()
@@ -213,7 +185,7 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	// Verify operator is still in OLM mode and deployment exists
 	t.Log("Verifying operator is still deployed correctly")
 	verifyOperatorMode(t, true)
-	verifyOperatorDeploymentExists(t)
+	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
 
 	// Note: In a real version upgrade test, we would set a different MAIN_IMAGE_TAG
 	// and verify that the operator was torn down and redeployed with the new version.
@@ -224,7 +196,7 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	verifyCentralNotInstalled(t, "acs-central")
+	verifyCentralNotInstalled(t, centralNamespace)
 }
 
 // TestSecuredClusterWithOLMSwitch tests that secured-cluster deployment also respects OLM mode switches
@@ -249,7 +221,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 	runCommand(t, deployTimeout, nil, args...)
 
 	verifyOperatorMode(t, true)
-	verifyNamespaceExists(t, "acs-central")
+	verifyNamespaceExists(t, centralNamespace)
 
 	// Load envrc for secured-cluster
 	envrcEnv, err := loadEnvrcFile(envrcPath)
@@ -264,7 +236,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Verify operator is still in OLM mode
 	verifyOperatorMode(t, true)
-	verifyNamespaceExists(t, "acs-sensor")
+	verifyNamespaceExists(t, sensorNamespace)
 
 	// Step 3: Switch to non-OLM by redeploying secured-cluster without --olm
 	t.Log("=== Step 3: Redeploy secured-cluster without OLM (triggering mode switch) ===")
@@ -273,13 +245,13 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Verify operator switched to non-OLM mode
 	verifyOperatorMode(t, false)
-	verifyNamespaceExists(t, "acs-sensor")
+	verifyNamespaceExists(t, sensorNamespace)
 
 	// Cleanup
 	t.Log("=== Cleaning up ===")
 	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "both"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	verifyCentralNotInstalled(t, "acs-central")
-	verifySecuredClusterNotInstalled(t, "acs-sensor")
+	verifyCentralNotInstalled(t, centralNamespace)
+	verifySecuredClusterNotInstalled(t, sensorNamespace)
 }

@@ -34,12 +34,12 @@ func TestDeployBothSimple(t *testing.T) {
 
 	// Verify namespaces exist and have managed-by labels
 	t.Log("Verifying namespace: acs-central")
-	verifyNamespaceExists(t, "acs-central")
-	verifyNamespaceHasLabel(t, "acs-central", "app.kubernetes.io/managed-by", "roxie")
+	verifyNamespaceExists(t, centralNamespace)
+	verifyNamespaceHasLabel(t, centralNamespace, "app.kubernetes.io/managed-by", "roxie")
 
 	t.Log("Verifying namespace: acs-sensor")
-	verifyNamespaceExists(t, "acs-sensor")
-	verifyNamespaceHasLabel(t, "acs-sensor", "app.kubernetes.io/managed-by", "roxie")
+	verifyNamespaceExists(t, sensorNamespace)
+	verifyNamespaceHasLabel(t, sensorNamespace, "app.kubernetes.io/managed-by", "roxie")
 
 	// Brief pause before cleanup
 	time.Sleep(5 * time.Second)
@@ -50,8 +50,8 @@ func TestDeployBothSimple(t *testing.T) {
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
 	t.Log("Verifying components are removed")
-	verifyCentralNotInstalled(t, "acs-central")
-	verifySecuredClusterNotInstalled(t, "acs-sensor")
+	verifyCentralNotInstalled(t, centralNamespace)
+	verifySecuredClusterNotInstalled(t, sensorNamespace)
 }
 
 // TestDetachedPortForwarding tests the detached port-forwarding mode for central.

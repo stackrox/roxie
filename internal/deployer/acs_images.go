@@ -7,30 +7,23 @@ import (
 )
 
 func imagesForConfig(config Config) []string {
-	images := make([]string, 0)
-	prefix := ""
-	if config.Roxie.KonfluxImagesEnabled() {
-		prefix = "release-"
-	}
-
+	var images []string
 	imageRegistry := constants.DefaultRegistry
-	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "main", config.Roxie.Version))
-	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "central-db", config.Roxie.Version))
-	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4-db", config.Roxie.Version))
-	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4", config.Roxie.Version))
-	if !config.Roxie.KonfluxImagesEnabled() {
-		prefix = "stackrox-"
+
+	for _, instance := range config.OperatorInstances() {
+		prefix := ""
+		if instance.KonfluxImagesEnabled() {
+			prefix = "release-"
+		}
+		images = append(images,
+			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "main", instance.Version),
+			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "central-db", instance.Version),
+			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4-db", instance.Version),
+			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4", instance.Version),
+			instance.OperatorImage(),
+			instance.BundleImage(),
+		)
 	}
-	images = append(images, fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "operator", config.Operator.Version))
-	images = append(images, OperatorBundleImage(config))
 
 	return images
-}
-
-func OperatorBundleImage(config Config) string {
-	imageRegistry := constants.DefaultRegistry
-	if config.Roxie.KonfluxImagesEnabled() {
-		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, config.Operator.Version)
-	}
-	return fmt.Sprintf("%s/stackrox-operator-bundle:v%s", imageRegistry, config.Operator.Version)
 }

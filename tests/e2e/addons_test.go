@@ -50,12 +50,12 @@ central:
 		Verbose: true,
 	}
 
-	verifyCentralInstalled(t, "acs-central")
-	verifyHelmReleaseExists(t, helmCtx, "roxie-addon-test-chart", "acs-central")
+	verifyCentralInstalled(t, centralNamespace)
+	verifyHelmReleaseExists(t, helmCtx, "roxie-addon-test-chart", centralNamespace)
 
 	t.Log("=== Tearing down Central ===")
 	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	verifyHelmReleaseNotExists(t, helmCtx, "roxie-addon-test-chart", "acs-central")
+	verifyHelmReleaseNotExists(t, helmCtx, "roxie-addon-test-chart", centralNamespace)
 }
