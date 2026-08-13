@@ -222,6 +222,13 @@ func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInst
 	return bundleImage, nil
 }
 
+func needsOperatorPullSecrets(instance OperatorInstanceConfig, roxieConfig *RoxieConfig) bool {
+	if roxieConfig.UsesCustomRegistry() {
+		return roxieConfig.RegistryRequiresAuth
+	}
+	return instance.KonfluxImagesEnabled() && roxieConfig.ClusterType.NeedsDefaultRegistryPullSecrets()
+}
+
 // deployOperatorFromCSV deploys the operator from CSV into the given instance namespace.
 func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string, instance OperatorInstanceConfig) error {
 	csvFile := filepath.Join(bundleDir, "rhacs-operator.clusterserviceversion.yaml")
@@ -237,7 +244,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string, 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	d.useOperatorPullSecrets = instance.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsPullSecrets()
+	d.useOperatorPullSecrets = needsOperatorPullSecrets(instance, &d.config.Roxie)
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dimf("  • Namespace: %s", instance.Namespace)

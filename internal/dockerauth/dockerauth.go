@@ -210,6 +210,49 @@ func (d *DockerAuth) VerifyCredentials(ctx context.Context, username, password, 
 	return nil
 }
 
+// RegistryRequiresAuth reports whether registry requires authentication to pull
+// images. It makes a single, anonymous tags-list request against a well-known
+// repository path and checks whether it's rejected.
+func (d *DockerAuth) RegistryRequiresAuth(ctx context.Context, registry string) (bool, error) {
+	host, orgPath := splitRegistryHost(registry)
+
+	reg, err := name.NewRegistry(host)
+	if err != nil {
+		return false, fmt.Errorf("invalid registry host %q: %w", host, err)
+	}
+	repo := reg.Repo(orgPath, "main")
+
+	tr, err := transport.NewWithContext(ctx, reg, authn.Anonymous, http.DefaultTransport, []string{repo.Scope("pull")})
+	if err != nil {
+		var te *transport.Error
+		if errors.As(err, &te) && indicatesAuthRequired(te.StatusCode) {
+			return true, nil
+		}
+		return false, fmt.Errorf("negotiating anonymous access to %s: %w", host, err)
+	}
+
+	url := fmt.Sprintf("https://%s/v2/%s/tags/list?n=1", repo.RegistryStr(), repo.RepositoryStr())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false, fmt.Errorf("building request for %s: %w", host, err)
+	}
+
+	resp, err := (&http.Client{Transport: tr}).Do(req)
+	if err != nil {
+		return false, fmt.Errorf("checking whether %s requires authentication: %w", host, err)
+	}
+	defer resp.Body.Close()
+
+	return indicatesAuthRequired(resp.StatusCode), nil
+}
+
+// indicatesAuthRequired reports whether code suggests the anonymous request was
+// rejected for lack of authentication. Besides 401/403, this also treats 404 as
+// such, since some registries hide private repos behind it instead.
+func indicatesAuthRequired(code int) bool {
+	return code == http.StatusUnauthorized || code == http.StatusForbidden || code == http.StatusNotFound
+}
+
 // CreatePullSecretYAMLFromCredentials creates Kubernetes pull secret YAML from
 // verified credentials, scoped to the host of the given image registry
 func (d *DockerAuth) CreatePullSecretYAMLFromCredentials(creds Credentials, namespace, registry string) string {
