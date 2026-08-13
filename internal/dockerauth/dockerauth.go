@@ -9,15 +9,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/logger"
 )
 
-const (
-	acsImageRegistry    = "quay.io"
-	mainImageRepository = "rhacs-eng/main"
-)
+// splitRegistryHost splits a resolved image registry (e.g. "quay.io/stackrox-io")
+// into its host ("quay.io") and org/repo path ("stackrox-io").
+func splitRegistryHost(registry string) (host, path string) {
+	host, path, _ = strings.Cut(registry, "/")
+	return host, path
+}
 
 // DockerAuth handles Docker authentication and pull secret management.
 type DockerAuth struct {
@@ -58,7 +61,10 @@ func New(log *logger.Logger) *DockerAuth {
 
 // GetAndVerifyCredentials retrieves and verifies Docker credentials.
 // This should be called early to fail fast if credentials are invalid.
-func (d *DockerAuth) GetAndVerifyCredentials() (*Credentials, error) {
+func (d *DockerAuth) GetAndVerifyCredentials(registry string) (*Credentials, error) {
+	host, orgPath := splitRegistryHost(registry)
+	mainImageRepository := orgPath + "/main"
+
 	var username, password string
 
 	// Try environment variables first.
@@ -78,7 +84,7 @@ func (d *DockerAuth) GetAndVerifyCredentials() (*Credentials, error) {
 		d.logger.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain Docker credentials from config file: %s", dockerConfigPath)
 		if _, err := os.Stat(dockerConfigPath); err == nil {
 			var err error
-			username, password, err = d.getCredentialsFromDockerConfig(dockerConfigPath)
+			username, password, err = d.getCredentialsFromDockerConfig(dockerConfigPath, host)
 			if err != nil {
 				return nil, err
 			}
@@ -91,7 +97,7 @@ func (d *DockerAuth) GetAndVerifyCredentials() (*Credentials, error) {
 
 	// Verify credentials.
 	if !d.skipCredVerification {
-		if err := d.VerifyCredentials(username, password); err != nil {
+		if err := d.VerifyCredentials(username, password, host, mainImageRepository); err != nil {
 			return nil, fmt.Errorf("credentials are invalid: %w", err)
 		}
 	}
@@ -102,8 +108,9 @@ func (d *DockerAuth) GetAndVerifyCredentials() (*Credentials, error) {
 	}, nil
 }
 
-// getCredentialsFromDockerConfig extracts credentials from existing Docker config.
-func (d *DockerAuth) getCredentialsFromDockerConfig(configPath string) (string, string, error) {
+// getCredentialsFromDockerConfig extracts credentials from existing Docker config
+// for the given registry host.
+func (d *DockerAuth) getCredentialsFromDockerConfig(configPath, host string) (string, string, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read Docker config: %w", err)
@@ -114,8 +121,8 @@ func (d *DockerAuth) getCredentialsFromDockerConfig(configPath string) (string, 
 		return "", "", fmt.Errorf("failed to parse Docker config: %w", err)
 	}
 
-	// Check for existing auths for the ACS image registry.
-	if authEntry, ok := config.Auths[acsImageRegistry]; ok && authEntry.Auth != "" {
+	// Check for existing auths for the target registry host.
+	if authEntry, ok := config.Auths[host]; ok && authEntry.Auth != "" {
 		// Decode the base64 auth string to get username:password
 		decoded, err := base64.StdEncoding.DecodeString(authEntry.Auth)
 		if err != nil {
@@ -128,15 +135,15 @@ func (d *DockerAuth) getCredentialsFromDockerConfig(configPath string) (string, 
 		return string(parts[0]), string(parts[1]), nil
 	}
 
-	// Try credential helper specifically configured for the ACS image registry
-	helper := d.lookupCredentialHelperForRegistry(&config, acsImageRegistry)
+	// Try credential helper specifically configured for the target registry host.
+	helper := d.lookupCredentialHelperForRegistry(&config, host)
 	if helper == "" {
-		return "", "", fmt.Errorf("no Docker credentials found in config for ACS image registry (%s)", acsImageRegistry)
+		return "", "", fmt.Errorf("no Docker credentials found in config for image registry (%s)", host)
 	}
 
-	credData, err := d.getCredentialFromHelper(helper, acsImageRegistry)
+	credData, err := d.getCredentialFromHelper(helper, host)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get credentials from helper '%s' for '%s': %w", helper, acsImageRegistry, err)
+		return "", "", fmt.Errorf("failed to get credentials from helper '%s' for '%s': %w", helper, host, err)
 	}
 
 	return credData.Username, credData.Secret, nil
@@ -177,19 +184,19 @@ func (d *DockerAuth) getCredentialFromHelper(helperName, registry string) (*Cred
 	return &credData, nil
 }
 
-// VerifyCredentials attempts to verify that the credentials work by making a request to the registry.
-// This uses a read-only HTTP request.
+// VerifyCredentials attempts to verify that the credentials work by making a request to the
+// given registry host for the given repository. This uses a read-only HTTP request.
 // It mimics what the kubelet would do when pulling images.
-func (d *DockerAuth) VerifyCredentials(username, password string) error {
+func (d *DockerAuth) VerifyCredentials(username, password, host, repository string) error {
 	// Create auth header for Basic authentication
 	authString := fmt.Sprintf("%s:%s", username, password)
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
 
-	// Try to get a token from quay.io's OAuth2 endpoint for a specific repository
+	// Try to get a token from the registry's OAuth2 endpoint for a specific repository
 	// This mimics what kubelet does when pulling images - it requests a token with pull scope
 	// for the specific repository.
 	authURL := fmt.Sprintf("https://%s/v2/auth?service=%s&scope=repository:%s:pull",
-		acsImageRegistry, acsImageRegistry, mainImageRepository)
+		host, host, repository)
 
 	cmd := exec.Command("curl", "-s", "-f",
 		"-H", fmt.Sprintf("Authorization: Basic %s", encodedAuth),
@@ -197,34 +204,37 @@ func (d *DockerAuth) VerifyCredentials(username, password string) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		d.logger.Warningf("Failed to verify credentials for %s: %v", acsImageRegistry, err)
+		d.logger.Warningf("Failed to verify credentials for %s: %v", host, err)
 		d.logger.Dimf("Verification output: %s", string(output))
-		return fmt.Errorf("credential verification failed for %s: %w", acsImageRegistry, err)
+		return fmt.Errorf("credential verification failed for %s: %w", host, err)
 	}
 
 	// Check if we got a valid JSON response with a token
 	var tokenResponse map[string]interface{}
 	if err := json.Unmarshal(output, &tokenResponse); err != nil {
-		return fmt.Errorf("credential verification failed: invalid response from %s: %w", acsImageRegistry, err)
+		return fmt.Errorf("credential verification failed: invalid response from %s: %w", host, err)
 	}
 
 	if _, ok := tokenResponse["token"]; !ok {
-		return fmt.Errorf("credential verification failed: no token received from %s", acsImageRegistry)
+		return fmt.Errorf("credential verification failed: no token received from %s", host)
 	}
 
-	d.logger.Dimf("Successfully verified credentials for %s (repository: %s)", acsImageRegistry, mainImageRepository)
+	d.logger.Dimf("Successfully verified credentials for %s (repository: %s)", host, repository)
 	return nil
 }
 
-// CreatePullSecretYAMLFromCredentials creates Kubernetes pull secret YAML from verified credentials.
-func (d *DockerAuth) CreatePullSecretYAMLFromCredentials(creds Credentials, namespace string) string {
+// CreatePullSecretYAMLFromCredentials creates Kubernetes pull secret YAML from
+// verified credentials, scoped to the host of the given image registry
+func (d *DockerAuth) CreatePullSecretYAMLFromCredentials(creds Credentials, namespace, registry string) string {
+	host, _ := splitRegistryHost(registry)
+
 	// Create auth string
 	authString := fmt.Sprintf("%s:%s", creds.Username, creds.Password)
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
 
 	dockerConfig := DockerConfig{
 		Auths: map[string]AuthEntry{
-			acsImageRegistry: {Auth: encodedAuth},
+			host: {Auth: encodedAuth},
 		},
 	}
 

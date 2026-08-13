@@ -7,13 +7,16 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 
 	"dario.cat/mergo"
+	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stackrox/roxie/internal/clusterdefaults"
 	"github.com/stackrox/roxie/internal/component"
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
@@ -446,6 +449,21 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 	return nil
 }
 
+// validateImageRegistry checks that registry is a well-formed "host/repository-path" string, e.g. "quay.io/rhacs-eng".
+func validateImageRegistry(registry string) error {
+	host, repoPath, hasPath := strings.Cut(registry, "/")
+	if !hasPath || repoPath == "" {
+		return fmt.Errorf("roxie.imageRegistry must include a repository path (e.g. %s), got: %s", constants.DefaultRegistry, registry)
+	}
+	if _, err := name.NewRegistry(host); err != nil {
+		return fmt.Errorf("roxie.imageRegistry has an invalid registry host %q: %w", host, err)
+	}
+	if _, err := name.NewRepository(repoPath); err != nil {
+		return fmt.Errorf("roxie.imageRegistry has an invalid repository path %q: %w", repoPath, err)
+	}
+	return nil
+}
+
 func deployValidate(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
 	if components.IncludesCentral() && os.Getenv("ROXIE_SHELL") != "" {
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
@@ -481,9 +499,17 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 		return errors.New("skipping operator deployment while also requesting deploying via OLM at the same time does not make sense")
 	}
 
+	registry := deploySettings.Roxie.Registry()
+	if err := validateImageRegistry(registry); err != nil {
+		return err
+	}
+
 	if deploySettings.Roxie.KonfluxImagesEnabled() {
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
+		}
+		if registry != constants.DefaultRegistry {
+			return fmt.Errorf("using Konflux images with a custom image registry (%s) is not supported", registry)
 		}
 	}
 

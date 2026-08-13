@@ -12,13 +12,14 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/types"
-	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 var (
@@ -247,7 +248,8 @@ func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 	return d.configureCentralEndpoint(ctx)
 }
 
-// isOperatorVersionCorrect checks if the deployed operator matches the desired version.
+// isOperatorVersionCorrect checks if the deployed operator matches the desired
+// image, comparing the full reference (registry, repository, and tag).
 func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance OperatorInstanceConfig) bool {
 	currentImage, err := d.getDeployedOperatorImage(ctx, instance.Namespace)
 	if err != nil {
@@ -255,19 +257,11 @@ func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance Operat
 		return false
 	}
 
-	// Extract the tag from the current image
-	parts := strings.SplitN(currentImage, ":", 2)
-	if len(parts) < 2 {
-		d.logger.Warningf("Could not parse operator image tag from: %s", currentImage)
-		return false
-	}
-	currentTag := parts[1]
-
-	desiredTag := instance.Version.ToOperatorTag().String()
-	if currentTag != desiredTag {
-		d.logger.Info("Operator version mismatch detected:")
-		d.logger.Infof("  Current: %s", currentTag)
-		d.logger.Infof("  Desired: %s", desiredTag)
+	desiredImage := instance.OperatorImage(d.config.Roxie.Registry())
+	if currentImage != desiredImage {
+		d.logger.Info("Operator image mismatch detected:")
+		d.logger.Infof("  Current: %s", currentImage)
+		d.logger.Infof("  Desired: %s", desiredImage)
 		return false
 	}
 	return true
@@ -309,7 +303,7 @@ func (d *Deployer) ensurePullSecretExists(ctx context.Context, namespace string)
 		return errors.New("no pull secrets available to set up on the cluster")
 	}
 
-	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(*d.dockerCreds, namespace)
+	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(*d.dockerCreds, namespace, d.config.Roxie.Registry())
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: strings.NewReader(pullSecretYAML),

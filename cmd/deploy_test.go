@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"dario.cat/mergo"
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/logger"
@@ -310,6 +311,55 @@ func TestNewDeployCmd_SetRejectsSpec(t *testing.T) {
 			err = cmd.ParseFlags(tt.args)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "spec")
+		})
+	}
+}
+
+func TestValidateImageRegistry(t *testing.T) {
+	tests := []struct {
+		name          string
+		registry      string
+		expectError   bool
+		errorContains string
+	}{
+		{name: "default registry", registry: constants.DefaultRegistry},
+		{name: "valid host/path registry", registry: "quay.io/stackrox-io"},
+		{name: "registry host with port", registry: "localhost:5000/rhacs-eng"},
+		{
+			name:          "bare host with no path is rejected",
+			registry:      "justahost",
+			expectError:   true,
+			errorContains: "must include a repository path",
+		},
+		{
+			name:          "trailing slash with no path is rejected",
+			registry:      "quay.io/",
+			expectError:   true,
+			errorContains: "must include a repository path",
+		},
+		{
+			name:          "invalid registry host",
+			registry:      "quay io/rhacs-eng",
+			expectError:   true,
+			errorContains: "invalid registry host",
+		},
+		{
+			name:          "invalid repository path characters",
+			registry:      "quay.io/RHACS-ENG",
+			expectError:   true,
+			errorContains: "invalid repository path",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateImageRegistry(tt.registry)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorContains)
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }

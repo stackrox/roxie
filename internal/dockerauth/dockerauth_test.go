@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/logger"
 )
 
@@ -18,7 +19,7 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	da := New(log)
 	da.skipCredVerification = true // Skip verification in tests
 
-	creds, err := da.GetAndVerifyCredentials()
+	creds, err := da.GetAndVerifyCredentials(constants.DefaultRegistry)
 	if err != nil {
 		t.Fatalf("GetAndVerifyCredentials failed: %v", err)
 	}
@@ -31,7 +32,7 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	}
 
 	// Test creating YAML from credentials
-	yamlText := da.CreatePullSecretYAMLFromCredentials(*creds, "ns")
+	yamlText := da.CreatePullSecretYAMLFromCredentials(*creds, "ns", "registry.example.com/some-org")
 
 	// Verify YAML structure
 	if !strings.Contains(yamlText, "apiVersion: v1") {
@@ -72,8 +73,12 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 		t.Fatalf("Decoded data is not valid JSON: %v", err)
 	}
 
-	if _, ok := data["auths"]; !ok {
-		t.Error("Decoded JSON should contain 'auths' key")
+	auths, ok := data["auths"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Decoded JSON should contain 'auths' key")
+	}
+	if _, ok := auths["registry.example.com"]; !ok {
+		t.Errorf("Expected auths to be keyed by the registry host 'registry.example.com', got %v", auths)
 	}
 }
 
@@ -89,8 +94,33 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	da := New(log)
 	da.skipCredVerification = true // Skip verification in tests
 
-	_, err := da.GetAndVerifyCredentials()
+	_, err := da.GetAndVerifyCredentials(constants.DefaultRegistry)
 	if err == nil {
 		t.Error("Expected error when no credentials are available")
+	}
+}
+func TestSplitRegistryHost(t *testing.T) {
+	tests := []struct {
+		name         string
+		registry     string
+		expectedHost string
+		expectedPath string
+	}{
+		{"default registry", constants.DefaultRegistry, "quay.io", "rhacs-eng"},
+		{"quay.io with org", "quay.io/stackrox-io", "quay.io", "stackrox-io"},
+		{"registry with port and nested path", "registry.io:5000/org/suborg", "registry.io:5000", "org/suborg"},
+		{"just hostname", "justahost", "justahost", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host, path := splitRegistryHost(tt.registry)
+			if host != tt.expectedHost {
+				t.Errorf("splitRegistryHost(%q): expected host %q, got %q", tt.registry, tt.expectedHost, host)
+			}
+			if path != tt.expectedPath {
+				t.Errorf("splitRegistryHost(%q): expected path %q, got %q", tt.registry, tt.expectedPath, path)
+			}
+		})
 	}
 }

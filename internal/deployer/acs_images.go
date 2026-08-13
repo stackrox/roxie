@@ -2,13 +2,11 @@ package deployer
 
 import (
 	"fmt"
-
-	"github.com/stackrox/roxie/internal/constants"
 )
 
 func imagesForConfig(config Config) []string {
 	var images []string
-	imageRegistry := constants.DefaultRegistry
+	imageRegistry := config.Roxie.Registry()
 
 	for _, instance := range config.OperatorInstances() {
 		prefix := ""
@@ -20,8 +18,8 @@ func imagesForConfig(config Config) []string {
 			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "central-db", instance.Version),
 			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4-db", instance.Version),
 			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4", instance.Version),
-			instance.OperatorImage(),
-			instance.BundleImage(),
+			instance.OperatorImage(imageRegistry),
+			instance.BundleImage(imageRegistry),
 		)
 	}
 
