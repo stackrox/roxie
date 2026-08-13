@@ -18,6 +18,7 @@ import (
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/deployer"
+	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagetag"
@@ -267,7 +268,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := deployValidate(log, components, &deploySettings); err != nil {
+	if err := deployValidate(ctx, log, components, &deploySettings); err != nil {
 		return err
 	}
 
@@ -464,13 +465,31 @@ func validateImageRegistry(registry string) error {
 	return nil
 }
 
-func deployValidate(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
+func deployValidate(ctx context.Context, log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
 	if components.IncludesCentral() && os.Getenv("ROXIE_SHELL") != "" {
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
 	}
 
 	if components.IncludesCentral() && !env.RunningInteractively && envrc == "" {
 		return errors.New("running without a controlling terminal requires --envrc to be set")
+	}
+
+	registry := deploySettings.Roxie.Registry()
+	if deploySettings.Roxie.UsesCustomRegistry() {
+		if err := validateImageRegistry(registry); err != nil {
+			return err
+		}
+
+		requiresAuth, err := dockerauth.New(log).RegistryRequiresAuth(ctx, registry)
+		if err != nil {
+			return fmt.Errorf("checking registry %s: %w", registry, err)
+		}
+		deploySettings.Roxie.RegistryRequiresAuth = requiresAuth
+		if requiresAuth {
+			log.Dimf("Registry %s requires authentication", registry)
+		} else {
+			log.Dimf("Registry %s is public, no authentication required", registry)
+		}
 	}
 
 	clusterType := deploySettings.Roxie.ClusterType
@@ -484,10 +503,9 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 			return errors.New("containerized mode requires Central exposure")
 		}
 
-		// On infra OpenShift we already get image pull secrets for Quay automatically.
-		if clusterType.NeedsPullSecrets() {
+		if deploySettings.Roxie.NeedsPullSecrets() {
 			if os.Getenv("REGISTRY_USERNAME") == "" || os.Getenv("REGISTRY_PASSWORD") == "" {
-				return fmt.Errorf("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables for clusters of type %s", clusterType)
+				return fmt.Errorf("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables for registry %s on clusters of type %s", registry, clusterType)
 			}
 			if _, err := os.Stat("/kubeconfig"); err != nil {
 				return fmt.Errorf("containerized mode requires /kubeconfig file: %w", err)
@@ -497,11 +515,6 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 
 	if deploySettings.Operator.SkipDeploymentEnabled() && deploySettings.Operator.DeployViaOlmEnabled() {
 		return errors.New("skipping operator deployment while also requesting deploying via OLM at the same time does not make sense")
-	}
-
-	registry := deploySettings.Roxie.Registry()
-	if err := validateImageRegistry(registry); err != nil {
-		return err
 	}
 
 	if deploySettings.Roxie.KonfluxImagesEnabled() {

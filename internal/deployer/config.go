@@ -62,6 +62,9 @@ type RoxieConfig struct {
 	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
 	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
 	HAProxy       HAProxyConfig     `yaml:"haProxy,omitempty"`
+
+	// RegistryRequiresAuth is computed internally and is not user-configurable.
+	RegistryRequiresAuth bool `yaml:"-"`
 }
 
 // Registry returns the resolved image registry, defaulting to
@@ -71,6 +74,21 @@ func (c *RoxieConfig) Registry() string {
 		return constants.DefaultRegistry
 	}
 	return strings.TrimSuffix(c.ImageRegistry, "/")
+}
+
+// UsesCustomRegistry returns whether a custom image registry was configured.
+func (c *RoxieConfig) UsesCustomRegistry() bool {
+	return c.Registry() != constants.DefaultRegistry
+}
+
+// NeedsPullSecrets returns whether roxie needs to set up image pull secrets itself.
+// For a custom registry this relies on RegistryRequiresAuth having already been
+// resolved during deploy validation (see cmd/deploy.go's deployValidate).
+func (c *RoxieConfig) NeedsPullSecrets() bool {
+	if c.UsesCustomRegistry() {
+		return c.RegistryRequiresAuth
+	}
+	return c.ClusterType.NeedsDefaultRegistryPullSecrets()
 }
 
 func (c *RoxieConfig) KonfluxImagesSet() bool {

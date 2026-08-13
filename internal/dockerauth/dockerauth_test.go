@@ -4,11 +4,16 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/logger"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
@@ -100,6 +105,90 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 		t.Error("Expected error when no credentials are available")
 	}
 }
+
+func TestRegistryRequiresAuth(t *testing.T) {
+	tests := []struct {
+		name             string
+		challengeAuth    bool // whether /v2/ demands a Bearer challenge at all
+		tokenStatus      int  // status the token endpoint returns, if challenged
+		tagsListStatus   int  // status the tags-list request returns
+		expectedRequires bool
+	}{
+		{
+			name:             "no auth mechanism: public",
+			challengeAuth:    false,
+			tagsListStatus:   http.StatusOK,
+			expectedRequires: false,
+		},
+		{
+			name:             "anonymous token granted, public repository",
+			challengeAuth:    true,
+			tokenStatus:      http.StatusOK,
+			tagsListStatus:   http.StatusOK,
+			expectedRequires: false,
+		},
+		{
+			name:             "anonymous token granted, private repository",
+			challengeAuth:    true,
+			tokenStatus:      http.StatusOK,
+			tagsListStatus:   http.StatusUnauthorized,
+			expectedRequires: true,
+		},
+		{
+			name: "anonymous token granted, private repository hidden behind 404",
+			// Some registries (e.g. GHCR) return 404 instead of 401/403 for private
+			// repositories, to avoid leaking their existence to unauthenticated
+			// callers.
+			challengeAuth:    true,
+			tokenStatus:      http.StatusOK,
+			tagsListStatus:   http.StatusNotFound,
+			expectedRequires: true,
+		},
+		{
+			name:             "anonymous token request itself rejected",
+			challengeAuth:    true,
+			tokenStatus:      http.StatusUnauthorized,
+			expectedRequires: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var registryAddr string
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
+				if !tt.challengeAuth {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="http://%s/token",service="test-registry"`, registryAddr))
+				w.WriteHeader(http.StatusUnauthorized)
+			})
+			mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+				if tt.tokenStatus != http.StatusOK {
+					w.WriteHeader(tt.tokenStatus)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"token":"fake-anonymous-token"}`))
+			})
+			mux.HandleFunc("/v2/some-org/main/tags/list", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.tagsListStatus)
+			})
+
+			server := httptest.NewServer(mux)
+			defer server.Close()
+			registryAddr = strings.TrimPrefix(server.URL, "http://")
+
+			da := &DockerAuth{logger: logger.New()}
+			requiresAuth, err := da.RegistryRequiresAuth(context.Background(), registryAddr+"/some-org")
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedRequires, requiresAuth)
+		})
+	}
+}
+
 func TestSplitRegistryHost(t *testing.T) {
 	tests := []struct {
 		name         string

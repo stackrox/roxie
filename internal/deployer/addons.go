@@ -31,7 +31,7 @@ func (d *Deployer) deployAddOns(ctx context.Context, addOns []AddOn) error {
 		return nil
 	}
 
-	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
+	needPullSecrets := d.config.Roxie.NeedsPullSecrets()
 	if err := d.prepareNamespace(ctx, d.config.Central.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}
