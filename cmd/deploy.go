@@ -480,10 +480,7 @@ func deployValidate(ctx context.Context, log *logger.Logger, components componen
 			return err
 		}
 
-		requiresAuth, err := dockerauth.New(log).RegistryRequiresAuth(ctx, registry)
-		if err != nil {
-			return fmt.Errorf("checking registry %s: %w", registry, err)
-		}
+		requiresAuth := dockerauth.New(log).RegistryRequiresAuth(ctx, registry)
 		deploySettings.Roxie.RegistryRequiresAuth = requiresAuth
 		if requiresAuth {
 			log.Dimf("Registry %s requires authentication", registry)
