@@ -305,7 +305,7 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component) e
 	// Prepare and verify credentials early to fail fast.
 	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
 	if needPullSecrets {
-		if err := d.prepareCredentials(); err != nil {
+		if err := d.prepareCredentials(ctx); err != nil {
 			return fmt.Errorf("failed to prepare credentials: %w", err)
 		}
 	}
@@ -354,11 +354,11 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component) e
 
 // prepareCredentials prepares and verifies Docker credentials early to allow failing fast.
 // The verified credentials are stored in the Deployer object for later use.
-func (d *Deployer) prepareCredentials() error {
+func (d *Deployer) prepareCredentials(ctx context.Context) error {
 	d.logger.Dimf("Preparing and verifying Docker credentials...")
 
 	// This will retrieve and verify credentials, returning error if invalid
-	creds, err := d.dockerAuth.GetAndVerifyCredentials(d.config.Roxie.Registry())
+	creds, err := d.dockerAuth.GetAndVerifyCredentials(ctx, d.config.Roxie.Registry())
 	if err != nil {
 		return err
 	}

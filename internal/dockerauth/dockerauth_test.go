@@ -1,6 +1,7 @@
 package dockerauth
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"strings"
@@ -19,7 +20,7 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	da := New(log)
 	da.skipCredVerification = true // Skip verification in tests
 
-	creds, err := da.GetAndVerifyCredentials(constants.DefaultRegistry)
+	creds, err := da.GetAndVerifyCredentials(context.Background(), constants.DefaultRegistry)
 	if err != nil {
 		t.Fatalf("GetAndVerifyCredentials failed: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	da := New(log)
 	da.skipCredVerification = true // Skip verification in tests
 
-	_, err := da.GetAndVerifyCredentials(constants.DefaultRegistry)
+	_, err := da.GetAndVerifyCredentials(context.Background(), constants.DefaultRegistry)
 	if err == nil {
 		t.Error("Expected error when no credentials are available")
 	}

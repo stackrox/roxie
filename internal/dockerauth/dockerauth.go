@@ -2,14 +2,20 @@ package dockerauth
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/logger"
@@ -61,7 +67,7 @@ func New(log *logger.Logger) *DockerAuth {
 
 // GetAndVerifyCredentials retrieves and verifies Docker credentials.
 // This should be called early to fail fast if credentials are invalid.
-func (d *DockerAuth) GetAndVerifyCredentials(registry string) (*Credentials, error) {
+func (d *DockerAuth) GetAndVerifyCredentials(ctx context.Context, registry string) (*Credentials, error) {
 	host, orgPath := splitRegistryHost(registry)
 	mainImageRepository := orgPath + "/main"
 
@@ -97,7 +103,7 @@ func (d *DockerAuth) GetAndVerifyCredentials(registry string) (*Credentials, err
 
 	// Verify credentials.
 	if !d.skipCredVerification {
-		if err := d.VerifyCredentials(username, password, host, mainImageRepository); err != nil {
+		if err := d.VerifyCredentials(ctx, username, password, host, mainImageRepository); err != nil {
 			return nil, fmt.Errorf("credentials are invalid: %w", err)
 		}
 	}
@@ -184,39 +190,20 @@ func (d *DockerAuth) getCredentialFromHelper(helperName, registry string) (*Cred
 	return &credData, nil
 }
 
-// VerifyCredentials attempts to verify that the credentials work by making a request to the
-// given registry host for the given repository. This uses a read-only HTTP request.
-// It mimics what the kubelet would do when pulling images.
-func (d *DockerAuth) VerifyCredentials(username, password, host, repository string) error {
-	// Create auth header for Basic authentication
-	authString := fmt.Sprintf("%s:%s", username, password)
-	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
-
-	// Try to get a token from the registry's OAuth2 endpoint for a specific repository
-	// This mimics what kubelet does when pulling images - it requests a token with pull scope
-	// for the specific repository.
-	authURL := fmt.Sprintf("https://%s/v2/auth?service=%s&scope=repository:%s:pull",
-		host, host, repository)
-
-	cmd := exec.Command("curl", "-s", "-f",
-		"-H", fmt.Sprintf("Authorization: Basic %s", encodedAuth),
-		authURL)
-
-	output, err := cmd.CombinedOutput()
+// VerifyCredentials verifies that the given credentials grant pull access to
+// the given repository on the given registry host. It works for registries
+// that follow the standard OCI Distribution v2 challenge/token protocol.
+func (d *DockerAuth) VerifyCredentials(ctx context.Context, username, password, host, repository string) error {
+	reg, err := name.NewRegistry(host)
 	if err != nil {
-		d.logger.Warningf("Failed to verify credentials for %s: %v", host, err)
-		d.logger.Dimf("Verification output: %s", string(output))
+		return fmt.Errorf("invalid registry host %q: %w", host, err)
+	}
+
+	auth := &authn.Basic{Username: username, Password: password}
+	scope := fmt.Sprintf("repository:%s:pull", repository)
+
+	if _, err := transport.NewWithContext(ctx, reg, auth, http.DefaultTransport, []string{scope}); err != nil {
 		return fmt.Errorf("credential verification failed for %s: %w", host, err)
-	}
-
-	// Check if we got a valid JSON response with a token
-	var tokenResponse map[string]interface{}
-	if err := json.Unmarshal(output, &tokenResponse); err != nil {
-		return fmt.Errorf("credential verification failed: invalid response from %s: %w", host, err)
-	}
-
-	if _, ok := tokenResponse["token"]; !ok {
-		return fmt.Errorf("credential verification failed: no token received from %s", host)
 	}
 
 	d.logger.Dimf("Successfully verified credentials for %s (repository: %s)", host, repository)
