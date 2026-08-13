@@ -228,7 +228,7 @@ func (d *DockerAuth) RegistryRequiresAuth(ctx context.Context, registry string) 
 		return true
 	}
 
-	url := fmt.Sprintf("https://%s/v2/%s/tags/list?n=1", repo.RegistryStr(), repo.RepositoryStr())
+	url := fmt.Sprintf("%s://%s/v2/%s/tags/list?n=1", repo.Scheme(), repo.RegistryStr(), repo.RepositoryStr())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return true
