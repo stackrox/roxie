@@ -358,7 +358,7 @@ func (d *Deployer) prepareCredentials() error {
 	d.logger.Dimf("Preparing and verifying Docker credentials...")
 
 	// This will retrieve and verify credentials, returning error if invalid
-	creds, err := d.dockerAuth.GetAndVerifyCredentials()
+	creds, err := d.dockerAuth.GetAndVerifyCredentials(d.config.Roxie.Registry())
 	if err != nil {
 		return err
 	}

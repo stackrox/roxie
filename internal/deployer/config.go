@@ -2,6 +2,7 @@ package deployer
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/stackrox/roxie/internal/constants"
@@ -56,10 +57,20 @@ func (c *Config) DeepCopy() (*Config, error) {
 // RoxieConfig holds roxie-level settings such as version and feature flags.
 type RoxieConfig struct {
 	Version       imagetag.MainTag  `yaml:"version,omitempty"`
+	ImageRegistry string            `yaml:"imageRegistry,omitempty"`
 	KonfluxImages *bool             `yaml:"konfluxImages,omitempty"`
 	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
 	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
 	HAProxy       HAProxyConfig     `yaml:"haProxy,omitempty"`
+}
+
+// Registry returns the resolved image registry, defaulting to
+// constants.DefaultRegistry when ImageRegistry is not set.
+func (c *RoxieConfig) Registry() string {
+	if c.ImageRegistry == "" {
+		return constants.DefaultRegistry
+	}
+	return strings.TrimSuffix(c.ImageRegistry, "/")
 }
 
 func (c *RoxieConfig) KonfluxImagesSet() bool {
@@ -118,8 +129,7 @@ func (c *OperatorInstanceConfig) ClusterRoleBindingName() string {
 }
 
 // BundleImage returns the operator bundle image for this operator instance.
-func (c *OperatorInstanceConfig) BundleImage() string {
-	imageRegistry := constants.DefaultRegistry
+func (c *OperatorInstanceConfig) BundleImage(imageRegistry string) string {
 	operatorTag := c.Version.ToOperatorTag()
 	if c.KonfluxImagesEnabled() {
 		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, operatorTag)
@@ -127,8 +137,8 @@ func (c *OperatorInstanceConfig) BundleImage() string {
 	return fmt.Sprintf("%s/stackrox-operator-bundle:v%s", imageRegistry, operatorTag)
 }
 
-func (c *OperatorInstanceConfig) OperatorImage() string {
-	imageRegistry := constants.DefaultRegistry
+// OperatorImage returns the operator image for this operator instance.
+func (c *OperatorInstanceConfig) OperatorImage(imageRegistry string) string {
 	operatorTag := c.Version.ToOperatorTag()
 	if c.KonfluxImagesEnabled() {
 		return fmt.Sprintf("%s/release-operator:%s", imageRegistry, operatorTag)
