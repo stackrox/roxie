@@ -13,7 +13,6 @@ import (
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
@@ -136,7 +135,7 @@ func TestRegistryRequiresAuth(t *testing.T) {
 		},
 		{
 			name: "anonymous token granted, private repository hidden behind 404",
-			// Some registries (e.g. GHCR) return 404 instead of 401/403 for private
+			// Some registries return 404 instead of 401/403 for private
 			// repositories, to avoid leaking their existence to unauthenticated
 			// callers.
 			challengeAuth:    true,
@@ -148,6 +147,16 @@ func TestRegistryRequiresAuth(t *testing.T) {
 			name:             "anonymous token request itself rejected",
 			challengeAuth:    true,
 			tokenStatus:      http.StatusUnauthorized,
+			expectedRequires: true,
+		},
+		{
+			name: "tags-list request fails with a server error",
+			// A transient 5xx doesn't tell us whether the registry is public or
+			// private, so this fails safe by reporting that auth is required,
+			// rather than treating it as confirmed "public".
+			challengeAuth:    true,
+			tokenStatus:      http.StatusOK,
+			tagsListStatus:   http.StatusInternalServerError,
 			expectedRequires: true,
 		},
 	}
@@ -182,8 +191,7 @@ func TestRegistryRequiresAuth(t *testing.T) {
 			registryAddr = strings.TrimPrefix(server.URL, "http://")
 
 			da := &DockerAuth{logger: logger.New()}
-			requiresAuth, err := da.RegistryRequiresAuth(context.Background(), registryAddr+"/some-org")
-			require.NoError(t, err)
+			requiresAuth := da.RegistryRequiresAuth(context.Background(), registryAddr+"/some-org")
 			assert.Equal(t, tt.expectedRequires, requiresAuth)
 		})
 	}
