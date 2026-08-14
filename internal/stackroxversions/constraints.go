@@ -9,7 +9,7 @@ import (
 
 var (
 	SupportsAdditionalPrinterColumnsConstraint = func() *semver.Constraints {
-		constraint, err := semver.NewConstraint(">= 4.9.0")
+		constraint, err := semver.NewConstraint(">= 4.10.0")
 		if err != nil {
 			panic("invalid semver constraint")
 		}
@@ -18,7 +18,7 @@ var (
 )
 
 // SupportsAdditionalPrinterColumns checks if the provided main image tag supports
-// the additional printer columns (i.e., >= 4.9.0).
+// the additional printer columns (i.e., >= 4.10.0).
 func SupportsAdditionalPrinterColumns(version string) (bool, error) {
 	// We also need to support versions such as 4.11.0-937-gf0da38f1a.
 	version, _, _ = strings.Cut(version, "-")
