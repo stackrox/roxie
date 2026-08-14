@@ -14,7 +14,7 @@ jobs:
       INFRA_TOKEN: ${{ secrets.INFRA_CI_TOKEN }}
     steps:
       - name: Install infractl
-        uses: stackrox/actions/infra/install-infractl@v1.0.41
+        uses: stackrox/actions/infra/install-infractl@v1.0.42
 
       - name: Delete cluster
         run: |
