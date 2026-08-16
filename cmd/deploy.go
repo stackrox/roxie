@@ -18,7 +18,6 @@ import (
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/deployer"
-	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagetag"
@@ -268,7 +267,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := deployValidate(ctx, log, components, &deploySettings); err != nil {
+	if err := deployValidate(log, components, &deploySettings); err != nil {
 		return err
 	}
 
@@ -283,6 +282,14 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 	d.SetVerbose(verbose)
 	d.SetConfig(deploySettings)
+
+	d.ResolveRegistryAuth(ctx)
+
+	if d.NeedsPullSecrets() {
+		if err := validateContainerizedCredentials(deploySettings.Roxie.Registry(), deploySettings.Roxie.ClusterType); err != nil {
+			return err
+		}
+	}
 
 	if dryRun {
 		log.Info("Exiting because of enabled dry run mode.")
@@ -465,7 +472,20 @@ func validateImageRegistry(registry string) error {
 	return nil
 }
 
-func deployValidate(ctx context.Context, log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
+func validateContainerizedCredentials(registry string, clusterType types.ClusterType) error {
+	if !env.RunningInRoxieContainer {
+		return nil
+	}
+	if os.Getenv("REGISTRY_USERNAME") == "" || os.Getenv("REGISTRY_PASSWORD") == "" {
+		return fmt.Errorf("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables for registry %s on clusters of type %s", registry, clusterType)
+	}
+	if _, err := os.Stat("/kubeconfig"); err != nil {
+		return fmt.Errorf("containerized mode requires /kubeconfig file: %w", err)
+	}
+	return nil
+}
+
+func deployValidate(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
 	if components.IncludesCentral() && os.Getenv("ROXIE_SHELL") != "" {
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
 	}
@@ -479,17 +499,7 @@ func deployValidate(ctx context.Context, log *logger.Logger, components componen
 		if err := validateImageRegistry(registry); err != nil {
 			return err
 		}
-
-		requiresAuth := dockerauth.New(log).RegistryRequiresAuth(ctx, registry)
-		deploySettings.Roxie.RegistryRequiresAuth = requiresAuth
-		if requiresAuth {
-			log.Dimf("Registry %s requires authentication", registry)
-		} else {
-			log.Dimf("Registry %s is public, no authentication required", registry)
-		}
 	}
-
-	clusterType := deploySettings.Roxie.ClusterType
 
 	if env.RunningInRoxieContainer {
 		// For running containerized we have specific requirements.
@@ -498,15 +508,6 @@ func deployValidate(ctx context.Context, log *logger.Logger, components componen
 		}
 		if !deploySettings.Central.ExposureEnabled() {
 			return errors.New("containerized mode requires Central exposure")
-		}
-
-		if deploySettings.Roxie.NeedsPullSecrets() {
-			if os.Getenv("REGISTRY_USERNAME") == "" || os.Getenv("REGISTRY_PASSWORD") == "" {
-				return fmt.Errorf("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables for registry %s on clusters of type %s", registry, clusterType)
-			}
-			if _, err := os.Stat("/kubeconfig"); err != nil {
-				return fmt.Errorf("containerized mode requires /kubeconfig file: %w", err)
-			}
 		}
 	}
 
