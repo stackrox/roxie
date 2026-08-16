@@ -3,7 +3,6 @@
 package e2e
 
 import (
-	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -11,29 +10,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestDeployWithStackroxIORegistry verifies that roxie can deploy Central using
+// TestCentralDeployWithStackroxIORegistry verifies that roxie can deploy Central using
 // the public quay.io/stackrox-io registry instead of the default quay.io/rhacs-eng.
-func TestDeployWithStackroxIORegistry(t *testing.T) {
+func TestCentralDeployWithStackroxIORegistry(t *testing.T) {
 	dumpClusterStateOnFailure(t)
 
 	const stackroxIORegistry = "quay.io/stackrox-io"
-
-	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
-	require.NoError(t, err)
-	envrcPath := envrcFile.Name()
-	envrcFile.Close()
 
 	t.Log("=== Deploying central with quay.io/stackrox-io registry ===")
 	args := append([]string{
 		roxieBinary, "deploy", "--early-readiness", "central",
 		"--set", "roxie.imageRegistry=" + stackroxIORegistry,
-		"--envrc", envrcPath,
+		"--envrc", "/dev/null",
 	}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
-	verifyCentralInstalled(t, centralNamespace)
 	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
 	verifyOperatorImageRegistry(t, operatorSystemNamespace, stackroxIORegistry)
+	verifyCentralInstalled(t, centralNamespace)
 
 	t.Log("=== Cleaning up ===")
 	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
