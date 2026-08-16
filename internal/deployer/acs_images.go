@@ -6,7 +6,7 @@ import (
 
 func imagesForConfig(config Config) []string {
 	var images []string
-	imageRegistry := config.Roxie.Registry()
+	imageRegistry := config.Roxie.ImageRegistry
 
 	for _, instance := range config.OperatorInstances() {
 		prefix := ""
