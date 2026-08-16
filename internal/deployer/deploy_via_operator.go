@@ -257,7 +257,7 @@ func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance Operat
 		return false
 	}
 
-	desiredImage := instance.OperatorImage(d.config.Roxie.Registry())
+	desiredImage := instance.OperatorImage(d.config.Roxie.ImageRegistry)
 	if currentImage != desiredImage {
 		d.logger.Info("Operator image mismatch detected:")
 		d.logger.Infof("  Current: %s", currentImage)
@@ -303,7 +303,7 @@ func (d *Deployer) ensurePullSecretExists(ctx context.Context, namespace string)
 		return errors.New("no pull secrets available to set up on the cluster")
 	}
 
-	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(*d.dockerCreds, namespace, d.config.Roxie.Registry())
+	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(*d.dockerCreds, namespace, d.config.Roxie.ImageRegistry)
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: strings.NewReader(pullSecretYAML),

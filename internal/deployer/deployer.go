@@ -301,15 +301,12 @@ func (d *Deployer) stopDetachedPortForward() {
 	d.portForwardPID = 0
 }
 
-// ResolveRegistryAuth probes whether the configured custom registry requires
-// authentication and records the result for NeedsPullSecrets to use. It's a
-// no-op for the default registry, which is already known to require auth.
-// Should be called once, after SetConfig and before Deploy.
+// ResolveRegistryAuth probes whether the configured custom registry is public or requires authentication.
 func (d *Deployer) ResolveRegistryAuth(ctx context.Context) {
 	if !d.config.Roxie.UsesCustomRegistry() {
 		return
 	}
-	registry := d.config.Roxie.Registry()
+	registry := d.config.Roxie.ImageRegistry
 	d.registryRequiresAuth = d.dockerAuth.RegistryRequiresAuth(ctx, registry)
 	if d.registryRequiresAuth {
 		d.logger.Dimf("Registry %s requires authentication", registry)
@@ -385,7 +382,7 @@ func (d *Deployer) prepareCredentials(ctx context.Context) error {
 	d.logger.Dimf("Preparing and verifying Docker credentials...")
 
 	// This will retrieve and verify credentials, returning error if invalid
-	creds, err := d.dockerAuth.GetAndVerifyCredentials(ctx, d.config.Roxie.Registry())
+	creds, err := d.dockerAuth.GetAndVerifyCredentials(ctx, d.config.Roxie.ImageRegistry)
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,6 @@ package deployer
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/stackrox/roxie/internal/constants"
@@ -64,18 +63,9 @@ type RoxieConfig struct {
 	HAProxy       HAProxyConfig     `yaml:"haProxy,omitempty"`
 }
 
-// Registry returns the resolved image registry, defaulting to
-// constants.DefaultRegistry when ImageRegistry is not set.
-func (c *RoxieConfig) Registry() string {
-	if c.ImageRegistry == "" {
-		return constants.DefaultRegistry
-	}
-	return strings.TrimSuffix(c.ImageRegistry, "/")
-}
-
 // UsesCustomRegistry returns whether a custom image registry was configured.
 func (c *RoxieConfig) UsesCustomRegistry() bool {
-	return c.Registry() != constants.DefaultRegistry
+	return c.ImageRegistry != constants.DefaultRegistry
 }
 
 func (c *RoxieConfig) KonfluxImagesSet() bool {
@@ -222,6 +212,7 @@ func NewCentralConfig() CentralConfig {
 func DefaultRoxieConfig() RoxieConfig {
 	cfg := NewRoxieConfig()
 	cfg.HAProxy.BindPort = defaultHAProxyBindPort
+	cfg.ImageRegistry = constants.DefaultRegistry
 	return cfg
 }
 

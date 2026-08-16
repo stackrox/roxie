@@ -38,7 +38,7 @@ var requiredCRDs = []string{
 // deployOperatorNonOLM deploys one RHACS operator instance without OLM.
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context, instance OperatorInstanceConfig) error {
 	d.logger.Infof("Operator tag: %s (namespace %s)", instance.Version, instance.Namespace)
-	bundleImage, err := d.resolveBundleImage(ctx, instance, d.config.Roxie.Registry())
+	bundleImage, err := d.resolveBundleImage(ctx, instance, d.config.Roxie.ImageRegistry)
 	if err != nil {
 		return fmt.Errorf("resolving operator bundle image: %w", err)
 	}
@@ -174,7 +174,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 
 	if len(missing) > 0 {
 		crdInstance := d.config.NewestOperatorInstance()
-		bundleImage, err := d.resolveBundleImage(ctx, crdInstance, d.config.Roxie.Registry())
+		bundleImage, err := d.resolveBundleImage(ctx, crdInstance, d.config.Roxie.ImageRegistry)
 		if err != nil {
 			return fmt.Errorf("resolving operator bundle image: %w", err)
 		}
@@ -482,7 +482,7 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, instance Operato
 		return fmt.Errorf("extracting manager container from operator pod spec: %w", err)
 	}
 
-	operatorImage := instance.OperatorImage(d.config.Roxie.Registry())
+	operatorImage := instance.OperatorImage(d.config.Roxie.ImageRegistry)
 	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
 	if current, _ := managerContainer["image"].(string); current != operatorImage {
 		d.logger.Infof("Rewriting operator image to %s", operatorImage)

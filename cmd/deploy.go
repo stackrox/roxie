@@ -286,7 +286,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	d.ResolveRegistryAuth(ctx)
 
 	if d.NeedsPullSecrets() {
-		if err := validateContainerizedCredentials(deploySettings.Roxie.Registry(), deploySettings.Roxie.ClusterType); err != nil {
+		if err := validateContainerizedCredentials(deploySettings.Roxie.ImageRegistry, deploySettings.Roxie.ClusterType); err != nil {
 			return err
 		}
 	}
@@ -494,7 +494,7 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 		return errors.New("running without a controlling terminal requires --envrc to be set")
 	}
 
-	registry := deploySettings.Roxie.Registry()
+	registry := deploySettings.Roxie.ImageRegistry
 	if deploySettings.Roxie.UsesCustomRegistry() {
 		if err := validateImageRegistry(registry); err != nil {
 			return err

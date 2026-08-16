@@ -3,6 +3,7 @@ package deployer
 import (
 	"testing"
 
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -18,19 +19,19 @@ func TestNeedsOperatorPullSecrets(t *testing.T) {
 		{
 			name:        "default registry, non-Konflux: no pull secrets",
 			instance:    OperatorInstanceConfig{},
-			roxieConfig: RoxieConfig{ClusterType: types.ClusterTypeGKE},
+			roxieConfig: RoxieConfig{ImageRegistry: constants.DefaultRegistry, ClusterType: types.ClusterTypeGKE},
 			expected:    false,
 		},
 		{
 			name:        "Konflux images: pull secrets needed",
 			instance:    OperatorInstanceConfig{KonfluxImages: new(true)},
-			roxieConfig: RoxieConfig{ClusterType: types.ClusterTypeGKE},
+			roxieConfig: RoxieConfig{ImageRegistry: constants.DefaultRegistry, ClusterType: types.ClusterTypeGKE},
 			expected:    true,
 		},
 		{
 			name:        "Konflux images on a cluster type that auto-configures default-registry credentials: no pull secrets",
 			instance:    OperatorInstanceConfig{KonfluxImages: new(true)},
-			roxieConfig: RoxieConfig{ClusterType: types.ClusterTypeInfraOpenShift4},
+			roxieConfig: RoxieConfig{ImageRegistry: constants.DefaultRegistry, ClusterType: types.ClusterTypeInfraOpenShift4},
 			expected:    false,
 		},
 		{
@@ -73,12 +74,12 @@ func TestDeployer_NeedsPullSecrets(t *testing.T) {
 	}{
 		{
 			name:     "default registry on a cluster type that auto-configures credentials",
-			roxie:    RoxieConfig{ClusterType: types.ClusterTypeInfraOpenShift4},
+			roxie:    RoxieConfig{ImageRegistry: constants.DefaultRegistry, ClusterType: types.ClusterTypeInfraOpenShift4},
 			expected: false,
 		},
 		{
 			name:     "default registry on a cluster type that doesn't auto-configure credentials",
-			roxie:    RoxieConfig{ClusterType: types.ClusterTypeGKE},
+			roxie:    RoxieConfig{ImageRegistry: constants.DefaultRegistry, ClusterType: types.ClusterTypeGKE},
 			expected: true,
 		},
 		{
