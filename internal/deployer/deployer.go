@@ -61,6 +61,7 @@ type Deployer struct {
 	portForward            *portforward.Manager
 	portForwardPID         int
 	useOperatorPullSecrets bool
+	registryRequiresAuth   bool
 }
 
 type ResourceToDelete struct {
@@ -300,10 +301,36 @@ func (d *Deployer) stopDetachedPortForward() {
 	d.portForwardPID = 0
 }
 
+// ResolveRegistryAuth probes whether the configured custom registry requires
+// authentication and records the result for NeedsPullSecrets to use. It's a
+// no-op for the default registry, which is already known to require auth.
+// Should be called once, after SetConfig and before Deploy.
+func (d *Deployer) ResolveRegistryAuth(ctx context.Context) {
+	if !d.config.Roxie.UsesCustomRegistry() {
+		return
+	}
+	registry := d.config.Roxie.Registry()
+	d.registryRequiresAuth = d.dockerAuth.RegistryRequiresAuth(ctx, registry)
+	if d.registryRequiresAuth {
+		d.logger.Dimf("Registry %s requires authentication", registry)
+	} else {
+		d.logger.Dimf("Registry %s is public, no authentication required", registry)
+	}
+}
+
+// NeedsPullSecrets reports whether roxie needs to set up image pull secrets itself.
+// For a custom registry this relies on ResolveRegistryAuth having already been called.
+func (d *Deployer) NeedsPullSecrets() bool {
+	if d.config.Roxie.UsesCustomRegistry() {
+		return d.registryRequiresAuth
+	}
+	return d.config.Roxie.ClusterType.NeedsDefaultRegistryPullSecrets()
+}
+
 // Deploy deploys the specified components to the cluster.
 func (d *Deployer) Deploy(ctx context.Context, components component.Component) error {
 	// Prepare and verify credentials early to fail fast.
-	needPullSecrets := d.config.Roxie.NeedsPullSecrets()
+	needPullSecrets := d.NeedsPullSecrets()
 	if needPullSecrets {
 		if err := d.prepareCredentials(ctx); err != nil {
 			return fmt.Errorf("failed to prepare credentials: %w", err)
