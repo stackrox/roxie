@@ -152,14 +152,13 @@ func TestRegistryRequiresAuth(t *testing.T) {
 			expectErr:        true,
 		},
 		{
-			name: "tags-list request fails with a server error",
-			// A transient 5xx doesn't tell us whether the registry is public or
-			// private, so this fails safe by reporting that auth is required,
-			// rather than treating it as confirmed "public".
+			name: "tags-list request returns an unexpected server error",
+			// A transient 5xx doesn't tell us whether the registry is public or private.
 			challengeAuth:    true,
 			tokenStatus:      http.StatusOK,
 			tagsListStatus:   http.StatusInternalServerError,
 			expectedRequires: true,
+			expectErr:        true,
 		},
 	}
 

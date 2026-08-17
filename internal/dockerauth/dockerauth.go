@@ -241,7 +241,13 @@ func (d *DockerAuth) RegistryRequiresAuth(ctx context.Context, registry string) 
 	}
 	defer resp.Body.Close()
 
-	return resp.StatusCode < 200 || resp.StatusCode >= 300, nil
+	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+		return false, nil
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound {
+		return true, nil
+	}
+	return true, fmt.Errorf("unexpected status %s from %s", resp.Status, host)
 }
 
 // CreatePullSecretYAMLFromCredentials creates Kubernetes pull secret YAML from
