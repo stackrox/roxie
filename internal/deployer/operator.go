@@ -226,7 +226,7 @@ func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInst
 // operator's own deployment namespace.
 func (d *Deployer) needsOperatorPullSecrets(instance OperatorInstanceConfig) bool {
 	if d.config.Roxie.UsesCustomRegistry() {
-		return d.registryRequiresAuth
+		return d.NeedsPullSecrets()
 	}
 	return instance.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsDefaultRegistryPullSecrets()
 }

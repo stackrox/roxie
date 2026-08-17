@@ -54,14 +54,14 @@ type Deployer struct {
 	config Config
 
 	// State
-	centralEndpoint        string
-	centralPassword        string
-	roxCACertFile          string
-	tempDir                string
-	portForward            *portforward.Manager
-	portForwardPID         int
-	useOperatorPullSecrets bool
-	registryRequiresAuth   bool
+	centralEndpoint            string
+	centralPassword            string
+	roxCACertFile              string
+	tempDir                    string
+	portForward                *portforward.Manager
+	portForwardPID             int
+	useOperatorPullSecrets     bool
+	customRegistryAuthRequired *bool
 }
 
 type ResourceToDelete struct {
@@ -301,12 +301,18 @@ func (d *Deployer) stopDetachedPortForward() {
 	d.portForwardPID = 0
 }
 
-// ResolveRegistryAuth probes whether the configured custom registry is public or requires authentication.
-func (d *Deployer) ResolveRegistryAuth(ctx context.Context) {
+// customRegistryRequiresAuth reports whether the configured custom registry
+// requires authentication, probing it once and caching the result.
+func (d *Deployer) customRegistryRequiresAuth() bool {
+	if d.customRegistryAuthRequired != nil {
+		return *d.customRegistryAuthRequired
+	}
 	if !d.config.Roxie.UsesCustomRegistry() {
-		return
+		return false
 	}
 	registry := d.config.Roxie.ImageRegistry
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	requiresAuth, err := d.dockerAuth.RegistryRequiresAuth(ctx, registry)
 	if err != nil {
 		d.logger.Warningf("Could not determine if %s requires auth, will require credentials: %v", registry, err)
@@ -316,14 +322,14 @@ func (d *Deployer) ResolveRegistryAuth(ctx context.Context) {
 	} else {
 		d.logger.Dimf("Registry %s is public, no authentication required", registry)
 	}
-	d.registryRequiresAuth = requiresAuth
+	d.customRegistryAuthRequired = &requiresAuth
+	return requiresAuth
 }
 
 // NeedsPullSecrets reports whether roxie needs to set up image pull secrets itself.
-// For a custom registry this relies on ResolveRegistryAuth having already been called.
 func (d *Deployer) NeedsPullSecrets() bool {
 	if d.config.Roxie.UsesCustomRegistry() {
-		return d.registryRequiresAuth
+		return d.customRegistryRequiresAuth()
 	}
 	return d.config.Roxie.ClusterType.NeedsDefaultRegistryPullSecrets()
 }
