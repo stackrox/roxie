@@ -226,6 +226,10 @@ func (d *DockerAuth) RegistryRequiresAuth(ctx context.Context, registry string) 
 
 	tr, err := transport.NewWithContext(ctx, reg, authn.Anonymous, http.DefaultTransport, []string{repo.Scope("pull")})
 	if err != nil {
+		var te *transport.Error
+		if errors.As(err, &te) && requiresAuth(te.StatusCode) {
+			return true, nil
+		}
 		return true, fmt.Errorf("negotiating anonymous access to %s: %w", host, err)
 	}
 
@@ -244,10 +248,14 @@ func (d *DockerAuth) RegistryRequiresAuth(ctx context.Context, registry string) 
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
 		return false, nil
 	}
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound {
+	if requiresAuth(resp.StatusCode) {
 		return true, nil
 	}
 	return true, fmt.Errorf("unexpected status %s from %s", resp.Status, host)
+}
+
+func requiresAuth(code int) bool {
+	return code == http.StatusUnauthorized || code == http.StatusForbidden || code == http.StatusNotFound
 }
 
 // CreatePullSecretYAMLFromCredentials creates Kubernetes pull secret YAML from
