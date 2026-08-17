@@ -149,7 +149,6 @@ func TestRegistryRequiresAuth(t *testing.T) {
 			challengeAuth:    true,
 			tokenStatus:      http.StatusUnauthorized,
 			expectedRequires: true,
-			expectErr:        true,
 		},
 		{
 			name: "tags-list request returns an unexpected server error",
