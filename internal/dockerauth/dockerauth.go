@@ -213,34 +213,35 @@ func (d *DockerAuth) VerifyCredentials(ctx context.Context, username, password, 
 // RegistryRequiresAuth makes a best-effort check for whether registry requires
 // authentication to pull images, by sending a single anonymous tags-list
 // request against a well-known repository path. Anything short of a confirmed
-// successful response fails safe by reporting that auth is required.
-func (d *DockerAuth) RegistryRequiresAuth(ctx context.Context, registry string) bool {
+// successful response fails safe by reporting that auth is required, alongside
+// an error explaining why the check was inconclusive.
+func (d *DockerAuth) RegistryRequiresAuth(ctx context.Context, registry string) (bool, error) {
 	host, orgPath := splitRegistryHost(registry)
 
 	reg, err := name.NewRegistry(host)
 	if err != nil {
-		return true
+		return true, fmt.Errorf("invalid registry host %q: %w", host, err)
 	}
 	repo := reg.Repo(orgPath, "main")
 
 	tr, err := transport.NewWithContext(ctx, reg, authn.Anonymous, http.DefaultTransport, []string{repo.Scope("pull")})
 	if err != nil {
-		return true
+		return true, fmt.Errorf("negotiating anonymous access to %s: %w", host, err)
 	}
 
 	url := fmt.Sprintf("%s://%s/v2/%s/tags/list?n=1", repo.Scheme(), repo.RegistryStr(), repo.RepositoryStr())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return true
+		return true, fmt.Errorf("building request for %s: %w", host, err)
 	}
 
 	resp, err := (&http.Client{Transport: tr}).Do(req)
 	if err != nil {
-		return true
+		return true, fmt.Errorf("checking %s: %w", host, err)
 	}
 	defer resp.Body.Close()
 
-	return resp.StatusCode < 200 || resp.StatusCode >= 300
+	return resp.StatusCode < 200 || resp.StatusCode >= 300, nil
 }
 
 // CreatePullSecretYAMLFromCredentials creates Kubernetes pull secret YAML from
