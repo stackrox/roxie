@@ -130,11 +130,11 @@ func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance Op
 	needsTeardown := false
 
 	if exists {
-		if d.isOperatorVersionCorrect(ctx, instance) {
-			d.logger.Infof("✓ Operator already deployed with correct version in namespace %s", instance.Namespace)
+		if d.isOperatorImageCorrect(ctx, instance) {
+			d.logger.Infof("✓ Operator already deployed with correct image in namespace %s", instance.Namespace)
 			return nil
 		}
-		d.logger.Infof("🔄 Operator version mismatch in namespace %s, redeploying...", instance.Namespace)
+		d.logger.Infof("🔄 Operator image mismatch in namespace %s, redeploying...", instance.Namespace)
 		needsTeardown = true
 		needsDeployment = true
 	}
@@ -181,10 +181,10 @@ func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 			Namespace: operatorNamespaceSystem,
 			EnvVars:   d.config.Operator.EnvVars,
 		}
-		if d.isOperatorVersionCorrect(ctx, instance) {
-			d.logger.Info("✓ Operator already deployed with correct version")
+		if d.isOperatorImageCorrect(ctx, instance) {
+			d.logger.Info("✓ Operator already deployed with correct image")
 		} else {
-			d.logger.Info("🔄 Operator version mismatch, redeploying...")
+			d.logger.Info("🔄 Operator image mismatch, redeploying...")
 			needsTeardown = true
 			needsDeployment = true
 		}
@@ -248,9 +248,9 @@ func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 	return d.configureCentralEndpoint(ctx)
 }
 
-// isOperatorVersionCorrect checks if the deployed operator matches the desired
+// isOperatorImageCorrect checks if the deployed operator matches the desired
 // image, comparing the full reference (registry, repository, and tag).
-func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance OperatorInstanceConfig) bool {
+func (d *Deployer) isOperatorImageCorrect(ctx context.Context, instance OperatorInstanceConfig) bool {
 	currentImage, err := d.getDeployedOperatorImage(ctx, instance.Namespace)
 	if err != nil {
 		d.logger.Warningf("Could not retrieve operator image: %v", err)
