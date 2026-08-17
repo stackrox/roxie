@@ -26,8 +26,9 @@ func TestCentralDeployWithStackroxIORegistry(t *testing.T) {
 	runCommand(t, deployTimeout, nil, args...)
 
 	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
-	verifyOperatorImageRegistry(t, operatorSystemNamespace, stackroxIORegistry)
 	verifyCentralInstalled(t, centralNamespace)
+	verifyDeploymentImageRegistry(t, operatorSystemNamespace, operatorDeploymentName, stackroxIORegistry)
+	verifyDeploymentImageRegistry(t, centralNamespace, "central", stackroxIORegistry)
 
 	t.Log("=== Cleaning up ===")
 	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
@@ -36,18 +37,18 @@ func TestCentralDeployWithStackroxIORegistry(t *testing.T) {
 	verifyCentralNotInstalled(t, centralNamespace)
 }
 
-// verifyOperatorImageRegistry asserts that the operator deployment's image is
+// verifyDeploymentImageRegistry asserts that the given deployment's image is
 // hosted on the expected registry.
-func verifyOperatorImageRegistry(t *testing.T, namespace, expectedRegistry string) {
+func verifyDeploymentImageRegistry(t *testing.T, namespace, deployment, expectedRegistry string) {
 	t.Helper()
 
-	cmd := exec.Command("kubectl", "get", "deployment", operatorDeploymentName, "-n", namespace,
+	cmd := exec.Command("kubectl", "get", "deployment", deployment, "-n", namespace,
 		"-o", "jsonpath={.spec.template.spec.containers[0].image}")
 	output, err := cmd.Output()
-	require.NoErrorf(t, err, "Failed to get operator image in namespace %s", namespace)
+	require.NoErrorf(t, err, "Failed to get image for deployment %s in namespace %s", deployment, namespace)
 
 	image := strings.TrimSpace(string(output))
 	require.Truef(t, strings.HasPrefix(image, expectedRegistry+"/"),
-		"Expected operator image to be pulled from %s, got: %s", expectedRegistry, image)
-	t.Logf("✓ Operator image %s uses registry %s", image, expectedRegistry)
+		"Expected %s image to be pulled from %s, got: %s", deployment, expectedRegistry, image)
+	t.Logf("✓ %s image %s uses registry %s", deployment, image, expectedRegistry)
 }
