@@ -112,6 +112,7 @@ func TestRegistryRequiresAuth(t *testing.T) {
 		tokenStatus      int  // status the token endpoint returns, if challenged
 		tagsListStatus   int  // status the tags-list request returns
 		expectedRequires bool
+		expectErr        bool
 	}{
 		{
 			name:             "no auth mechanism: public",
@@ -148,6 +149,7 @@ func TestRegistryRequiresAuth(t *testing.T) {
 			challengeAuth:    true,
 			tokenStatus:      http.StatusUnauthorized,
 			expectedRequires: true,
+			expectErr:        true,
 		},
 		{
 			name: "tags-list request fails with a server error",
@@ -191,8 +193,13 @@ func TestRegistryRequiresAuth(t *testing.T) {
 			registryAddr = strings.TrimPrefix(server.URL, "http://")
 
 			da := &DockerAuth{logger: logger.New()}
-			requiresAuth := da.RegistryRequiresAuth(context.Background(), registryAddr+"/some-org")
+			requiresAuth, err := da.RegistryRequiresAuth(context.Background(), registryAddr+"/some-org")
 			assert.Equal(t, tt.expectedRequires, requiresAuth)
+			if tt.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

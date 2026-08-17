@@ -307,12 +307,16 @@ func (d *Deployer) ResolveRegistryAuth(ctx context.Context) {
 		return
 	}
 	registry := d.config.Roxie.ImageRegistry
-	d.registryRequiresAuth = d.dockerAuth.RegistryRequiresAuth(ctx, registry)
-	if d.registryRequiresAuth {
+	requiresAuth, err := d.dockerAuth.RegistryRequiresAuth(ctx, registry)
+	if err != nil {
+		d.logger.Warningf("Could not determine if %s requires auth, will require credentials: %v", registry, err)
+		requiresAuth = true
+	} else if requiresAuth {
 		d.logger.Dimf("Registry %s requires authentication", registry)
 	} else {
 		d.logger.Dimf("Registry %s is public, no authentication required", registry)
 	}
+	d.registryRequiresAuth = requiresAuth
 }
 
 // NeedsPullSecrets reports whether roxie needs to set up image pull secrets itself.
