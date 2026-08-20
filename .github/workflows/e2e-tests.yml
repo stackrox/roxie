@@ -78,7 +78,7 @@ jobs:
         run: echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> "$GITHUB_ENV"
 
       - name: Download production infractl
-        uses: stackrox/actions/infra/install-infractl@v1.0.42
+        uses: stackrox/actions/infra/install-infractl@v1.0.44
 
       - name: Download artifacts
         run: |
