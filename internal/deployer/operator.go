@@ -215,10 +215,10 @@ func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInst
 			fallback := instance
 			fallback.ImageRegistry = constants.DefaultRegistry
 			fallbackImage := fallback.BundleImage()
-			d.logger.Infof("No operator bundle found at %s, falling back to %s", bundleImage, fallbackImage)
+			d.logger.Warningf("No operator bundle found at %s, falling back to %s", bundleImage, fallbackImage)
 			return fallbackImage, nil
 		}
-		return "", fmt.Errorf("verifying operator bundle %s: %w", bundleImage, err)
+		return "", fmt.Errorf("verifying existence of operator bundle image %s: %w", bundleImage, err)
 	}
 
 	return bundleImage, nil

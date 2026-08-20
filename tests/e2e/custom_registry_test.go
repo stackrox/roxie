@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 	"testing"
@@ -27,28 +28,30 @@ func TestCentralDeployWithStackroxIORegistry(t *testing.T) {
 
 	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
 	verifyCentralInstalled(t, centralNamespace)
-	verifyDeploymentImageRegistry(t, operatorSystemNamespace, operatorDeploymentName, stackroxIORegistry)
-	verifyDeploymentImageRegistry(t, centralNamespace, "central", stackroxIORegistry)
+	verifyContainerImageRegistry(t, operatorSystemNamespace, operatorDeploymentName, "manager", stackroxIORegistry)
+	verifyContainerImageRegistry(t, centralNamespace, "central", "central", stackroxIORegistry)
 
 	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
+	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "all"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
 	verifyCentralNotInstalled(t, centralNamespace)
 }
 
-// verifyDeploymentImageRegistry asserts that the given deployment's image is
-// hosted on the expected registry.
-func verifyDeploymentImageRegistry(t *testing.T, namespace, deployment, expectedRegistry string) {
+// verifyContainerImageRegistry asserts that the given container's image in the
+// given deployment is hosted on the expected registry.
+func verifyContainerImageRegistry(t *testing.T, namespace, deployment, container, expectedRegistry string) {
 	t.Helper()
 
+	jsonpath := fmt.Sprintf("{.spec.template.spec.containers[?(@.name==%q)].image}", container)
 	cmd := exec.Command("kubectl", "get", "deployment", deployment, "-n", namespace,
-		"-o", "jsonpath={.spec.template.spec.containers[0].image}")
+		"-o", "jsonpath="+jsonpath)
 	output, err := cmd.Output()
-	require.NoErrorf(t, err, "Failed to get image for deployment %s in namespace %s", deployment, namespace)
+	require.NoErrorf(t, err, "Failed to get image for container %s in deployment %s/%s", container, namespace, deployment)
 
 	image := strings.TrimSpace(string(output))
+	require.NotEmptyf(t, image, "Container %s not found in deployment %s/%s", container, namespace, deployment)
 	require.Truef(t, strings.HasPrefix(image, expectedRegistry+"/"),
-		"Expected %s image to be pulled from %s, got: %s", deployment, expectedRegistry, image)
-	t.Logf("✓ %s image %s uses registry %s", deployment, image, expectedRegistry)
+		"Expected %s/%s container %s image to be from %s, got: %s", namespace, deployment, container, expectedRegistry, image)
+	t.Logf("✓ %s/%s container %s image %s uses registry %s", namespace, deployment, container, image, expectedRegistry)
 }

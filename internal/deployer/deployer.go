@@ -307,9 +307,7 @@ func (d *Deployer) customRegistryRequiresAuth() bool {
 	if d.customRegistryAuthRequired != nil {
 		return *d.customRegistryAuthRequired
 	}
-	if !d.config.Roxie.UsesCustomRegistry() {
-		return false
-	}
+
 	registry := d.config.Roxie.ImageRegistry
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
