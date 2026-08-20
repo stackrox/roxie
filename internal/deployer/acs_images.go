@@ -6,7 +6,6 @@ import (
 
 func imagesForConfig(config Config) []string {
 	var images []string
-	imageRegistry := config.Roxie.ImageRegistry
 
 	for _, instance := range config.OperatorInstances() {
 		prefix := ""
@@ -14,12 +13,12 @@ func imagesForConfig(config Config) []string {
 			prefix = "release-"
 		}
 		images = append(images,
-			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "main", instance.Version),
-			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "central-db", instance.Version),
-			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4-db", instance.Version),
-			fmt.Sprintf("%s/%s%s:%s", imageRegistry, prefix, "scanner-v4", instance.Version),
-			instance.OperatorImage(imageRegistry),
-			instance.BundleImage(imageRegistry),
+			fmt.Sprintf("%s/%s%s:%s", instance.ImageRegistry, prefix, "main", instance.Version),
+			fmt.Sprintf("%s/%s%s:%s", instance.ImageRegistry, prefix, "central-db", instance.Version),
+			fmt.Sprintf("%s/%s%s:%s", instance.ImageRegistry, prefix, "scanner-v4-db", instance.Version),
+			fmt.Sprintf("%s/%s%s:%s", instance.ImageRegistry, prefix, "scanner-v4", instance.Version),
+			instance.OperatorImage(),
+			instance.BundleImage(),
 		)
 	}
 

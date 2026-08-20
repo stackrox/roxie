@@ -257,7 +257,7 @@ func (d *Deployer) isOperatorImageCorrect(ctx context.Context, instance Operator
 		return false
 	}
 
-	desiredImage := instance.OperatorImage(d.config.Roxie.ImageRegistry)
+	desiredImage := instance.OperatorImage()
 	if currentImage != desiredImage {
 		d.logger.Info("Operator image mismatch detected:")
 		d.logger.Infof("  Current: %s", currentImage)
