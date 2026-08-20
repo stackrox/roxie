@@ -38,7 +38,7 @@ var requiredCRDs = []string{
 // deployOperatorNonOLM deploys one RHACS operator instance without OLM.
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context, instance OperatorInstanceConfig) error {
 	d.logger.Infof("Operator tag: %s (namespace %s)", instance.Version, instance.Namespace)
-	bundleImage, err := d.resolveBundleImage(ctx, instance, d.config.Roxie.ImageRegistry)
+	bundleImage, err := d.resolveBundleImage(ctx, instance)
 	if err != nil {
 		return fmt.Errorf("resolving operator bundle image: %w", err)
 	}
@@ -174,7 +174,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 
 	if len(missing) > 0 {
 		crdInstance := d.config.NewestOperatorInstance()
-		bundleImage, err := d.resolveBundleImage(ctx, crdInstance, d.config.Roxie.ImageRegistry)
+		bundleImage, err := d.resolveBundleImage(ctx, crdInstance)
 		if err != nil {
 			return fmt.Errorf("resolving operator bundle image: %w", err)
 		}
@@ -203,16 +203,18 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 // does not exist there.
 //
 // This is done because upstream StackRox builds (quay.io/stackrox-io) do not publish operator bundles.
-func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInstanceConfig, registry string) (string, error) {
-	bundleImage := instance.BundleImage(registry)
-	if registry == constants.DefaultRegistry {
+func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInstanceConfig) (string, error) {
+	bundleImage := instance.BundleImage()
+	if instance.ImageRegistry == constants.DefaultRegistry {
 		return bundleImage, nil
 	}
 
 	if err := ocihelper.VerifyImageExistence(ctx, d.logger, bundleImage); err != nil {
 		var te *transport.Error
 		if errors.As(err, &te) && te.StatusCode == http.StatusNotFound {
-			fallbackImage := instance.BundleImage(constants.DefaultRegistry)
+			fallback := instance
+			fallback.ImageRegistry = constants.DefaultRegistry
+			fallbackImage := fallback.BundleImage()
 			d.logger.Infof("No operator bundle found at %s, falling back to %s", bundleImage, fallbackImage)
 			return fallbackImage, nil
 		}
@@ -482,7 +484,7 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, instance Operato
 		return fmt.Errorf("extracting manager container from operator pod spec: %w", err)
 	}
 
-	operatorImage := instance.OperatorImage(d.config.Roxie.ImageRegistry)
+	operatorImage := instance.OperatorImage()
 	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
 	if current, _ := managerContainer["image"].(string); current != operatorImage {
 		d.logger.Infof("Rewriting operator image to %s", operatorImage)

@@ -10,20 +10,20 @@ import (
 )
 
 func TestOperatorImage_Konflux(t *testing.T) {
-	instance := OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: new(true)}
+	instance := OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: new(true), ImageRegistry: constants.DefaultRegistry}
 	expected := fmt.Sprintf("%s/release-operator:4.9.2", constants.DefaultRegistry)
-	assert.Equal(t, expected, instance.OperatorImage(constants.DefaultRegistry))
+	assert.Equal(t, expected, instance.OperatorImage())
 }
 
 func TestOperatorImage_NonKonflux(t *testing.T) {
-	instance := OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: new(false)}
+	instance := OperatorInstanceConfig{Version: "4.9.2", KonfluxImages: new(false), ImageRegistry: constants.DefaultRegistry}
 	expected := fmt.Sprintf("%s/stackrox-operator:4.9.2", constants.DefaultRegistry)
-	assert.Equal(t, expected, instance.OperatorImage(constants.DefaultRegistry))
+	assert.Equal(t, expected, instance.OperatorImage())
 }
 
 func TestOperatorImage_RegistryOverride(t *testing.T) {
-	instance := OperatorInstanceConfig{Version: "4.9.2"}
-	assert.Equal(t, "quay.io/stackrox-io/stackrox-operator:4.9.2", instance.OperatorImage("quay.io/stackrox-io"))
+	instance := OperatorInstanceConfig{Version: "4.9.2", ImageRegistry: "quay.io/stackrox-io"}
+	assert.Equal(t, "quay.io/stackrox-io/stackrox-operator:4.9.2", instance.OperatorImage())
 }
 
 func TestPopulateKonfluxEnvVars_AllEntries(t *testing.T) {

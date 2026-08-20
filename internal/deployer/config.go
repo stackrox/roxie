@@ -95,6 +95,7 @@ type OperatorInstanceConfig struct {
 	// The following fields are computed internally and are not user-configurable.
 	Namespace      string `yaml:"-"`
 	RoleNameSuffix string `yaml:"-"`
+	ImageRegistry  string `yaml:"-"`
 }
 
 func (c *OperatorInstanceConfig) KonfluxImagesSet() bool {
@@ -124,21 +125,21 @@ func (c *OperatorInstanceConfig) ClusterRoleBindingName() string {
 }
 
 // BundleImage returns the operator bundle image for this operator instance.
-func (c *OperatorInstanceConfig) BundleImage(imageRegistry string) string {
+func (c *OperatorInstanceConfig) BundleImage() string {
 	operatorTag := c.Version.ToOperatorTag()
 	if c.KonfluxImagesEnabled() {
-		return fmt.Sprintf("%s/release-operator-bundle:v%s", imageRegistry, operatorTag)
+		return fmt.Sprintf("%s/release-operator-bundle:v%s", c.ImageRegistry, operatorTag)
 	}
-	return fmt.Sprintf("%s/stackrox-operator-bundle:v%s", imageRegistry, operatorTag)
+	return fmt.Sprintf("%s/stackrox-operator-bundle:v%s", c.ImageRegistry, operatorTag)
 }
 
 // OperatorImage returns the operator image for this operator instance.
-func (c *OperatorInstanceConfig) OperatorImage(imageRegistry string) string {
+func (c *OperatorInstanceConfig) OperatorImage() string {
 	operatorTag := c.Version.ToOperatorTag()
 	if c.KonfluxImagesEnabled() {
-		return fmt.Sprintf("%s/release-operator:%s", imageRegistry, operatorTag)
+		return fmt.Sprintf("%s/release-operator:%s", c.ImageRegistry, operatorTag)
 	}
-	return fmt.Sprintf("%s/stackrox-operator:%s", imageRegistry, operatorTag)
+	return fmt.Sprintf("%s/stackrox-operator:%s", c.ImageRegistry, operatorTag)
 }
 
 // OperatorConfig is the top-level operator configuration used in single-operator mode.
