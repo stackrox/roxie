@@ -301,6 +301,14 @@ func (d *Deployer) stopDetachedPortForward() {
 	d.portForwardPID = 0
 }
 
+// NeedsPullSecrets reports whether roxie needs to set up image pull secrets itself.
+func (d *Deployer) NeedsPullSecrets() bool {
+	if d.config.Roxie.UsesCustomRegistry() {
+		return d.customRegistryRequiresAuth()
+	}
+	return d.config.Roxie.ClusterType.NeedsDefaultRegistryPullSecrets()
+}
+
 // customRegistryRequiresAuth reports whether the configured custom registry
 // requires authentication, probing it once and caching the result.
 func (d *Deployer) customRegistryRequiresAuth() bool {
@@ -322,14 +330,6 @@ func (d *Deployer) customRegistryRequiresAuth() bool {
 	}
 	d.customRegistryAuthRequired = &requiresAuth
 	return requiresAuth
-}
-
-// NeedsPullSecrets reports whether roxie needs to set up image pull secrets itself.
-func (d *Deployer) NeedsPullSecrets() bool {
-	if d.config.Roxie.UsesCustomRegistry() {
-		return d.customRegistryRequiresAuth()
-	}
-	return d.config.Roxie.ClusterType.NeedsDefaultRegistryPullSecrets()
 }
 
 // Deploy deploys the specified components to the cluster.
