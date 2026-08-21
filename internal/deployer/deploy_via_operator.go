@@ -215,7 +215,7 @@ func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying Central via Operator...")
 
-	needPullSecrets := d.NeedsPullSecrets()
+	needPullSecrets := d.NeedsPullSecrets(ctx)
 	if err := d.prepareNamespace(ctx, d.config.Central.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}
@@ -822,7 +822,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying SecuredCluster via Operator...")
 
-	needPullSecrets := d.NeedsPullSecrets()
+	needPullSecrets := d.NeedsPullSecrets(ctx)
 	if err := d.prepareNamespace(ctx, d.config.SecuredCluster.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}

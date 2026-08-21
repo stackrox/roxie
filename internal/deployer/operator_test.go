@@ -1,6 +1,7 @@
 package deployer
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stackrox/roxie/internal/constants"
@@ -63,7 +64,7 @@ func TestNeedsOperatorPullSecrets(t *testing.T) {
 				config:                     Config{Roxie: tt.roxieConfig},
 				customRegistryAuthRequired: tt.customRegistryAuthRequired,
 			}
-			assert.Equal(t, tt.expected, d.needsOperatorPullSecrets(tt.instance))
+			assert.Equal(t, tt.expected, d.needsOperatorPullSecrets(context.Background(), tt.instance))
 		})
 	}
 }
@@ -105,7 +106,7 @@ func TestDeployer_NeedsPullSecrets(t *testing.T) {
 				config:                     Config{Roxie: tt.roxie},
 				customRegistryAuthRequired: tt.customRegistryAuthRequired,
 			}
-			assert.Equal(t, tt.expected, d.NeedsPullSecrets())
+			assert.Equal(t, tt.expected, d.NeedsPullSecrets(context.Background()))
 		})
 	}
 }

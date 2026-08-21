@@ -226,9 +226,9 @@ func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInst
 
 // needsOperatorPullSecrets reports whether a pull secret should be created for the
 // operator's own deployment namespace.
-func (d *Deployer) needsOperatorPullSecrets(instance OperatorInstanceConfig) bool {
+func (d *Deployer) needsOperatorPullSecrets(ctx context.Context, instance OperatorInstanceConfig) bool {
 	if d.config.Roxie.UsesCustomRegistry() {
-		return d.customRegistryRequiresAuth()
+		return d.customRegistryRequiresAuth(ctx)
 	}
 	return instance.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsDefaultRegistryPullSecrets()
 }
@@ -248,7 +248,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string, 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	d.useOperatorPullSecrets = d.needsOperatorPullSecrets(instance)
+	d.useOperatorPullSecrets = d.needsOperatorPullSecrets(ctx, instance)
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dimf("  • Namespace: %s", instance.Namespace)

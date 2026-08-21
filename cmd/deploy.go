@@ -283,7 +283,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	d.SetVerbose(verbose)
 	d.SetConfig(deploySettings)
 
-	if d.NeedsPullSecrets() {
+	if d.NeedsPullSecrets(ctx) {
 		if err := validateContainerizedCredentials(deploySettings.Roxie.ImageRegistry, deploySettings.Roxie.ClusterType); err != nil {
 			return err
 		}
