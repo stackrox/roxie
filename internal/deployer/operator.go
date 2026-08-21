@@ -486,6 +486,10 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, instance Operato
 
 	operatorImage := instance.OperatorImage()
 	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
+
+	// Rewrite needed when the bundle's baked-in image differs from the desired one:
+	// - Konflux builds (bundle from rhacs-eng, operator image uses release naming)
+	// - bundle fallback (bundle from rhacs-eng, operator image from custom registry that does not contain bundle images)
 	if current, _ := managerContainer["image"].(string); current != operatorImage {
 		d.logger.Infof("Rewriting operator image to %s", operatorImage)
 		managerContainer["image"] = operatorImage
