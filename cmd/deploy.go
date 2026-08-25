@@ -7,13 +7,16 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 
 	"dario.cat/mergo"
+	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stackrox/roxie/internal/clusterdefaults"
 	"github.com/stackrox/roxie/internal/component"
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
@@ -280,6 +283,12 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	d.SetVerbose(verbose)
 	d.SetConfig(deploySettings)
 
+	if d.NeedsPullSecrets(ctx) {
+		if err := validateContainerizedCredentials(deploySettings.Roxie.ImageRegistry, deploySettings.Roxie.ClusterType); err != nil {
+			return err
+		}
+	}
+
 	if dryRun {
 		log.Info("Exiting because of enabled dry run mode.")
 		return nil
@@ -350,6 +359,19 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	return nil
+}
+
+func validateContainerizedCredentials(registry string, clusterType types.ClusterType) error {
+	if !env.RunningInRoxieContainer {
+		return nil
+	}
+	if os.Getenv("REGISTRY_USERNAME") == "" || os.Getenv("REGISTRY_PASSWORD") == "" {
+		return fmt.Errorf("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables for registry %s on clusters of type %s", registry, clusterType)
+	}
+	if _, err := os.Stat("/kubeconfig"); err != nil {
+		return fmt.Errorf("containerized mode requires /kubeconfig file: %w", err)
+	}
 	return nil
 }
 
@@ -455,7 +477,12 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 		return errors.New("running without a controlling terminal requires --envrc to be set")
 	}
 
-	clusterType := deploySettings.Roxie.ClusterType
+	registry := deploySettings.Roxie.ImageRegistry
+	if deploySettings.Roxie.UsesCustomRegistry() {
+		if err := validateImageRegistry(registry); err != nil {
+			return err
+		}
+	}
 
 	if env.RunningInRoxieContainer {
 		// For running containerized we have specific requirements.
@@ -464,16 +491,6 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 		}
 		if !deploySettings.Central.ExposureEnabled() {
 			return errors.New("containerized mode requires Central exposure")
-		}
-
-		// On infra OpenShift we already get image pull secrets for Quay automatically.
-		if clusterType.NeedsPullSecrets() {
-			if os.Getenv("REGISTRY_USERNAME") == "" || os.Getenv("REGISTRY_PASSWORD") == "" {
-				return fmt.Errorf("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables for clusters of type %s", clusterType)
-			}
-			if _, err := os.Stat("/kubeconfig"); err != nil {
-				return fmt.Errorf("containerized mode requires /kubeconfig file: %w", err)
-			}
 		}
 	}
 
@@ -484,6 +501,9 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 	if deploySettings.Roxie.KonfluxImagesEnabled() {
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
+		}
+		if registry != constants.DefaultRegistry {
+			return fmt.Errorf("using Konflux images with a custom image registry (%s) is not supported", registry)
 		}
 	}
 
@@ -505,6 +525,21 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 		}
 	}
 
+	return nil
+}
+
+// validateImageRegistry checks that registry is a well-formed "host/repository-path" string, e.g. "quay.io/rhacs-eng".
+func validateImageRegistry(registry string) error {
+	host, repoPath, hasPath := strings.Cut(registry, "/")
+	if !hasPath || repoPath == "" {
+		return fmt.Errorf("roxie.imageRegistry must include a repository path (e.g. %s), got: %s", constants.DefaultRegistry, registry)
+	}
+	if _, err := name.NewRegistry(host); err != nil {
+		return fmt.Errorf("roxie.imageRegistry has an invalid registry host %q: %w", host, err)
+	}
+	if _, err := name.NewRepository(repoPath); err != nil {
+		return fmt.Errorf("roxie.imageRegistry has an invalid repository path %q: %w", repoPath, err)
+	}
 	return nil
 }
 

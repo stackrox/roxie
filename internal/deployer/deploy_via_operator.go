@@ -12,13 +12,14 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/types"
-	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 var (
@@ -129,11 +130,11 @@ func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance Op
 	needsTeardown := false
 
 	if exists {
-		if d.isOperatorVersionCorrect(ctx, instance) {
-			d.logger.Infof("✓ Operator already deployed with correct version in namespace %s", instance.Namespace)
+		if d.isOperatorImageCorrect(ctx, instance) {
+			d.logger.Infof("✓ Operator already deployed with correct image in namespace %s", instance.Namespace)
 			return nil
 		}
-		d.logger.Infof("🔄 Operator version mismatch in namespace %s, redeploying...", instance.Namespace)
+		d.logger.Infof("🔄 Operator image mismatch in namespace %s, redeploying...", instance.Namespace)
 		needsTeardown = true
 		needsDeployment = true
 	}
@@ -180,10 +181,10 @@ func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 			Namespace: operatorNamespaceSystem,
 			EnvVars:   d.config.Operator.EnvVars,
 		}
-		if d.isOperatorVersionCorrect(ctx, instance) {
-			d.logger.Info("✓ Operator already deployed with correct version")
+		if d.isOperatorImageCorrect(ctx, instance) {
+			d.logger.Info("✓ Operator already deployed with correct image")
 		} else {
-			d.logger.Info("🔄 Operator version mismatch, redeploying...")
+			d.logger.Info("🔄 Operator image mismatch, redeploying...")
 			needsTeardown = true
 			needsDeployment = true
 		}
@@ -214,7 +215,7 @@ func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying Central via Operator...")
 
-	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
+	needPullSecrets := d.NeedsPullSecrets(ctx)
 	if err := d.prepareNamespace(ctx, d.config.Central.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}
@@ -247,27 +248,20 @@ func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 	return d.configureCentralEndpoint(ctx)
 }
 
-// isOperatorVersionCorrect checks if the deployed operator matches the desired version.
-func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance OperatorInstanceConfig) bool {
+// isOperatorImageCorrect checks if the deployed operator matches the desired
+// image, comparing the full reference (registry, repository, and tag).
+func (d *Deployer) isOperatorImageCorrect(ctx context.Context, instance OperatorInstanceConfig) bool {
 	currentImage, err := d.getDeployedOperatorImage(ctx, instance.Namespace)
 	if err != nil {
 		d.logger.Warningf("Could not retrieve operator image: %v", err)
 		return false
 	}
 
-	// Extract the tag from the current image
-	parts := strings.SplitN(currentImage, ":", 2)
-	if len(parts) < 2 {
-		d.logger.Warningf("Could not parse operator image tag from: %s", currentImage)
-		return false
-	}
-	currentTag := parts[1]
-
-	desiredTag := instance.Version.ToOperatorTag().String()
-	if currentTag != desiredTag {
-		d.logger.Info("Operator version mismatch detected:")
-		d.logger.Infof("  Current: %s", currentTag)
-		d.logger.Infof("  Desired: %s", desiredTag)
+	desiredImage := instance.OperatorImage()
+	if currentImage != desiredImage {
+		d.logger.Info("Operator image mismatch detected:")
+		d.logger.Infof("  Current: %s", currentImage)
+		d.logger.Infof("  Desired: %s", desiredImage)
 		return false
 	}
 	return true
@@ -309,7 +303,7 @@ func (d *Deployer) ensurePullSecretExists(ctx context.Context, namespace string)
 		return errors.New("no pull secrets available to set up on the cluster")
 	}
 
-	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(*d.dockerCreds, namespace)
+	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(*d.dockerCreds, namespace, d.config.Roxie.ImageRegistry)
 	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: strings.NewReader(pullSecretYAML),
@@ -828,7 +822,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 	d.logger.Info("🚀 Deploying SecuredCluster via Operator...")
 
-	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
+	needPullSecrets := d.NeedsPullSecrets(ctx)
 	if err := d.prepareNamespace(ctx, d.config.SecuredCluster.Namespace, needPullSecrets); err != nil {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}

@@ -5,14 +5,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/ocihelper"
 )
@@ -35,7 +38,10 @@ var requiredCRDs = []string{
 // deployOperatorNonOLM deploys one RHACS operator instance without OLM.
 func (d *Deployer) deployOperatorNonOLM(ctx context.Context, instance OperatorInstanceConfig) error {
 	d.logger.Infof("Operator tag: %s (namespace %s)", instance.Version, instance.Namespace)
-	bundleImage := instance.BundleImage()
+	bundleImage, err := d.resolveBundleImage(ctx, instance)
+	if err != nil {
+		return fmt.Errorf("resolving operator bundle image: %w", err)
+	}
 
 	bundleDir, err := d.downloadAndExtractOperatorBundle(ctx, bundleImage)
 	if err != nil {
@@ -168,7 +174,10 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 
 	if len(missing) > 0 {
 		crdInstance := d.config.NewestOperatorInstance()
-		bundleImage := crdInstance.BundleImage()
+		bundleImage, err := d.resolveBundleImage(ctx, crdInstance)
+		if err != nil {
+			return fmt.Errorf("resolving operator bundle image: %w", err)
+		}
 		d.logger.Warningf("Missing CRDs detected (%s)", strings.Join(missing, ", "))
 		d.logger.Warningf("Fetching bundle %s", bundleImage)
 
@@ -189,6 +198,41 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 	return nil
 }
 
+// resolveBundleImage returns the operator bundle image to use for the given instance, probing
+// the configured registry first and falling back to constants.DefaultRegistry if the bundle
+// does not exist there.
+//
+// This is done because upstream StackRox builds (quay.io/stackrox-io) do not publish operator bundles.
+func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInstanceConfig) (string, error) {
+	bundleImage := instance.BundleImage()
+	if instance.ImageRegistry == constants.DefaultRegistry {
+		return bundleImage, nil
+	}
+
+	if err := ocihelper.VerifyImageExistence(ctx, d.logger, bundleImage); err != nil {
+		var te *transport.Error
+		if errors.As(err, &te) && te.StatusCode == http.StatusNotFound {
+			fallback := instance
+			fallback.ImageRegistry = constants.DefaultRegistry
+			fallbackImage := fallback.BundleImage()
+			d.logger.Warningf("No operator bundle found at %s, falling back to %s", bundleImage, fallbackImage)
+			return fallbackImage, nil
+		}
+		return "", fmt.Errorf("verifying existence of operator bundle image %s: %w", bundleImage, err)
+	}
+
+	return bundleImage, nil
+}
+
+// needsOperatorPullSecrets reports whether a pull secret should be created for the
+// operator's own deployment namespace.
+func (d *Deployer) needsOperatorPullSecrets(ctx context.Context, instance OperatorInstanceConfig) bool {
+	if d.config.Roxie.UsesCustomRegistry() {
+		return d.customRegistryRequiresAuth(ctx)
+	}
+	return instance.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsDefaultRegistryPullSecrets()
+}
+
 // deployOperatorFromCSV deploys the operator from CSV into the given instance namespace.
 func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string, instance OperatorInstanceConfig) error {
 	csvFile := filepath.Join(bundleDir, "rhacs-operator.clusterserviceversion.yaml")
@@ -204,7 +248,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string, 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	d.useOperatorPullSecrets = instance.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsPullSecrets()
+	d.useOperatorPullSecrets = d.needsOperatorPullSecrets(ctx, instance)
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dimf("  • Namespace: %s", instance.Namespace)
@@ -440,11 +484,15 @@ func (d *Deployer) createDeploymentFromCSV(ctx context.Context, instance Operato
 		return fmt.Errorf("extracting manager container from operator pod spec: %w", err)
 	}
 
+	operatorImage := instance.OperatorImage()
 	podSpec["serviceAccountName"] = deploymentSpec["service_account"]
-	if current, _ := managerContainer["image"].(string); current != instance.OperatorImage() {
-		// Currently this should only happen in Konflux mode.
-		d.logger.Infof("Rewriting operator image to %s", instance.OperatorImage())
-		managerContainer["image"] = instance.OperatorImage()
+
+	// Rewrite needed when the bundle's baked-in image differs from the desired one:
+	// - Konflux builds (bundle from rhacs-eng, operator image uses release naming)
+	// - bundle fallback (bundle from rhacs-eng, operator image from custom registry that does not contain bundle images)
+	if current, _ := managerContainer["image"].(string); current != operatorImage {
+		d.logger.Infof("Rewriting operator image to %s", operatorImage)
+		managerContainer["image"] = operatorImage
 	}
 
 	if len(instance.EnvVars) > 0 {
