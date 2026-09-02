@@ -234,15 +234,20 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
+	// Cluster-config retrieval happens before the full config (and thus the configured deploy
+	// wait timeouts) is assembled, so give it its own short bounded context.
+	setupCtx, setupCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer setupCancel()
 
-	clusterConfig := retrieveClusterConfigForComponents(ctx, log, components)
+	clusterConfig := retrieveClusterConfigForComponents(setupCtx, log, components)
 
 	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
 	if err != nil {
 		return err
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), computeDeployContextTimeout(components, deploySettings))
+	defer cancel()
 
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
@@ -351,6 +356,34 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// computeDeployContextTimeout returns how long the overall deploy context should live. It must
+// outlive the per-component readiness waits, which run sequentially (Central, then SecuredCluster)
+// and derive their own contexts from this one (see waitForComponentReady); since
+// context.WithTimeout takes the earlier deadline, a fixed parent deadline would silently clamp the
+// configured --central-wait / --secured-cluster-wait values. We therefore sum the DeployTimeouts of
+// the components being deployed and add a margin for the surrounding setup/teardown steps that share
+// the context. DeployTimeout is defaulted (20m per component) by assembleConfigForCommand for a
+// fresh deploy; the fallback below keeps the context bounded if nothing contributes a positive value.
+func computeDeployContextTimeout(components component.Component, cfg deployer.Config) time.Duration {
+	const margin = 10 * time.Minute
+
+	var budget time.Duration
+	if components.IncludesCentral() {
+		budget += cfg.Central.DeployTimeout
+	}
+	if components.IncludesSensor() {
+		budget += cfg.SecuredCluster.DeployTimeout
+	}
+	if budget <= 0 {
+		// No Central/SecuredCluster readiness wait contributes here (e.g. an operator-only deploy, or
+		// a base config that left the timeouts unset); fall back to a sane default so the context is
+		// still bounded.
+		budget = deployer.DefaultCentralWaitTimeout
+	}
+
+	return budget + margin
 }
 
 func retrieveClusterConfigForComponents(
