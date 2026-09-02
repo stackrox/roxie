@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"dario.cat/mergo"
+	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/logger"
@@ -426,4 +427,39 @@ func TestApplyUserDefaults(t *testing.T) {
 		cfg := deployer.NewConfig()
 		assert.Error(t, tryApplyUserDefaults(log, &cfg))
 	})
+}
+
+func TestComputeDeployContextTimeout(t *testing.T) {
+	const margin = 10 * time.Minute
+
+	cfg := deployer.Config{}
+	cfg.Central.DeployTimeout = 25 * time.Minute
+	cfg.SecuredCluster.DeployTimeout = 40 * time.Minute
+
+	tests := map[string]struct {
+		components component.Component
+		want       time.Duration
+	}{
+		"central and secured cluster are summed": {
+			components: component.Both,
+			want:       25*time.Minute + 40*time.Minute + margin,
+		},
+		"central only": {
+			components: component.Central,
+			want:       25*time.Minute + margin,
+		},
+		"secured cluster only": {
+			components: component.SecuredCluster,
+			want:       40*time.Minute + margin,
+		},
+		"neither central nor sensor falls back to default": {
+			components: component.Operator,
+			want:       deployer.DefaultCentralWaitTimeout + margin,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.want, computeDeployContextTimeout(tc.components, cfg))
+		})
+	}
 }
