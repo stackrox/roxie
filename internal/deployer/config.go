@@ -187,10 +187,23 @@ type CentralConfig struct {
 	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
 	PortForwarding      *bool                  `yaml:"portForwarding,omitempty"`
 	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
+	Metadata            CRMetadata             `yaml:"metadata,omitempty"`
 	Spec                map[string]interface{} `yaml:"spec,omitempty"`
 
 	AddOns          map[string]bool                   `yaml:"addOns,omitempty"`
 	AvailableAddOns map[string]CentralAddOnDefinition `yaml:"availableAddOns,omitempty"`
+}
+
+// CRMetadata holds overridable metadata settings for a CR.
+type CRMetadata struct {
+	Annotations map[string]string `yaml:"annotations,omitempty"`
+	// Note: keep toMap() in sync.
+}
+
+func (m CRMetadata) toMap() map[string]any {
+	return map[string]any{
+		"annotations": m.Annotations,
+	}
 }
 
 func (c *CentralConfig) EarlyReadinessEnabled() bool {
@@ -321,9 +334,10 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 		}
 	}
 	if err := helpers.DeepMerge(cr, map[string]interface{}{
-		"spec": c.Spec,
+		"metadata": c.Metadata.toMap(),
+		"spec":     c.Spec,
 	}); err != nil {
-		return nil, fmt.Errorf("merging spec into Central CR: %w", err)
+		return nil, fmt.Errorf("merging metadata and spec into Central CR: %w", err)
 	}
 	return cr, nil
 }
@@ -337,6 +351,7 @@ type SecuredClusterConfig struct {
 	PauseReconciliation *bool                  `yaml:"pauseReconciliation,omitempty"`
 	DeployTimeout       time.Duration          `yaml:"deployTimeout,omitempty"`
 	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
+	Metadata            CRMetadata             `yaml:"metadata,omitempty"`
 	Spec                map[string]interface{} `yaml:"spec,omitempty"`
 }
 
@@ -421,9 +436,10 @@ func (s *SecuredClusterConfig) CustomResource() (map[string]interface{}, error) 
 	}
 
 	if err := helpers.DeepMerge(cr, map[string]interface{}{
-		"spec": s.Spec,
+		"metadata": s.Metadata.toMap(),
+		"spec":     s.Spec,
 	}); err != nil {
-		return nil, fmt.Errorf("merging spec into SecuredCluster CR: %w", err)
+		return nil, fmt.Errorf("merging metadata and spec into SecuredCluster CR: %w", err)
 	}
 	return cr, nil
 }
