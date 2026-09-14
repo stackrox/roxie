@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
@@ -47,31 +47,25 @@ var retryableErrors = []string{
 	"broken pipe",
 }
 
-type HelmCtx struct {
-	Ctx     context.Context
-	Log     *logger.Logger
-	Verbose bool
-}
-
 // Install installs or upgrades a Helm chart idempotently.
-func Install(helmCtx HelmCtx, opts InstallOptions) error {
+func Install(ctx context.Context, opts InstallOptions) error {
 	if opts.ChartPath == "" && (opts.RepoURL == "" || opts.ChartName == "") {
 		return fmt.Errorf("either ChartPath or RepoURL+ChartName must be set")
 	}
 
-	return executeHelmActionWithRetries(helmCtx, "install",
-		func(helmCtx HelmCtx) error {
-			return doInstall(helmCtx, opts)
+	return executeHelmActionWithRetries(ctx, "install",
+		func(ctx context.Context) error {
+			return doInstall(ctx, opts)
 		})
 }
 
 // Uninstall removes a Helm release, ignoring "not found" errors.
-func Uninstall(helmCtx HelmCtx, releaseName, namespace string) error {
-	return executeHelmActionWithRetries(helmCtx, "uninstall",
-		func(helmCtx HelmCtx) error {
-			err := doUninstall(helmCtx, releaseName, namespace)
+func Uninstall(ctx context.Context, releaseName, namespace string) error {
+	return executeHelmActionWithRetries(ctx, "uninstall",
+		func(ctx context.Context) error {
+			err := doUninstall(ctx, releaseName, namespace)
 			if err != nil && strings.Contains(strings.ToLower(err.Error()), "not found") {
-				helmCtx.Log.Dimf("Helm release %q not found in namespace %s, skipping uninstall", releaseName, namespace)
+				log.Dimf("Helm release %q not found in namespace %s, skipping uninstall", releaseName, namespace)
 				return nil
 			}
 			return err
@@ -79,12 +73,12 @@ func Uninstall(helmCtx HelmCtx, releaseName, namespace string) error {
 }
 
 // ListByPrefix returns the names of Helm releases whose name starts with the given prefix.
-func ListByPrefix(helmCtx HelmCtx, prefix, namespace string) ([]string, error) {
+func ListByPrefix(ctx context.Context, prefix, namespace string) ([]string, error) {
 	var releases []string
 
-	err := executeHelmActionWithRetries(helmCtx, "list",
-		func(helmCtx HelmCtx) error {
-			result, err := doListByPrefix(helmCtx, prefix, namespace)
+	err := executeHelmActionWithRetries(ctx, "list",
+		func(ctx context.Context) error {
+			result, err := doListByPrefix(ctx, prefix, namespace)
 			if err != nil {
 				return err
 			}
@@ -98,20 +92,20 @@ func ListByPrefix(helmCtx HelmCtx, prefix, namespace string) ([]string, error) {
 	return releases, nil
 }
 
-func executeHelmActionWithRetries(helmCtx HelmCtx, actionName string, helmAction func(helmCtx HelmCtx) error) error {
+func executeHelmActionWithRetries(ctx context.Context, actionName string, helmAction func(ctx context.Context) error) error {
 	var err error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if attempt > 1 {
 			waitTime := time.Duration(attempt) * retryDelay
-			helmCtx.Log.Infof("Retrying helm %s (attempt %d/%d) after %v...", actionName, attempt, maxAttempts, waitTime)
+			log.Infof("Retrying helm %s (attempt %d/%d) after %v...", actionName, attempt, maxAttempts, waitTime)
 			select {
-			case <-helmCtx.Ctx.Done():
-				return fmt.Errorf("helm %s aborted while waiting to retry: %w", actionName, helmCtx.Ctx.Err())
+			case <-ctx.Done():
+				return fmt.Errorf("helm %s aborted while waiting to retry: %w", actionName, ctx.Err())
 			case <-time.After(waitTime):
 			}
 		}
 
-		err = helmAction(helmCtx)
+		err = helmAction(ctx)
 		if err == nil {
 			return nil
 		}
@@ -120,13 +114,13 @@ func executeHelmActionWithRetries(helmCtx HelmCtx, actionName string, helmAction
 			return fmt.Errorf("helm %s failed: %w", actionName, err)
 		}
 
-		helmCtx.Log.Warningf("Transient error during helm %s: %v", actionName, err)
+		log.Warningf("Transient error during helm %s: %v", actionName, err)
 	}
 	return fmt.Errorf("helm %s failed after %d attempts: %w", actionName, maxAttempts, err)
 }
 
-func doInstall(helmCtx HelmCtx, opts InstallOptions) error {
-	cfg, err := newActionConfig(helmCtx, opts.Namespace)
+func doInstall(ctx context.Context, opts InstallOptions) error {
+	cfg, err := newActionConfig(ctx, opts.Namespace)
 	if err != nil {
 		return err
 	}
@@ -135,29 +129,25 @@ func doInstall(helmCtx HelmCtx, opts InstallOptions) error {
 	if err != nil {
 		return err
 	}
-	if helmCtx.Verbose {
-		helmCtx.Log.Dimf("resolved Helm chart for release %s as %q", opts.ReleaseName, chartPath)
-	}
+	log.Debugf("resolved Helm chart for release %s as %q", opts.ReleaseName, chartPath)
 
-	if helmCtx.Verbose {
-		if opts.ChartPath != "" {
-			helmCtx.Log.Dimf("installing Helm chart from directory %q as release %s into namespace %s",
-				opts.ChartPath, opts.ReleaseName, opts.Namespace)
-		} else {
-			helmCtx.Log.Dimf("installing Helm chart %s/%s:%s as release %s into namespace %s",
-				opts.RepoURL, opts.ChartName, opts.ChartVersion, opts.ReleaseName, opts.Namespace)
-		}
+	if opts.ChartPath != "" {
+		log.Debugf("installing Helm chart from directory %q as release %s into namespace %s",
+			opts.ChartPath, opts.ReleaseName, opts.Namespace)
+	} else {
+		log.Debugf("installing Helm chart %s/%s:%s as release %s into namespace %s",
+			opts.RepoURL, opts.ChartName, opts.ChartVersion, opts.ReleaseName, opts.Namespace)
 	}
 
 	status := releaseStatus(cfg, opts.ReleaseName)
 	if status.IsPending() || status == release.StatusFailed {
-		helmCtx.Log.Warningf("Helm release %s is in state %q, forcing uninstall before reinstall", opts.ReleaseName, status)
+		log.Warningf("Helm release %s is in state %q, forcing uninstall before reinstall", opts.ReleaseName, status)
 		uninstall := action.NewUninstall(cfg)
 		if _, err := uninstall.Run(opts.ReleaseName); err != nil && !strings.Contains(strings.ToLower(err.Error()), "not found") {
 			return fmt.Errorf("cleaning up stuck release %s: %w", opts.ReleaseName, err)
 		}
 	} else if status == release.StatusDeployed {
-		return doUpgrade(helmCtx, cfg, opts, chartPath)
+		return doUpgrade(ctx, cfg, opts, chartPath)
 	}
 
 	install := action.NewInstall(cfg)
@@ -170,15 +160,13 @@ func doInstall(helmCtx HelmCtx, opts InstallOptions) error {
 		return fmt.Errorf("loading chart from %q: %w", chartPath, err)
 	}
 
-	_, err = install.RunWithContext(helmCtx.Ctx, chart, opts.Values)
+	_, err = install.RunWithContext(ctx, chart, opts.Values)
 	return err
 }
 
-func doUpgrade(helmCtx HelmCtx, cfg *action.Configuration, opts InstallOptions, chartPath string) error {
-	if helmCtx.Verbose {
-		helmCtx.Log.Dimf("a Helm release named %s already exists in namespace %s, conducting upgrade",
-			opts.ReleaseName, opts.Namespace)
-	}
+func doUpgrade(ctx context.Context, cfg *action.Configuration, opts InstallOptions, chartPath string) error {
+	log.Debugf("a Helm release named %s already exists in namespace %s, conducting upgrade",
+		opts.ReleaseName, opts.Namespace)
 	upgrade := action.NewUpgrade(cfg)
 	upgrade.Namespace = opts.Namespace
 	upgrade.Wait = false
@@ -188,27 +176,25 @@ func doUpgrade(helmCtx HelmCtx, cfg *action.Configuration, opts InstallOptions, 
 		return fmt.Errorf("loading chart from %q: %w", chartPath, err)
 	}
 
-	_, err = upgrade.RunWithContext(helmCtx.Ctx, opts.ReleaseName, chart, opts.Values)
+	_, err = upgrade.RunWithContext(ctx, opts.ReleaseName, chart, opts.Values)
 	return err
 }
 
-func doUninstall(helmCtx HelmCtx, releaseName, namespace string) error {
-	cfg, err := newActionConfig(helmCtx, namespace)
+func doUninstall(ctx context.Context, releaseName, namespace string) error {
+	cfg, err := newActionConfig(ctx, namespace)
 	if err != nil {
 		return err
 	}
 
-	if helmCtx.Verbose {
-		helmCtx.Log.Dimf("uninstalling Helm release %s from namespace %s", releaseName, namespace)
-	}
+	log.Debugf("uninstalling Helm release %s from namespace %s", releaseName, namespace)
 
 	uninstall := action.NewUninstall(cfg)
 	_, err = uninstall.Run(releaseName)
 	return err
 }
 
-func doListByPrefix(helmCtx HelmCtx, prefix, namespace string) ([]string, error) {
-	cfg, err := newActionConfig(helmCtx, namespace)
+func doListByPrefix(ctx context.Context, prefix, namespace string) ([]string, error) {
+	cfg, err := newActionConfig(ctx, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -241,15 +227,13 @@ func isRetryable(err error) bool {
 	return false
 }
 
-func newActionConfig(helmCtx HelmCtx, namespace string) (*action.Configuration, error) {
+func newActionConfig(ctx context.Context, namespace string) (*action.Configuration, error) {
 	settings := cli.New()
 	settings.SetNamespace(namespace)
 
 	cfg := new(action.Configuration)
 	logFunc := func(format string, v ...any) {
-		if helmCtx.Verbose {
-			helmCtx.Log.Dimf("[helm] "+format, v...)
-		}
+		log.Debugf("[helm] "+format, v...)
 	}
 	if err := cfg.Init(settings.RESTClientGetter(), namespace, helmDriver, logFunc); err != nil {
 		return nil, fmt.Errorf("initializing helm configuration: %w", err)
@@ -274,7 +258,7 @@ func resolveChart(opts InstallOptions) (string, error) {
 
 // BuildDependencies fetches missing sub-chart dependencies for a local chart directory.
 // It is a no-op if the chart has no dependencies or all are already present.
-func BuildDependencies(log *logger.Logger, chartPath string) error {
+func BuildDependencies(chartPath string) error {
 	ch, err := loader.Load(chartPath)
 	if err != nil {
 		return fmt.Errorf("loading chart from %q: %w", chartPath, err)

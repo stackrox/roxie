@@ -11,6 +11,7 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/k8s"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
 )
 
@@ -40,8 +41,7 @@ func newTeardownCmd(settings *deployer.Config) *cobra.Command {
 }
 
 func runTeardown(cmd *cobra.Command, args []string) error {
-	log := globalLogger
-	if err := env.Initialize(log); err != nil {
+	if err := env.Initialize(); err != nil {
 		return err
 	}
 
@@ -61,7 +61,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	var clusterConfig *deployer.Config
-	clusterManifest, err := manifest.LoadManifestSecret(ctx, log)
+	clusterManifest, err := manifest.LoadManifestSecret(ctx)
 	if errors.Is(err, k8s.ErrResourceNotFound) {
 		log.Infof("No roxie manifest found in cluster, proceeding without it")
 	} else if err != nil {
@@ -75,26 +75,25 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	d, err := deployer.New(log)
+	d, err := deployer.New()
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
 	}
 	defer d.Cleanup()
 
 	d.SetConfig(deploySettings)
-	d.SetVerbose(verbose)
 
 	if err := d.Teardown(ctx, components); err != nil {
 		return fmt.Errorf("teardown failed: %w", err)
 	}
 
 	if components.IncludesCentral() {
-		if err := manifest.DeleteManifestSecret(ctx, log); err != nil {
+		if err := manifest.DeleteManifestSecret(ctx); err != nil {
 			log.Warningf("Failed to delete roxie manifest: %v", err)
 		}
 	}
 	if components == component.All {
-		if err := manifest.DeleteRoxieNamespace(ctx, log); err != nil {
+		if err := manifest.DeleteRoxieNamespace(ctx); err != nil {
 			log.Warningf("Failed to delete roxie namespace: %v", err)
 		}
 	}

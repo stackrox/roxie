@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stackrox/roxie/internal/logger"
 )
 
 func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
@@ -14,8 +13,7 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	t.Setenv("REGISTRY_USERNAME", "user")
 	t.Setenv("REGISTRY_PASSWORD", "pass")
 
-	log := logger.New()
-	da := New(log)
+	da := New()
 	da.skipCredVerification = true // Skip verification in tests
 
 	creds, err := da.GetAndVerifyCredentials()
@@ -85,8 +83,7 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	// Use a temporary home directory to simulate missing credentials.
 	t.Setenv("HOME", t.TempDir())
 
-	log := logger.New()
-	da := New(log)
+	da := New()
 	da.skipCredVerification = true // Skip verification in tests
 
 	_, err := da.GetAndVerifyCredentials()

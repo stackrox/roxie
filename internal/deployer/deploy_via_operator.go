@@ -14,8 +14,8 @@ import (
 
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/env"
-	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/k8s"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -34,14 +34,14 @@ var (
 
 // deployOperatorOnly deploys only the operator without any Central or SecuredCluster resources
 func (d *Deployer) deployOperatorOnly(ctx context.Context) error {
-	d.logger.Info("🚀 Deploying Operator only...")
+	log.Info("🚀 Deploying Operator only...")
 
 	if err := d.ensureOperatorDeployed(ctx); err != nil {
 		return err
 	}
 
-	d.logger.Success("✓ Operator deployed successfully")
-	d.logger.Info("You can now deploy Central or SecuredCluster components separately")
+	log.Success("✓ Operator deployed successfully")
+	log.Info("You can now deploy Central or SecuredCluster components separately")
 	return nil
 }
 
@@ -49,8 +49,8 @@ func (d *Deployer) deployOperatorOnly(ctx context.Context) error {
 func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 	// Skip operator deployment/checks if flag is set to false
 	if d.config.Operator.SkipDeploymentEnabled() {
-		d.logger.Info("ℹ️  Skipping operator deployment checks (--deploy-operator=false)")
-		d.logger.Info("   Assuming operator is already running...")
+		log.Info("ℹ️  Skipping operator deployment checks (--deploy-operator=false)")
+		log.Info("   Assuming operator is already running...")
 		return nil
 	}
 
@@ -69,7 +69,7 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 		return fmt.Errorf("detecting operator deployment mode: %w", err)
 	}
 	if operatorExists && currentMode == OperatorModeOLM {
-		d.logger.Info("🔄 Switching operator from OLM to non-OLM mode...")
+		log.Info("🔄 Switching operator from OLM to non-OLM mode...")
 		if err := d.teardownOperatorOLM(ctx); err != nil {
 			return fmt.Errorf("failed to teardown OLM operator: %w", err)
 		}
@@ -107,7 +107,7 @@ func (d *Deployer) teardownStaleOperatorNamespaces(ctx context.Context, desired 
 		if !d.operatorDeploymentExists(ctx, ns) && !d.namespaceExists(ns) {
 			continue
 		}
-		d.logger.Infof("🔄 Removing previous operator from namespace %s (no longer needed)...", ns)
+		log.Infof("🔄 Removing previous operator from namespace %s (no longer needed)...", ns)
 		instance := OperatorInstanceConfig{Namespace: ns}
 		switch ns {
 		case operatorNamespaceCentral:
@@ -130,10 +130,10 @@ func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance Op
 
 	if exists {
 		if d.isOperatorVersionCorrect(ctx, instance) {
-			d.logger.Infof("✓ Operator already deployed with correct version in namespace %s", instance.Namespace)
+			log.Infof("✓ Operator already deployed with correct version in namespace %s", instance.Namespace)
 			return nil
 		}
-		d.logger.Infof("🔄 Operator version mismatch in namespace %s, redeploying...", instance.Namespace)
+		log.Infof("🔄 Operator version mismatch in namespace %s, redeploying...", instance.Namespace)
 		needsTeardown = true
 		needsDeployment = true
 	}
@@ -171,7 +171,7 @@ func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 	if !operatorExists {
 		needsDeployment = true
 	} else if currentMode == OperatorModeNonOLM {
-		d.logger.Info("🔄 Switching operator from non-OLM to OLM mode...")
+		log.Info("🔄 Switching operator from non-OLM to OLM mode...")
 		needsTeardown = true
 		needsDeployment = true
 	} else {
@@ -181,9 +181,9 @@ func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 			EnvVars:   d.config.Operator.EnvVars,
 		}
 		if d.isOperatorVersionCorrect(ctx, instance) {
-			d.logger.Info("✓ Operator already deployed with correct version")
+			log.Info("✓ Operator already deployed with correct version")
 		} else {
-			d.logger.Info("🔄 Operator version mismatch, redeploying...")
+			log.Info("🔄 Operator version mismatch, redeploying...")
 			needsTeardown = true
 			needsDeployment = true
 		}
@@ -212,7 +212,7 @@ func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 
 // deployCentralOperator deploys Central using the operator
 func (d *Deployer) deployCentralOperator(ctx context.Context) error {
-	d.logger.Info("🚀 Deploying Central via Operator...")
+	log.Info("🚀 Deploying Central via Operator...")
 
 	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
 	if err := d.prepareNamespace(ctx, d.config.Central.Namespace, needPullSecrets); err != nil {
@@ -237,7 +237,7 @@ func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 	}
 
 	if d.config.Central.PauseReconciliationEnabled() {
-		d.logger.Infof("Adding pause-reconcile annotation to Central")
+		log.Infof("Adding pause-reconcile annotation to Central")
 		err := d.addPauseReconcileAnnotation(ctx, "Central", centralCrName, d.config.Central.Namespace)
 		if err != nil {
 			return err
@@ -251,23 +251,23 @@ func (d *Deployer) deployCentralOperator(ctx context.Context) error {
 func (d *Deployer) isOperatorVersionCorrect(ctx context.Context, instance OperatorInstanceConfig) bool {
 	currentImage, err := d.getDeployedOperatorImage(ctx, instance.Namespace)
 	if err != nil {
-		d.logger.Warningf("Could not retrieve operator image: %v", err)
+		log.Warningf("Could not retrieve operator image: %v", err)
 		return false
 	}
 
 	// Extract the tag from the current image
 	parts := strings.SplitN(currentImage, ":", 2)
 	if len(parts) < 2 {
-		d.logger.Warningf("Could not parse operator image tag from: %s", currentImage)
+		log.Warningf("Could not parse operator image tag from: %s", currentImage)
 		return false
 	}
 	currentTag := parts[1]
 
 	desiredTag := instance.Version.ToOperatorTag().String()
 	if currentTag != desiredTag {
-		d.logger.Info("Operator version mismatch detected:")
-		d.logger.Infof("  Current: %s", currentTag)
-		d.logger.Infof("  Desired: %s", desiredTag)
+		log.Info("Operator version mismatch detected:")
+		log.Infof("  Current: %s", currentTag)
+		log.Infof("  Desired: %s", desiredTag)
 		return false
 	}
 	return true
@@ -289,7 +289,7 @@ func (d *Deployer) getDeployedOperatorImage(ctx context.Context, namespace strin
 
 // prepareNamespace creates pull secrets in the namespace if needed
 func (d *Deployer) prepareNamespace(ctx context.Context, namespace string, needPullSecrets bool) error {
-	d.logger.Infof("Preparing namespace %s", namespace)
+	log.Infof("Preparing namespace %s", namespace)
 
 	if err := d.ensureNamespaceExists(namespace); err != nil {
 		return err
@@ -315,7 +315,7 @@ func (d *Deployer) ensurePullSecretExists(ctx context.Context, namespace string)
 		Stdin: strings.NewReader(pullSecretYAML),
 	})
 	if err != nil {
-		d.logger.Warningf("Could not apply pull secret: %v", err)
+		log.Warningf("Could not apply pull secret: %v", err)
 	}
 
 	return nil
@@ -348,15 +348,15 @@ func (d *Deployer) createAdminPasswordSecret(ctx context.Context) error {
 	if err != nil {
 		stderr := strings.TrimSpace(result.Stderr)
 		if len(stderr) > 0 {
-			d.logger.Errorf("kubectl apply produced error output:")
+			log.Errorf("kubectl apply produced error output:")
 			for line := range strings.SplitSeq(stderr, "\n") {
-				d.logger.Dim("| " + line)
+				log.Dim("| " + line)
 			}
 		}
 		return err
 	}
 
-	d.logger.Success("✓ Admin password secret created")
+	log.Success("✓ Admin password secret created")
 	return nil
 }
 
@@ -469,14 +469,14 @@ func getCentralResourcesOperator(resourcesProfile types.ResourceProfile) map[str
 
 // applyCentralCR applies the Central CR to the cluster
 func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}) error {
-	d.logger.Info("Applying Central custom resource")
+	log.Info("Applying Central custom resource")
 
-	if d.verbose {
+	if log.IsVerbose() {
 		if env.RunningInteractively {
-			d.logger.Dim("Central CR YAML:")
-			helpers.LogMultilineYaml(d.logger, cr)
+			log.Debug("Central CR YAML:")
+			log.LogMultilineYaml(cr)
 		} else {
-			d.logger.Dim("Skipping emitting Central CR in non-interactive mode, because it could leak confidential information")
+			log.Debug("Skipping emitting Central CR in non-interactive mode, because it could leak confidential information")
 		}
 	}
 
@@ -490,12 +490,12 @@ func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
-		d.logger.Errorf("kubectl stdout: %s", result.Stdout)
-		d.logger.Errorf("kubectl stderr: %s", result.Stderr)
+		log.Errorf("kubectl stdout: %s", result.Stdout)
+		log.Errorf("kubectl stderr: %s", result.Stderr)
 		return fmt.Errorf("failed to apply Central CR: %w\nStderr: %s", err, result.Stderr)
 	}
 
-	d.logger.Success("✓ Central Custom Resource applied")
+	log.Success("✓ Central Custom Resource applied")
 	return nil
 }
 
@@ -521,20 +521,20 @@ func (d *Deployer) waitForAvailableCondition(ctx context.Context, resource, name
 	if err != nil {
 		stderr := strings.TrimSpace(result.Stderr)
 		if len(stderr) > 0 {
-			d.logger.Errorf("kubectl wait produced error output:")
+			log.Errorf("kubectl wait produced error output:")
 			for line := range strings.SplitSeq(stderr, "\n") {
-				d.logger.Dim("| " + line)
+				log.Dim("| " + line)
 			}
 		}
 		return fmt.Errorf("error waiting for resource %s in namespace %s to become Available: %v", resource, namespace, err)
 	}
-	d.logger.Successf("✓ Resource %s in namespace %s is ready", resource, namespace)
+	log.Successf("✓ Resource %s in namespace %s is ready", resource, namespace)
 	return nil
 }
 
 // waitForResourceToExist polls until the given resource exists in the namespace.
 func (d *Deployer) waitForResourceToExist(ctx context.Context, resource, namespace string) error {
-	d.logger.Infof("Waiting for resource %s to exist in namespace %s...", resource, namespace)
+	log.Infof("Waiting for resource %s to exist in namespace %s...", resource, namespace)
 	for {
 		_, err := d.runKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", resource, "-n", namespace},
@@ -567,7 +567,7 @@ func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Com
 	if err != nil {
 		return err
 	}
-	d.logger.Infof("⏳ Waiting for %s to become ready (timeout: %s)...", comp, waitCfg.Timeout)
+	log.Infof("⏳ Waiting for %s to become ready (timeout: %s)...", comp, waitCfg.Timeout)
 
 	const padding = 5 * time.Second
 	waitCtx, cancel := context.WithTimeout(ctx, waitCfg.Timeout+padding)
@@ -582,7 +582,7 @@ func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Com
 			waitChannel <- fmt.Errorf("error waiting for %s deployment to become Available: %v", comp, err)
 			return
 		}
-		d.logger.Infof("Resource %s is now ready.", waitCfg.WaitFor)
+		log.Infof("Resource %s is now ready.", waitCfg.WaitFor)
 		waitChannel <- nil
 	}()
 
@@ -606,17 +606,17 @@ func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Com
 			// Track seen deployments and their states to avoid duplicate messages.
 			deploymentsProgressed, err := d.checkDeploymentProgressInNamespace(waitCtx, waitCfg.Namespace, seenDeployments)
 			if err != nil {
-				d.logger.Warningf("failed to check for deployment progress in namespace %s: %v", waitCfg.Namespace, err)
+				log.Warningf("failed to check for deployment progress in namespace %s: %v", waitCfg.Namespace, err)
 			}
 			podsProgressed, err := d.checkPodProgressInNamespace(waitCtx, waitCfg.Namespace, seenPods)
 			if err != nil {
-				d.logger.Warningf("failed to check for pod progress in namespace %s: %v", waitCfg.Namespace, err)
+				log.Warningf("failed to check for pod progress in namespace %s: %v", waitCfg.Namespace, err)
 			}
 			if deploymentsProgressed || podsProgressed {
 				lastUpdate = time.Now()
 			} else {
 				if time.Since(lastUpdate) > progressUpdatePeriod {
-					d.logger.Dimf("Still waiting for component %s in namespace %s", comp, waitCfg.Namespace)
+					log.Dimf("Still waiting for component %s in namespace %s", comp, waitCfg.Namespace)
 					lastUpdate = time.Now()
 				}
 			}
@@ -627,7 +627,7 @@ func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Com
 // waitForLoadBalancer waits for a LoadBalancer service to get an external IP.
 // Returns the endpoint as "host:port", with no https:// prefix.
 func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceName string, timeout int) (string, error) {
-	d.logger.Infof("⏳ Waiting for LoadBalancer %s to get external IP...", serviceName)
+	log.Infof("⏳ Waiting for LoadBalancer %s to get external IP...", serviceName)
 
 	start := time.Now()
 	for time.Since(start) < time.Duration(timeout)*time.Second {
@@ -638,9 +638,9 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 			ip := strings.TrimSpace(result.Stdout)
 			if ip != "" && ip != "<pending>" {
 				if env.RunningInteractively {
-					d.logger.Successf("✓ LoadBalancer IP: %s", ip)
+					log.Successf("✓ LoadBalancer IP: %s", ip)
 				} else {
-					d.logger.Success("✓ LoadBalancer IP")
+					log.Success("✓ LoadBalancer IP")
 				}
 				return fmt.Sprintf("%s:443", ip), nil
 			}
@@ -654,9 +654,9 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 			hostname := strings.TrimSpace(result.Stdout)
 			if hostname != "" && hostname != "<pending>" {
 				if env.RunningInteractively {
-					d.logger.Successf("✓ LoadBalancer hostname: %s", hostname)
+					log.Successf("✓ LoadBalancer hostname: %s", hostname)
 				} else {
-					d.logger.Success("✓ LoadBalancer hostname")
+					log.Success("✓ LoadBalancer hostname")
 				}
 				return fmt.Sprintf("%s:443", hostname), nil
 			}
@@ -676,7 +676,7 @@ func (d *Deployer) fetchCentralCACerts(ctx context.Context) error {
 	var caPEMs [][]byte
 
 	// Fetch the internal StackRox CA from the central-tls secret.
-	d.logger.Info("Fetching internal CA certificate from central-tls secret...")
+	log.Info("Fetching internal CA certificate from central-tls secret...")
 	internalCA, err := d.fetchSecretField(ctx, "central-tls", "ca\\.pem")
 	if err != nil {
 		return fmt.Errorf("failed to get CA cert from central-tls secret: %w", err)
@@ -687,10 +687,10 @@ func (d *Deployer) fetchCentralCACerts(ctx context.Context) error {
 	// trust pool. This includes the leaf — Central itself does the same
 	// when building the trust bundle for Sensor.
 	if secretName := d.defaultTLSSecretName(); secretName != "" {
-		d.logger.Infof("Fetching custom TLS certificates from secret %s...", secretName)
+		log.Infof("Fetching custom TLS certificates from secret %s...", secretName)
 		customCerts, err := d.fetchCustomTLSCerts(ctx, secretName)
 		if err != nil {
-			d.logger.Warningf("Could not fetch custom TLS certs from secret %s: %v", secretName, err)
+			log.Warningf("Could not fetch custom TLS certs from secret %s: %v", secretName, err)
 			// Try to continue.
 		} else {
 			caPEMs = append(caPEMs, customCerts...)
@@ -717,7 +717,7 @@ func (d *Deployer) fetchCentralCACerts(ctx context.Context) error {
 	}
 
 	d.roxCACertFile = fileName
-	d.logger.Successf("✓ CA certificates saved to: %s", d.roxCACertFile)
+	log.Successf("✓ CA certificates saved to: %s", d.roxCACertFile)
 	return nil
 }
 
@@ -766,7 +766,7 @@ func (d *Deployer) fetchCustomTLSCerts(ctx context.Context, secretName string) (
 		if err != nil {
 			return nil, fmt.Errorf("parsing certificate from secret %s: %w", secretName, err)
 		}
-		d.logger.Infof("Found certificate in %s: Subject.CN=%q, IsCA=%v",
+		log.Infof("Found certificate in %s: Subject.CN=%q, IsCA=%v",
 			secretName, cert.Subject.CommonName, cert.IsCA)
 		pems = append(pems, pem.EncodeToMemory(block))
 	}
@@ -782,7 +782,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 		if exposure == types.ExposureLoadBalancer {
 			_, err := d.waitForLoadBalancer(ctx, d.config.Central.Namespace, "central-loadbalancer", 300)
 			if err != nil {
-				d.logger.Warningf("LoadBalancer not ready: %v", err)
+				log.Warningf("LoadBalancer not ready: %v", err)
 			} else {
 				serviceName = "central-loadbalancer"
 			}
@@ -813,12 +813,12 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 	}
 
 	if err := d.fetchCentralCACerts(ctx); err != nil {
-		d.logger.Warningf("Could not fetch Central CA certs: %v", err)
+		log.Warningf("Could not fetch Central CA certs: %v", err)
 	}
 
 	if env.RunningInteractively {
-		d.logger.Successf("✓ Central is ready at: %s", d.centralEndpoint)
-		d.logger.Successf("✓ Admin password: %s", d.centralPassword)
+		log.Successf("✓ Central is ready at: %s", d.centralEndpoint)
+		log.Successf("✓ Admin password: %s", d.centralPassword)
 	}
 
 	return nil
@@ -826,7 +826,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 
 // deploySecuredClusterOperator deploys SecuredCluster using the operator.
 func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
-	d.logger.Info("🚀 Deploying SecuredCluster via Operator...")
+	log.Info("🚀 Deploying SecuredCluster via Operator...")
 
 	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
 	if err := d.prepareNamespace(ctx, d.config.SecuredCluster.Namespace, needPullSecrets); err != nil {
@@ -845,7 +845,7 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 	if !found || clusterName == "" {
 		return fmt.Errorf("cluster name not found in SecuredCluster CR")
 	}
-	d.logger.Infof("Using cluster name: %s", clusterName)
+	log.Infof("Using cluster name: %s", clusterName)
 
 	crsContent, err := d.generateCRS(ctx, clusterName)
 	if err != nil {
@@ -865,14 +865,14 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 	}
 
 	if d.config.SecuredCluster.PauseReconciliationEnabled() {
-		d.logger.Infof("Adding pause-reconcile annotation to SecuredCluster")
+		log.Infof("Adding pause-reconcile annotation to SecuredCluster")
 		err := d.addPauseReconcileAnnotation(ctx, "SecuredCluster", securedClusterCrName, d.config.SecuredCluster.Namespace)
 		if err != nil {
 			return err
 		}
 	}
 
-	d.logger.Successf("✓ SecuredCluster '%s' is ready", clusterName)
+	log.Successf("✓ SecuredCluster '%s' is ready", clusterName)
 	return nil
 }
 
@@ -933,19 +933,19 @@ func getSecuredClusterResourcesOperator(resourceProfile types.ResourceProfile) m
 
 // applySecuredClusterCR applies the SecuredCluster CR to the cluster
 func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]interface{}) error {
-	d.logger.Info("Applying SecuredCluster custom resource")
+	log.Info("Applying SecuredCluster custom resource")
 
 	yamlData, err := yaml.Marshal(cr)
 	if err != nil {
 		return fmt.Errorf("failed to marshal SecuredCluster CR: %w", err)
 	}
 
-	if d.verbose {
+	if log.IsVerbose() {
 		if env.RunningInteractively {
-			d.logger.Dim("SecuredCluster CR YAML:")
-			d.logger.Dim(string(yamlData))
+			log.Debug("SecuredCluster CR YAML:")
+			log.Debug(string(yamlData))
 		} else {
-			d.logger.Dim("Skipping emitting SecuredCluster CR in non-interactive mode, because it could leak confidential information")
+			log.Debug("Skipping emitting SecuredCluster CR in non-interactive mode, because it could leak confidential information")
 		}
 	}
 
@@ -954,10 +954,10 @@ func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]inte
 		Stdin: bytes.NewReader(yamlData),
 	})
 	if err != nil {
-		d.logger.Errorf("kubectl error: %s", result.Stderr)
+		log.Errorf("kubectl error: %s", result.Stderr)
 		return fmt.Errorf("failed to apply SecuredCluster CR: %w", err)
 	}
 
-	d.logger.Success("✓ SecuredCluster CR applied")
+	log.Success("✓ SecuredCluster CR applied")
 	return nil
 }

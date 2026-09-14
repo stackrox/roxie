@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 const (
@@ -21,7 +21,6 @@ const (
 
 // DockerAuth handles Docker authentication and pull secret management.
 type DockerAuth struct {
-	logger               *logger.Logger
 	skipCredVerification bool
 }
 
@@ -50,10 +49,8 @@ type Credentials struct {
 }
 
 // New creates a new DockerAuth instance.
-func New(log *logger.Logger) *DockerAuth {
-	return &DockerAuth{
-		logger: log,
-	}
+func New() *DockerAuth {
+	return &DockerAuth{}
 }
 
 // GetAndVerifyCredentials retrieves and verifies Docker credentials.
@@ -75,7 +72,7 @@ func (d *DockerAuth) GetAndVerifyCredentials() (*Credentials, error) {
 	if username == "" {
 		// Try to get from Docker config file.
 		dockerConfigPath := filepath.Join(os.Getenv("HOME"), ".docker", "config.json")
-		d.logger.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain Docker credentials from config file: %s", dockerConfigPath)
+		log.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain Docker credentials from config file: %s", dockerConfigPath)
 		if _, err := os.Stat(dockerConfigPath); err == nil {
 			var err error
 			username, password, err = d.getCredentialsFromDockerConfig(dockerConfigPath)
@@ -197,8 +194,8 @@ func (d *DockerAuth) VerifyCredentials(username, password string) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		d.logger.Warningf("Failed to verify credentials for %s: %v", acsImageRegistry, err)
-		d.logger.Dimf("Verification output: %s", string(output))
+		log.Warningf("Failed to verify credentials for %s: %v", acsImageRegistry, err)
+		log.Dimf("Verification output: %s", string(output))
 		return fmt.Errorf("credential verification failed for %s: %w", acsImageRegistry, err)
 	}
 
@@ -212,7 +209,7 @@ func (d *DockerAuth) VerifyCredentials(username, password string) error {
 		return fmt.Errorf("credential verification failed: no token received from %s", acsImageRegistry)
 	}
 
-	d.logger.Dimf("Successfully verified credentials for %s (repository: %s)", acsImageRegistry, mainImageRepository)
+	log.Dimf("Successfully verified credentials for %s (repository: %s)", acsImageRegistry, mainImageRepository)
 	return nil
 }
 

@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/client"
@@ -38,7 +38,7 @@ func ListLocalImages(ctx context.Context, host string) ([]string, error) {
 }
 
 // ExecInContainer runs a command inside a container and returns its stdout.
-func ExecInContainer(ctx context.Context, log *logger.Logger, host, containerName string, cmd []string) ([]byte, error) {
+func ExecInContainer(ctx context.Context, host, containerName string, cmd []string) ([]byte, error) {
 	cli, err := client.New(client.WithHost(host))
 	if err != nil {
 		return nil, fmt.Errorf("creating container runtime client: %w", err)
@@ -102,7 +102,7 @@ func ParseCrictlImages(data []byte) ([]string, error) {
 
 // ResolveSocket returns the container runtime socket URI by checking DOCKER_HOST,
 // then probing well-known paths for Docker, Podman. Returns "" if none found.
-func ResolveSocket(log *logger.Logger) string {
+func ResolveSocket() string {
 	if host := os.Getenv("DOCKER_HOST"); host != "" {
 		log.Dimf("Using container runtime socket from DOCKER_HOST: %s", host)
 		return host

@@ -21,8 +21,7 @@ func newEnvCmd() *cobra.Command {
 }
 
 func runEnv(cmd *cobra.Command, args []string) error {
-	log := globalLogger
-	if err := env.Initialize(log); err != nil {
+	if err := env.Initialize(); err != nil {
 		return err
 	}
 

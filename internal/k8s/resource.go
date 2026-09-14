@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -20,7 +20,6 @@ var (
 //
 // Parameters:
 //   - ctx: The context for the kubectl command
-//   - log: Logger for diagnostic output (can be nil for silent operation)
 //   - namespace: The namespace where the resource is located (use "" for cluster-scoped resources)
 //   - resourceType: The resource type (e.g., "pod", "secret", "pvc")
 //   - resourceName: The name of the resource
@@ -28,14 +27,14 @@ var (
 // Returns:
 //   - *unstructured.Unstructured: The resource as an unstructured object containing all metadata
 //   - error: nil if successful, error otherwise (including ErrResourceNotFound for not found resources)
-func RetrieveResourceFromCluster(ctx context.Context, log *logger.Logger, namespace, resourceType, resourceName string) (*unstructured.Unstructured, error) {
+func RetrieveResourceFromCluster(ctx context.Context, namespace, resourceType, resourceName string) (*unstructured.Unstructured, error) {
 	// We use --ignore-not-found=true for more reliable distinction between "not found" and other errors.
 	args := []string{"get", resourceType, resourceName, "-o", "json", "--ignore-not-found=true"}
 	if namespace != "" {
 		args = append([]string{"-n", namespace}, args...)
 	}
 
-	result, err := RunKubectl(ctx, log, KubectlOptions{
+	result, err := RunKubectl(ctx, KubectlOptions{
 		Args: args,
 	})
 
@@ -45,17 +44,13 @@ func RetrieveResourceFromCluster(ctx context.Context, log *logger.Logger, namesp
 		return nil, ErrResourceNotFound
 	}
 	if err != nil {
-		if log != nil {
-			log.Warningf("Failed to retrieve %s/%s from namespace %s: %v", resourceType, resourceName, namespace, err)
-		}
+		log.Warningf("Failed to retrieve %s/%s from namespace %s: %v", resourceType, resourceName, namespace, err)
 		return nil, fmt.Errorf("kubectl get failed: %w", err)
 	}
 
 	obj := &unstructured.Unstructured{}
 	if err := json.Unmarshal([]byte(result.Stdout), obj); err != nil {
-		if log != nil {
-			log.Warningf("Failed to unmarshal %s/%s: %v", resourceType, resourceName, err)
-		}
+		log.Warningf("Failed to unmarshal %s/%s: %v", resourceType, resourceName, err)
 		return nil, fmt.Errorf("failed to unmarshal resource JSON: %w", err)
 	}
 
@@ -89,8 +84,8 @@ func ResourceNotOwnedByName(obj *unstructured.Unstructured, ownerName string) bo
 // Returns:
 //   - string: the label value -- if the label is not found, an empty string is returned without error.
 //   - error: nil if successful, error otherwise (including ErrResourceNotFound for not found resources)
-func RetrieveClusterResourceLabel(ctx context.Context, log *logger.Logger, namespace, resourceType, resourceName, label string) (string, error) {
-	u, err := RetrieveResourceFromCluster(ctx, log, namespace, resourceType, resourceName)
+func RetrieveClusterResourceLabel(ctx context.Context, namespace, resourceType, resourceName, label string) (string, error) {
+	u, err := RetrieveResourceFromCluster(ctx, namespace, resourceType, resourceName)
 	if err != nil {
 		return "", fmt.Errorf("retrieving resource %s/%s from namespace %s: %w", resourceType, resourceName, namespace, err)
 	}
