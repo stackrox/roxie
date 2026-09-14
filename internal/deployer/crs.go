@@ -17,7 +17,7 @@ import (
 
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/k8s"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 var (
@@ -61,7 +61,7 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if attempt > 1 {
 			waitTime := time.Duration(attempt*baseRetryDelay) * time.Second
-			d.logger.Infof("Retrying CRS generation (attempt %d/%d) after %v...", attempt, maxAttempts, waitTime)
+			log.Infof("Retrying CRS generation (attempt %d/%d) after %v...", attempt, maxAttempts, waitTime)
 			select {
 			case <-ctx.Done():
 				return "", ctx.Err()
@@ -76,14 +76,14 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 		crsContent, err := d.generateCRSOnce(ctx, client, crsName)
 		if err != nil {
 			if d.isRetryableError(err) {
-				d.logger.Warningf("Transient error generating CRS: %v", err)
+				log.Warningf("Transient error generating CRS: %v", err)
 				lastErr = err
 				continue
 			}
 			return "", fmt.Errorf("CRS generation failed with non-retryable error: %w", err)
 		}
 
-		d.logger.Success("✓ CRS generated")
+		log.Success("✓ CRS generated")
 		return crsContent, nil
 	}
 
@@ -111,12 +111,12 @@ func (d *Deployer) centralHTTPClient() (*http.Client, error) {
 			}
 			pool.AddCert(cert)
 			caCertsAdded++
-			d.logger.Dimf("CA cert #%d: Subject.CN=%q, Issuer.CN=%q, SubjectKeyId=%x", caCertsAdded, cert.Subject.CommonName, cert.Issuer.CommonName, cert.SubjectKeyId)
+			log.Dimf("CA cert #%d: Subject.CN=%q, Issuer.CN=%q, SubjectKeyId=%x", caCertsAdded, cert.Subject.CommonName, cert.Issuer.CommonName, cert.SubjectKeyId)
 		}
-		d.logger.Infof("Loaded %d CA certificate(s) from %q", caCertsAdded, d.roxCACertFile)
+		log.Infof("Loaded %d CA certificate(s) from %q", caCertsAdded, d.roxCACertFile)
 		tlsConfig.RootCAs = pool
 		tlsConfig.InsecureSkipVerify = true
-		tlsConfig.VerifyPeerCertificate = centralVerifyFunc(d.logger, tlsConfig)
+		tlsConfig.VerifyPeerCertificate = centralVerifyFunc(tlsConfig)
 	}
 
 	return &http.Client{
@@ -129,7 +129,7 @@ func (d *Deployer) centralHTTPClient() (*http.Client, error) {
 
 // generateCRSOnce generates a Cluster Registration Secret via Central's REST API.
 func (d *Deployer) generateCRSOnce(ctx context.Context, client *http.Client, crsName string) (string, error) {
-	d.logger.Infof("Generating CRS named %q via Central API...", crsName)
+	log.Infof("Generating CRS named %q via Central API...", crsName)
 
 	reqBody, err := json.Marshal(crsGenRequest{Name: crsName})
 	if err != nil {
@@ -199,7 +199,7 @@ func (d *Deployer) isRetryableError(err error) bool {
 // Forging a certificate trusted by this pool requires the CA private key, which
 // is stored in the central-tls secret on the cluster. Reading that secret requires
 // kubectl access — at which point the attacker can read the admin password directly.
-func centralVerifyFunc(log *logger.Logger, conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
+func centralVerifyFunc(conf *tls.Config) func([][]byte, [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 		if len(rawCerts) == 0 {
 			return errors.New("remote peer presented no certificates")
@@ -235,18 +235,18 @@ func centralVerifyFunc(log *logger.Logger, conf *tls.Config) func([][]byte, [][]
 
 // applyCRS applies the CRS content to the sensor namespace
 func (d *Deployer) applyCRS(ctx context.Context, crsContent string) error {
-	d.logger.Info("Applying CRS to sensor namespace")
+	log.Info("Applying CRS to sensor namespace")
 
 	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-n", d.config.SecuredCluster.Namespace, "-f", "-"},
 		Stdin: strings.NewReader(crsContent),
 	})
 	if err != nil {
-		d.logger.Errorf("kubectl stdout: %s", result.Stdout)
-		d.logger.Errorf("kubectl stderr: %s", result.Stderr)
+		log.Errorf("kubectl stdout: %s", result.Stdout)
+		log.Errorf("kubectl stderr: %s", result.Stderr)
 		return fmt.Errorf("failed to apply CRS: %w\nStderr: %s", err, result.Stderr)
 	}
 
-	d.logger.Success("✓ CRS applied")
+	log.Success("✓ CRS applied")
 	return nil
 }

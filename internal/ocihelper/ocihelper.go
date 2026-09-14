@@ -15,12 +15,12 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	mobyclient "github.com/moby/moby/client"
 
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 // VerifyImageExistence verifies that an OCI image is accessible.
 // Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
-func VerifyImageExistence(ctx context.Context, log *logger.Logger, imageRef string) error {
+func VerifyImageExistence(ctx context.Context, imageRef string) error {
 	log.Dimf("Inspecting image %s", imageRef)
 
 	ref, err := name.ParseReference(imageRef)
@@ -42,7 +42,7 @@ func VerifyImageExistence(ctx context.Context, log *logger.Logger, imageRef stri
 
 // ExtractManifestsFromImage extracts the /manifests/ directory from an operator bundle image.
 // Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.
-func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef, destDir, containerRuntimeSocket string) error {
+func ExtractManifestsFromImage(ctx context.Context, imageRef, destDir, containerRuntimeSocket string) error {
 	tempDir, err := os.MkdirTemp("", "oci-image-")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
@@ -51,13 +51,13 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 
 	log.Dimf("Using temporary directory: %s", tempDir)
 
-	img, err := assureImageExistsLocally(ctx, log, imageRef, containerRuntimeSocket)
+	img, err := assureImageExistsLocally(ctx, imageRef, containerRuntimeSocket)
 	if err != nil {
 		return err
 	}
 
 	log.Dim("Extracting /manifests/ directory from image layers...")
-	if err := extractManifestsFromImage(log, img, tempDir, destDir); err != nil {
+	if err := extractManifestsFromImage(img, tempDir, destDir); err != nil {
 		return err
 	}
 
@@ -65,7 +65,7 @@ func ExtractManifestsFromImage(ctx context.Context, log *logger.Logger, imageRef
 	return nil
 }
 
-func assureImageExistsLocally(ctx context.Context, log *logger.Logger, imageRef, containerRuntimeSocket string) (v1.Image, error) {
+func assureImageExistsLocally(ctx context.Context, imageRef, containerRuntimeSocket string) (v1.Image, error) {
 	log.Dimf("Fetching image %s", imageRef)
 
 	ref, err := name.ParseReference(imageRef)
@@ -111,7 +111,7 @@ func assureImageExistsLocally(ctx context.Context, log *logger.Logger, imageRef,
 }
 
 // extractManifestsFromImage extracts /manifests/ from an OCI image.
-func extractManifestsFromImage(log *logger.Logger, img v1.Image, tempExtractDir, destDir string) error {
+func extractManifestsFromImage(img v1.Image, tempExtractDir, destDir string) error {
 	layers, err := img.Layers()
 	if err != nil {
 		return fmt.Errorf("failed to get image layers: %w", err)
@@ -122,7 +122,7 @@ func extractManifestsFromImage(log *logger.Logger, img v1.Image, tempExtractDir,
 	// Extract all layers into tempExtractDir
 	for i, layer := range layers {
 		log.Dimf("Extracting layer %d/%d...", i+1, len(layers))
-		if err := extractLayerToDir(log, layer, tempExtractDir); err != nil {
+		if err := extractLayerToDir(layer, tempExtractDir); err != nil {
 			return fmt.Errorf("failed to extract layer %d: %w", i+1, err)
 		}
 	}
@@ -139,18 +139,18 @@ func extractManifestsFromImage(log *logger.Logger, img v1.Image, tempExtractDir,
 }
 
 // extractLayerToDir extracts a single image layer to a directory.
-func extractLayerToDir(log *logger.Logger, layer v1.Layer, destDir string) error {
+func extractLayerToDir(layer v1.Layer, destDir string) error {
 	rc, err := layer.Uncompressed()
 	if err != nil {
 		return fmt.Errorf("failed to get layer contents: %w", err)
 	}
 	defer rc.Close()
 
-	return extractTarToDir(log, rc, destDir)
+	return extractTarToDir(rc, destDir)
 }
 
 // extractTarToDir extracts an uncompressed tar stream to a directory.
-func extractTarToDir(log *logger.Logger, r io.Reader, destDir string) error {
+func extractTarToDir(r io.Reader, destDir string) error {
 	// Open a Root directory to prevent path traversal attacks.
 	root, err := os.OpenRoot(destDir)
 	if err != nil {
