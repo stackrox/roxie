@@ -8,13 +8,12 @@ import (
 	"time"
 
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestResolveBundleImage_StackroxIOFallsBackToDefault_Integration(t *testing.T) {
-	d := &Deployer{logger: logger.New()}
+	d := &Deployer{}
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
@@ -28,7 +27,7 @@ func TestResolveBundleImage_StackroxIOFallsBackToDefault_Integration(t *testing.
 }
 
 func TestResolveBundleImage_NonNotFoundErrorPropagates_Integration(t *testing.T) {
-	d := &Deployer{logger: logger.New()}
+	d := &Deployer{}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 

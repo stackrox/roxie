@@ -126,7 +126,7 @@ func (d *DockerAuth) findAuthConfigPath() (string, error) {
 	for _, path := range d.authFiles {
 		_, err := os.Stat(path)
 		if errors.Is(err, fs.ErrNotExist) {
-			d.logger.Dimf("%q not found", path)
+			log.Dimf("%q not found", path)
 		} else if err != nil {
 			return "", err
 		} else {
