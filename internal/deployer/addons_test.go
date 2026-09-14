@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -238,9 +237,7 @@ func TestResolveAddOns(t *testing.T) {
 		},
 	}
 
-	addOnCfg := AddOnConfig{
-		log: logger.New(),
-	}
+	addOnCfg := AddOnConfig{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resolved, err := resolveEnabledAddOns(tt.cfg, addOnCfg)
