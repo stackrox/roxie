@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/stackrox/roxie/internal/helpers"
-	"github.com/stackrox/roxie/internal/logger"
 )
 
 func TestMain(m *testing.M) {
@@ -49,10 +48,9 @@ func TestMain(m *testing.M) {
 }
 
 func lookupLatestTag() (string, error) {
-	log := logger.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	tag, err := helpers.LookupLatestTag(ctx, log)
+	tag, err := helpers.LookupLatestTag(ctx)
 	if err != nil {
 		return "", err
 	}

@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,8 +13,7 @@ func TestImageCacheLoadSaveRoundtrip(t *testing.T) {
 	tmpDir := t.TempDir()
 	cachePath := filepath.Join(tmpDir, ".roxie.image_cache")
 
-	log := logger.New()
-	c, err := New(log, cachePath, 20)
+	c, err := New(cachePath, 20)
 	require.NoError(t, err, "creating ImageCache failed")
 
 	if len(c.cache) != 0 {
@@ -30,7 +28,7 @@ func TestImageCacheLoadSaveRoundtrip(t *testing.T) {
 	}
 
 	// Reopen cache and verify persistence
-	c2, err := New(log, cachePath, 20)
+	c2, err := New(cachePath, 20)
 	require.NoError(t, err, "creating ImageCache failed")
 	if !c2.IsCached("quay.io/example/app:1") {
 		t.Error("Image should be cached after reopening")
@@ -52,8 +50,7 @@ func TestImageCacheHandlesOldFormat(t *testing.T) {
 		t.Fatalf("Failed to write cache file: %v", err)
 	}
 
-	log := logger.New()
-	c, err := New(log, cachePath, 20)
+	c, err := New(cachePath, 20)
 	require.NoError(t, err, "creating ImageCache failed")
 
 	if !c.IsCached("a") {
@@ -68,9 +65,8 @@ func TestImageCacheMaxEntries(t *testing.T) {
 	tmpDir := t.TempDir()
 	cachePath := filepath.Join(tmpDir, ".roxie.image_cache")
 
-	log := logger.New()
 	maxEntries := 5
-	c, err := New(log, cachePath, maxEntries)
+	c, err := New(cachePath, maxEntries)
 	require.NoError(t, err, "creating ImageCache failed")
 
 	// Add more than maxEntries
@@ -92,8 +88,7 @@ func TestImageCacheMoveToEnd(t *testing.T) {
 	tmpDir := t.TempDir()
 	cachePath := filepath.Join(tmpDir, ".roxie.image_cache")
 
-	log := logger.New()
-	c, err := New(log, cachePath, 5)
+	c, err := New(cachePath, 5)
 	require.NoError(t, err, "creating ImageCache failed")
 
 	c.AddToCache("image1")
