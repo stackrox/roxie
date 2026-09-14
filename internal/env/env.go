@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/stackrox/roxie/internal/containerutil"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 	"golang.org/x/term"
 )
@@ -59,12 +59,12 @@ func isRunningInteractively() bool {
 
 // ensureInitialized performs lazy initialization of cluster information
 // This avoids contacting the cluster on package import
-func ensureInitialized(log *logger.Logger) error {
+func ensureInitialized() error {
 	initializationMutex.Lock()
 	defer initializationMutex.Unlock()
 
 	if !initialized {
-		kubeConfig, err := fetchKubeConfig(log)
+		kubeConfig, err := fetchKubeConfig()
 		if err != nil {
 			return err
 		}
@@ -105,10 +105,7 @@ type KubeCluster struct {
 // Retries on failure to handle race conditions during container startup, which I have
 // observed in relation with podman :U mounts: the container was starting before the gcloud config
 // was writable by the container user, hence GKE authentication failed immediately.
-func Initialize(log *logger.Logger) error {
-	if log == nil {
-		log = logger.New()
-	}
+func Initialize() error {
 	if RunningInRoxieContainer {
 		log.Dim("Running containerized.")
 	}
@@ -118,7 +115,7 @@ func Initialize(log *logger.Logger) error {
 	var lastErr error
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err := ensureInitialized(log)
+		err := ensureInitialized()
 		if err == nil {
 			return nil
 		}
@@ -217,8 +214,8 @@ func isOpenShift4(apiResources []string) bool {
 }
 
 // fetchKubeConfig retrieves the current kubectl configuration
-func fetchKubeConfig(log *logger.Logger) (KubeConfig, error) {
-	if err := kubeconfigChecks(log); err != nil {
+func fetchKubeConfig() (KubeConfig, error) {
+	if err := kubeconfigChecks(); err != nil {
 		return KubeConfig{}, err
 	}
 	// Get current context
@@ -264,7 +261,7 @@ func fetchKubeConfig(log *logger.Logger) (KubeConfig, error) {
 	}, nil
 }
 
-func kubeconfigChecks(log *logger.Logger) error {
+func kubeconfigChecks() error {
 	kubeConfigPath, err := getKubeConfigPath()
 	if err != nil {
 		return fmt.Errorf("getting kubeconfig path: %w", err)
@@ -318,7 +315,7 @@ func fetchAPIResources() ([]string, error) {
 	return lines, nil
 }
 
-func IsInStackroxRepository(log *logger.Logger) bool {
+func IsInStackroxRepository() bool {
 	out, err := exec.Command("git", "remote", "-v").Output()
 	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		log.Dimf("Not a git repository, ignoring ('git remote' returned %d)", exitErr.ExitCode())
@@ -349,7 +346,7 @@ func isStackRoxRepositoryRemote(remote string) bool {
 	return stackroxRepoPattern.MatchString(remote)
 }
 
-func GetStackroxRepositoryTag(log *logger.Logger) (string, error) {
+func GetStackroxRepositoryTag() (string, error) {
 	topLevelDir, err := GetStackRoxTopLevelDir()
 	if err != nil {
 		return "", fmt.Errorf("getting stackrox top level directory: %w", err)

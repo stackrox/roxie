@@ -12,7 +12,7 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/k8s"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -58,7 +58,7 @@ func manifestToSecret(m RoxieManifest) (*unstructured.Unstructured, error) {
 	return secret, nil
 }
 
-func CreateManifestSecretOnCluster(ctx context.Context, log *logger.Logger, m RoxieManifest) error {
+func CreateManifestSecretOnCluster(ctx context.Context, m RoxieManifest) error {
 	secret, err := manifestToSecret(m)
 	if err != nil {
 		return fmt.Errorf("failed to convert manifest to secret: %w", err)
@@ -69,11 +69,11 @@ func CreateManifestSecretOnCluster(ctx context.Context, log *logger.Logger, m Ro
 		return fmt.Errorf("failed to marshal manifest secret: %w", err)
 	}
 
-	if err := ensureRoxieNamespace(ctx, log); err != nil {
+	if err := ensureRoxieNamespace(ctx); err != nil {
 		return fmt.Errorf("failed to ensure roxie namespace exists: %w", err)
 	}
 
-	_, err = k8s.RunKubectl(ctx, log, k8s.KubectlOptions{
+	_, err = k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -85,8 +85,8 @@ func CreateManifestSecretOnCluster(ctx context.Context, log *logger.Logger, m Ro
 	return nil
 }
 
-func LoadManifestSecret(ctx context.Context, log *logger.Logger) (*RoxieManifest, error) {
-	obj, err := k8s.RetrieveResourceFromCluster(ctx, log, roxieNamespace, "secret", manifestSecretName)
+func LoadManifestSecret(ctx context.Context) (*RoxieManifest, error) {
+	obj, err := k8s.RetrieveResourceFromCluster(ctx, roxieNamespace, "secret", manifestSecretName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve manifest secret: %w", err)
 	}
@@ -112,23 +112,23 @@ func LoadManifestSecret(ctx context.Context, log *logger.Logger) (*RoxieManifest
 	return &m, nil
 }
 
-func DeleteManifestSecret(ctx context.Context, log *logger.Logger) error {
-	_, err := k8s.RunKubectl(ctx, log, k8s.KubectlOptions{
+func DeleteManifestSecret(ctx context.Context) error {
+	_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "secret", manifestSecretName, "-n", roxieNamespace, "--ignore-not-found=true"},
 		IgnoreErrors: true,
 	})
 	return err
 }
 
-func DeleteRoxieNamespace(ctx context.Context, log *logger.Logger) error {
-	_, err := k8s.RunKubectl(ctx, log, k8s.KubectlOptions{
+func DeleteRoxieNamespace(ctx context.Context) error {
+	_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "namespace", roxieNamespace, "--ignore-not-found=true"},
 		IgnoreErrors: true,
 	})
 	return err
 }
 
-func ensureRoxieNamespace(ctx context.Context, log *logger.Logger) error {
+func ensureRoxieNamespace(ctx context.Context) error {
 	ns := &unstructured.Unstructured{
 		Object: map[string]any{
 			"apiVersion": "v1",
@@ -145,7 +145,7 @@ func ensureRoxieNamespace(ctx context.Context, log *logger.Logger) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal namespace: %w", err)
 	}
-	_, err = k8s.RunKubectl(ctx, log, k8s.KubectlOptions{
+	_, err = k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(nsYAML),
 	})
@@ -156,10 +156,10 @@ func ensureRoxieNamespace(ctx context.Context, log *logger.Logger) error {
 	return nil
 }
 
-func ManifestToCentralDeploymentInfo(ctx context.Context, log *logger.Logger, tempDir string, m *RoxieManifest) (types.CentralDeploymentInfo, error) {
+func ManifestToCentralDeploymentInfo(ctx context.Context, tempDir string, m *RoxieManifest) (types.CentralDeploymentInfo, error) {
 	roxieEnv := m.RoxieEnvironment
 
-	caCertFile, err := fetchCACertForShell(ctx, log, m.Config.Central.Namespace, tempDir)
+	caCertFile, err := fetchCACertForShell(ctx, m.Config.Central.Namespace, tempDir)
 	if err != nil {
 		// Nothing we expect to happen, but in any case, don't let the deployment fail here.
 		log.Warningf("Could not fetch CA cert: %v", err)
@@ -175,10 +175,10 @@ func ManifestToCentralDeploymentInfo(ctx context.Context, log *logger.Logger, te
 	}, nil
 }
 
-func fetchCACertForShell(ctx context.Context, log *logger.Logger, centralNamespace, tempDir string) (string, error) {
+func fetchCACertForShell(ctx context.Context, centralNamespace, tempDir string) (string, error) {
 	log.Info("Fetching Central CA certificate...")
 
-	result, err := k8s.RunKubectl(ctx, log, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "secret", "central-tls", "-n", centralNamespace, "-o", "jsonpath={.data.ca\\.pem}"},
 	})
 	if err != nil {

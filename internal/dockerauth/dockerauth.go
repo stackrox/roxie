@@ -19,7 +19,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 // splitRegistryHost splits a resolved image registry (e.g. "quay.io/stackrox-io")
@@ -31,7 +31,6 @@ func splitRegistryHost(registry string) (host, path string) {
 
 // DockerAuth handles Docker authentication and pull secret management.
 type DockerAuth struct {
-	logger               *logger.Logger
 	skipCredVerification bool
 
 	authFiles []string
@@ -62,7 +61,7 @@ type Credentials struct {
 }
 
 // New creates a new DockerAuth instance.
-func New(log *logger.Logger) *DockerAuth {
+func New() *DockerAuth {
 	authFiles := []string{filepath.Join(os.Getenv("HOME"), ".docker", "config.json")}
 	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if xdgRuntimeDir != "" {
@@ -71,7 +70,6 @@ func New(log *logger.Logger) *DockerAuth {
 	authFiles = append(authFiles, filepath.Join(os.Getenv("HOME"), ".config", "containers", "auth.json"))
 
 	return &DockerAuth{
-		logger:    log,
 		authFiles: authFiles,
 	}
 }
@@ -100,7 +98,7 @@ func (d *DockerAuth) GetAndVerifyCredentials(ctx context.Context, registry strin
 		if err != nil {
 			return nil, err
 		}
-		d.logger.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain registry credentials from config file: %s", registryAuthPath)
+		log.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain registry credentials from config file: %s", registryAuthPath)
 		username, password, err = d.getCredentialsFromDockerConfig(registryAuthPath, host)
 		if err != nil {
 			return nil, err
@@ -230,7 +228,7 @@ func (d *DockerAuth) verifyCredentials(ctx context.Context, username, password, 
 		return fmt.Errorf("credential verification failed for %s: %w", host, err)
 	}
 
-	d.logger.Dimf("Successfully verified credentials for %s (repository: %s)", host, repository)
+	log.Dimf("Successfully verified credentials for %s (repository: %s)", host, repository)
 	return nil
 }
 
