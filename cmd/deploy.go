@@ -19,7 +19,7 @@ import (
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/k8s"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
 	"github.com/stackrox/roxie/internal/roxieenv"
 	"github.com/stackrox/roxie/internal/stackroxversions"
@@ -216,9 +216,8 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 }
 
 func runDeploy(cmd *cobra.Command, args []string) error {
-	log := globalLogger
 	if !dryRun {
-		if err := env.Initialize(log); err != nil {
+		if err := env.Initialize(); err != nil {
 			return err
 		}
 	}
@@ -239,7 +238,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	setupCtx, setupCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer setupCancel()
 
-	clusterConfig := retrieveClusterConfigForComponents(setupCtx, log, components)
+	clusterConfig := retrieveClusterConfigForComponents(setupCtx, components)
 
 	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
 	if err != nil {
@@ -252,7 +251,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
 	} else {
-		mainImageTag, err := helpers.LookupMainImageTag(ctx, log)
+		mainImageTag, err := helpers.LookupMainImageTag(ctx)
 		if err != nil {
 			return fmt.Errorf("looking up main image tag: %w", err)
 		}
@@ -265,15 +264,15 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := configureConfig(log, components, &deploySettings); err != nil {
+	if err := configureConfig(components, &deploySettings); err != nil {
 		return err
 	}
 
-	if err := deployValidate(log, components, &deploySettings); err != nil {
+	if err := deployValidate(components, &deploySettings); err != nil {
 		return err
 	}
 
-	d, err := deployer.New(log)
+	d, err := deployer.New()
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
 	}
@@ -282,7 +281,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	if envrc != "" {
 		d.SetEnvrcFile(envrc)
 	}
-	d.SetVerbose(verbose)
 	d.SetConfig(deploySettings)
 
 	if dryRun {
@@ -295,7 +293,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	if deploySettings.Roxie.ClusterType.IsLocal() && !deploySettings.Roxie.KonfluxImagesEnabled() {
 		var preLoader deployer.ImagePreLoader
 		if imagePreLoadCommand != "" {
-			preLoader = deployer.NewCustomImagePreloader(ctx, log, imagePreLoadCommand)
+			preLoader = deployer.NewCustomImagePreloader(imagePreLoadCommand)
 		} else {
 			preLoader, err = d.GetPreLoaderForCluster()
 			if err != nil {
@@ -344,13 +342,13 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			RoxieEnvironment: roxieEnv,
 			Config:           deploySettings,
 		}
-		if err := manifest.CreateManifestSecretOnCluster(ctx, log, m); err != nil {
+		if err := manifest.CreateManifestSecretOnCluster(ctx, m); err != nil {
 			log.Warningf("Failed to save roxie manifest: %v", err)
 		}
 	}
 
 	if components.IncludesCentral() && envrc == "" {
-		if err := spawnSubshellForDeployerEnv(deploySettings.Roxie, d, log); err != nil {
+		if err := spawnSubshellForDeployerEnv(deploySettings.Roxie, d); err != nil {
 			return fmt.Errorf("failed to spawn subshell: %w", err)
 		}
 	}
@@ -388,10 +386,9 @@ func computeDeployContextTimeout(components component.Component, cfg deployer.Co
 
 func retrieveClusterConfigForComponents(
 	ctx context.Context,
-	log *logger.Logger,
 	components component.Component,
 ) *deployer.Config {
-	clusterManifest, err := manifest.LoadManifestSecret(ctx, log)
+	clusterManifest, err := manifest.LoadManifestSecret(ctx)
 	if err != nil {
 		if errors.Is(err, k8s.ErrResourceNotFound) {
 			log.Dim("No existing manifest found on cluster, starting from defaults")
@@ -411,7 +408,7 @@ func retrieveClusterConfigForComponents(
 	return &clusterManifest.Config
 }
 
-func configureConfig(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
+func configureConfig(components component.Component, deploySettings *deployer.Config) error {
 	if deploySettings.Roxie.ClusterType == "" {
 		clusterType := env.GetAutoDetectedClusterType()
 		log.Dimf("Detected cluster type: %v", clusterType)
@@ -425,10 +422,8 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 	if err != nil {
 		return err
 	}
-	if verbose {
-		log.Dimf("Applying the following defaults based on cluster type %v:", clusterType)
-		helpers.LogMultilineYaml(log, defaults)
-	}
+	log.Debugf("Applying the following defaults based on cluster type %v:", clusterType)
+	log.LogMultilineYaml(defaults)
 
 	// Deal with the "auto" resourceProfile.
 	if deploySettings.Central.ResourceProfile == types.ResourceProfileAuto {
@@ -466,10 +461,8 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 			return fmt.Errorf("configuring SecuredCluster spec: %w", err)
 		}
 	}
-	if verbose {
-		log.Dim("Deployment configuration:")
-		helpers.LogMultilineYaml(log, deploySettings)
-	}
+	log.Debug("Deployment configuration:")
+	log.LogMultilineYaml(deploySettings)
 
 	if !deploySettings.Central.PortForwardingSet() && !deploySettings.Central.ExposureEnabled() {
 		log.Info("Enabling port-forwarding due to no exposure")
@@ -479,7 +472,7 @@ func configureConfig(log *logger.Logger, components component.Component, deployS
 	return nil
 }
 
-func deployValidate(log *logger.Logger, components component.Component, deploySettings *deployer.Config) error {
+func deployValidate(components component.Component, deploySettings *deployer.Config) error {
 	if components.IncludesCentral() && os.Getenv("ROXIE_SHELL") != "" {
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
 	}
