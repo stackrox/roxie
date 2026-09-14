@@ -65,7 +65,7 @@ func Uninstall(ctx context.Context, releaseName, namespace string) error {
 		func(ctx context.Context) error {
 			err := doUninstall(ctx, releaseName, namespace)
 			if err != nil && strings.Contains(strings.ToLower(err.Error()), "not found") {
-				log.Dimf("Helm release %q not found in namespace %s, skipping uninstall", releaseName, namespace)
+				log.Debugf("Helm release %q not found in namespace %s, skipping uninstall", releaseName, namespace)
 				return nil
 			}
 			return err
