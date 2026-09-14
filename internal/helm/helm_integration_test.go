@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,11 +17,6 @@ const (
 
 func TestInstallAndUninstall(t *testing.T) {
 	ctx := t.Context()
-	helmCtx := HelmCtx{
-		Ctx:     ctx,
-		Log:     logger.New(),
-		Verbose: true,
-	}
 
 	namespace := createTestNamespace(t)
 	releaseName := "helm-integ-lifecycle"
@@ -31,41 +25,36 @@ func TestInstallAndUninstall(t *testing.T) {
 		ChartPath:   testChartPath,
 		Namespace:   namespace,
 	}
-	err := Install(helmCtx, opts)
+	err := Install(ctx, opts)
 	require.NoError(t, err, "initial install")
 
-	releases, err := ListByPrefix(helmCtx, releaseName, namespace)
+	releases, err := ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err)
 	assert.Len(t, releases, 1, "multiple releases listed")
 	assert.Contains(t, releases, releaseName, "release should exist after install")
 
-	err = Install(helmCtx, opts)
+	err = Install(ctx, opts)
 	require.NoError(t, err, "idempotent re-install")
 
-	releases, err = ListByPrefix(helmCtx, releaseName, namespace)
+	releases, err = ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err)
 	assert.Len(t, releases, 1, "multiple releases listed")
 	assert.Contains(t, releases, releaseName, "release should exist after install")
 
-	err = Uninstall(helmCtx, releaseName, namespace)
+	err = Uninstall(ctx, releaseName, namespace)
 	require.NoError(t, err, "uninstall")
 
-	releases, err = ListByPrefix(helmCtx, releaseName, namespace)
+	releases, err = ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err)
 	assert.NotContains(t, releases, releaseName, "release should be gone after uninstall")
 	assert.Empty(t, releases, "releases still listed")
 
-	err = Uninstall(helmCtx, releaseName, namespace)
+	err = Uninstall(ctx, releaseName, namespace)
 	require.NoError(t, err, "uninstall of already-removed release should succeed")
 }
 
 func TestInstallWithValues(t *testing.T) {
 	ctx := t.Context()
-	helmCtx := HelmCtx{
-		Ctx:     ctx,
-		Log:     logger.New(),
-		Verbose: true,
-	}
 
 	namespace := createTestNamespace(t)
 	releaseName := "helm-integ-values"
@@ -76,7 +65,7 @@ func TestInstallWithValues(t *testing.T) {
 		Values:      map[string]any{"target": "mundo"},
 	}
 
-	err := Install(helmCtx, opts)
+	err := Install(ctx, opts)
 	require.NoError(t, err)
 
 	out, err := exec.Command("kubectl", "get", "configmap", releaseName+"-cm",
@@ -87,12 +76,7 @@ func TestInstallWithValues(t *testing.T) {
 
 func TestListByPrefix_NoMatches(t *testing.T) {
 	ctx := t.Context()
-	helmCtx := HelmCtx{
-		Ctx:     ctx,
-		Log:     logger.New(),
-		Verbose: true,
-	}
-	releases, err := ListByPrefix(helmCtx, "nonexistent-prefix-xyz-", "default")
+	releases, err := ListByPrefix(ctx, "nonexistent-prefix-xyz-", "default")
 	require.NoError(t, err)
 	assert.Empty(t, releases)
 }
