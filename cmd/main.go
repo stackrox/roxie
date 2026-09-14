@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/helpers"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/paths"
 	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/strvals"
@@ -26,8 +26,6 @@ var (
 	dryRun  bool
 
 	skipUserConfig bool
-
-	globalLogger = logger.New()
 
 	// We need this set up before command line flags are parsed.
 	deploySettingsFromArgs = deployer.NewConfig()
@@ -44,7 +42,7 @@ func main() {
 // If a user config file exists, apply those user defaults on top the
 // current config. This essentially means, that the user config can
 // override values, which are already initialized in NewConfig().
-func tryApplyUserDefaults(log *logger.Logger, config *deployer.Config) error {
+func tryApplyUserDefaults(config *deployer.Config) error {
 	path, err := paths.UserConfigPath(true)
 	if err != nil {
 		return err
@@ -72,6 +70,10 @@ var rootCmd = &cobra.Command{
 	Short: "roxie - Advanced Cluster Security Deployment Tool",
 	Long: `roxie is a fast, developer-friendly CLI to deploy and manage
 Red Hat Advanced Cluster Security (ACS) on any Kubernetes/OpenShift cluster.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		log.SetVerbose(verbose)
+		return nil
+	},
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
