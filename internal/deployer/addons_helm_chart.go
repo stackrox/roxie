@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/stackrox/roxie/internal/helm"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 const (
@@ -14,8 +14,6 @@ const (
 )
 
 type helmAddOn struct {
-	log         *logger.Logger
-	verbose     bool
 	name        string
 	releaseName string
 	installOpts helm.InstallOptions
@@ -36,23 +34,13 @@ func (a *helmAddOn) IsOptional() bool {
 }
 
 func (a *helmAddOn) Deploy(ctx context.Context) error {
-	a.log.Infof("Installing add-on %q as Helm release %q", a.name, a.releaseName)
-	helmCtx := helm.HelmCtx{
-		Ctx:     ctx,
-		Log:     a.log,
-		Verbose: a.verbose,
-	}
-	return helm.Install(helmCtx, a.installOpts)
+	log.Infof("Installing add-on %q as Helm release %q", a.name, a.releaseName)
+	return helm.Install(ctx, a.installOpts)
 }
 
 func (a *helmAddOn) Teardown(ctx context.Context) error {
-	a.log.Infof("Uninstalling add-on Helm release %q", a.releaseName)
-	helmCtx := helm.HelmCtx{
-		Ctx:     ctx,
-		Log:     a.log,
-		Verbose: a.verbose,
-	}
-	return helm.Uninstall(helmCtx, a.releaseName, a.installOpts.Namespace)
+	log.Infof("Uninstalling add-on Helm release %q", a.releaseName)
+	return helm.Uninstall(ctx, a.releaseName, a.installOpts.Namespace)
 }
 
 func newHelmAddOn(
@@ -68,8 +56,6 @@ func newHelmAddOn(
 	opts.ReleaseName = releaseName
 	opts.Namespace = namespace
 	return &helmAddOn{
-		log:         addOnCfg.log,
-		verbose:     addOnCfg.verbose,
 		name:        name,
 		releaseName: releaseName,
 		installOpts: opts,
@@ -83,7 +69,7 @@ func (h *HelmChartRepoAddOn) New(
 	addOnCfg AddOnConfig,
 	commonProperties CommonAddOnProperties,
 	name, namespace string) (AddOn, error) {
-	addOnCfg.log.Infof("Add-on %s: using Helm chart %s from %s", name, h.Chart, h.Repo)
+	log.Infof("Add-on %s: using Helm chart %s from %s", name, h.Chart, h.Repo)
 
 	values, err := h.GetValues()
 	if err != nil {

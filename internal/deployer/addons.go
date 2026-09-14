@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"slices"
 
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 var (
@@ -36,16 +36,16 @@ func (d *Deployer) deployAddOns(ctx context.Context, addOns []AddOn) error {
 		return fmt.Errorf("failed to prepare namespace: %w", err)
 	}
 
-	d.logger.Infof("Deploying %d add-on(s)...", len(addOns))
+	log.Infof("Deploying %d add-on(s)...", len(addOns))
 
 	for _, addon := range addOns {
 		if err := addon.Deploy(ctx); err != nil {
 			if !addon.IsOptional() {
 				return fmt.Errorf("installing non-optional add-on %q: %w", addon.Name(), err)
 			}
-			d.logger.Warningf("Failed to install add-on %q: %v", addon.Name(), err)
+			log.Warningf("Failed to install add-on %q: %v", addon.Name(), err)
 		} else {
-			d.logger.Successf("Add-on %q installed", addon.Name())
+			log.Successf("Add-on %q installed", addon.Name())
 		}
 	}
 
@@ -57,26 +57,23 @@ func (d *Deployer) teardownAddOns(ctx context.Context, addOns []AddOn) {
 		return
 	}
 
-	d.logger.Infof("Tearing down %d add-on(s)...", len(addOns))
+	log.Infof("Tearing down %d add-on(s)...", len(addOns))
 
 	for _, addon := range addOns {
 		if err := addon.Teardown(ctx); err != nil {
 			if !addon.IsOptional() {
-				d.logger.Errorf("Failed to tear down non-optional add-on %q: %v", addon.Name(), err)
+				log.Errorf("Failed to tear down non-optional add-on %q: %v", addon.Name(), err)
 			} else {
-				d.logger.Warningf("Failed to tear down optional add-on %q: %v", addon.Name(), err)
+				log.Warningf("Failed to tear down optional add-on %q: %v", addon.Name(), err)
 			}
 		} else {
-			d.logger.Successf("Add-on %q torn down", addon.Name())
+			log.Successf("Add-on %q torn down", addon.Name())
 		}
 	}
 }
 
-// AddOnConfig carries runtime dependencies (logger, verbosity) needed to construct add-on instances.
-type AddOnConfig struct {
-	log     *logger.Logger
-	verbose bool
-}
+// AddOnConfig carries runtime dependencies needed to construct add-on instances.
+type AddOnConfig struct{}
 
 // ResolveEnabledAddOns returns the enabled add-ons sorted by descending priority (name for ties at zero).
 func (d *Deployer) ResolveEnabledAddOns() ([]AddOn, error) {
@@ -155,8 +152,5 @@ func createAddOnFromDefinition(
 
 // AddOnConfiguration builds an AddOnConfig from the deployer's runtime state.
 func (d *Deployer) AddOnConfiguration() AddOnConfig {
-	return AddOnConfig{
-		log:     d.logger,
-		verbose: d.verbose,
-	}
+	return AddOnConfig{}
 }
