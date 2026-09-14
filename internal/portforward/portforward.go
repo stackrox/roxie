@@ -7,22 +7,20 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 // Manager manages a kubectl port-forward subprocess and exposes a localhost endpoint
 type Manager struct {
 	kubectl   string
-	logger    *logger.Logger
 	proc      *exec.Cmd
 	localPort int
 }
 
 // New creates a new PortForwardManager
-func New(kubectl string, log *logger.Logger) *Manager {
+func New(kubectl string) *Manager {
 	return &Manager{
 		kubectl:   kubectl,
-		logger:    log,
 		localPort: 0,
 	}
 }
@@ -110,7 +108,7 @@ func (m *Manager) Start(namespace, serviceName string, remotePort, preferredLoca
 	m.proc = cmd
 	m.localPort = localPort
 	endpoint := fmt.Sprintf("127.0.0.1:%d", localPort)
-	m.logger.Successf("✓ Port-forward active at https://%s", endpoint)
+	log.Successf("✓ Port-forward active at https://%s", endpoint)
 
 	return endpoint, nil
 }
@@ -155,7 +153,7 @@ func (m *Manager) StartDetached(namespace, serviceName string, remotePort, prefe
 	}
 
 	endpoint := fmt.Sprintf("127.0.0.1:%d", localPort)
-	m.logger.Successf("✓ Detached port-forward active at https://%s (pid %d)", endpoint, pid)
+	log.Successf("✓ Detached port-forward active at https://%s (pid %d)", endpoint, pid)
 
 	return endpoint, pid, nil
 }

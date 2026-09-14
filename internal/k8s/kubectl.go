@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 // KubectlOptions contains options for running kubectl commands
@@ -28,7 +28,7 @@ type KubectlResult struct {
 }
 
 // RunKubectl executes a kubectl command with automatic retries on transient errors
-func RunKubectl(ctx context.Context, log *logger.Logger, opts KubectlOptions) (KubectlResult, error) {
+func RunKubectl(ctx context.Context, opts KubectlOptions) (KubectlResult, error) {
 	if opts.MaxAttempts <= 0 {
 		opts.MaxAttempts = 3
 	}
@@ -63,9 +63,7 @@ func RunKubectl(ctx context.Context, log *logger.Logger, opts KubectlOptions) (K
 	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
 		if attempt > 1 {
 			waitTime := time.Duration(attempt*opts.RetryDelay) * time.Second
-			if log != nil {
-				log.Infof("Retrying kubectl command (attempt %d/%d) after %v...", attempt, opts.MaxAttempts, waitTime)
-			}
+			log.Infof("Retrying kubectl command (attempt %d/%d) after %v...", attempt, opts.MaxAttempts, waitTime)
 			time.Sleep(waitTime)
 		}
 
@@ -117,9 +115,7 @@ func RunKubectl(ctx context.Context, log *logger.Logger, opts KubectlOptions) (K
 			}, fmt.Errorf("kubectl command failed: %w", err)
 		}
 
-		if log != nil {
-			log.Warningf("Transient error in kubectl command: %s", lastStderr)
-		}
+		log.Warningf("Transient error in kubectl command: %s", lastStderr)
 	}
 
 	return KubectlResult{
