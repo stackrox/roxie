@@ -322,12 +322,12 @@ func (d *Deployer) repoRequiresAuth(ctx context.Context, repo string) bool {
 	defer cancel()
 	requiresAuth, err := d.dockerAuth.RepositoryRequiresAuth(ctx, repo)
 	if err != nil {
-		d.logger.Warningf("Could not determine if %s requires auth, will require credentials: %v", repo, err)
+		log.Warningf("Could not determine if %s requires auth, will require credentials: %v", repo, err)
 		requiresAuth = true
 	} else if requiresAuth {
-		d.logger.Dimf("Repository %s requires authentication", repo)
+		log.Dimf("Repository %s requires authentication", repo)
 	} else {
-		d.logger.Dimf("Repository %s is public, no authentication required", repo)
+		log.Dimf("Repository %s is public, no authentication required", repo)
 	}
 
 	if d.repoAuthCache == nil {
