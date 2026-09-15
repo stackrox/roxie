@@ -205,7 +205,7 @@ func (d *Deployer) ensureCRDsInstalled(ctx context.Context) error {
 // This is done because upstream StackRox builds (quay.io/stackrox-io) do not publish operator bundles.
 func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInstanceConfig) (string, error) {
 	bundleImage := instance.BundleImage()
-	if instance.ImageRegistry == constants.DefaultRegistry {
+	if strings.HasPrefix(bundleImage, constants.DefaultRegistry+"/") {
 		return bundleImage, nil
 	}
 
