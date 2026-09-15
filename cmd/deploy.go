@@ -510,9 +510,8 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 		return errors.New("running without a controlling terminal requires --envrc to be set")
 	}
 
-	registry := deploySettings.Roxie.ImageRegistry
 	if deploySettings.Roxie.UsesCustomRegistry() {
-		if err := validateImageRegistry(registry); err != nil {
+		if err := validateImageRegistry(deploySettings.Roxie.ImageRegistry); err != nil {
 			return err
 		}
 	}
@@ -535,8 +534,8 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
 		}
-		if registry != constants.DefaultRegistry {
-			return fmt.Errorf("using Konflux images with a custom image registry (%s) is not supported", registry)
+		if deploySettings.Roxie.UsesCustomRegistry() {
+			return fmt.Errorf("using Konflux images with a custom image registry (%s) is not supported", deploySettings.Roxie.ImageRegistry)
 		}
 	}
 
