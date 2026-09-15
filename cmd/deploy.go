@@ -287,7 +287,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	d.SetVerbose(verbose)
 	d.SetConfig(deploySettings)
 
-	if d.NeedsPullSecrets(ctx) {
+	if env.RunningInRoxieContainer && d.NeedsPullSecrets(ctx) {
 		if err := validateContainerizedCredentials(deploySettings.Roxie.ImageRegistry, deploySettings.Roxie.ClusterType); err != nil {
 			return err
 		}
@@ -395,9 +395,6 @@ func computeDeployContextTimeout(components component.Component, cfg deployer.Co
 }
 
 func validateContainerizedCredentials(registry string, clusterType types.ClusterType) error {
-	if !env.RunningInRoxieContainer {
-		return nil
-	}
 	if os.Getenv("REGISTRY_USERNAME") == "" || os.Getenv("REGISTRY_PASSWORD") == "" {
 		return fmt.Errorf("containerized mode requires REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables for registry %s on clusters of type %s", registry, clusterType)
 	}
