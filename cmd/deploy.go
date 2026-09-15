@@ -16,7 +16,6 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stackrox/roxie/internal/clusterdefaults"
 	"github.com/stackrox/roxie/internal/component"
-	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
@@ -560,17 +559,17 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 	return nil
 }
 
-// validateImageRegistry checks that registry is a well-formed "host/repository-path" string, e.g. "quay.io/rhacs-eng".
+// validateImageRegistry checks that registry is a well-formed "host/org" string, e.g. "quay.io/rhacs-eng".
 func validateImageRegistry(registry string) error {
-	host, repoPath, hasPath := strings.Cut(registry, "/")
-	if !hasPath || repoPath == "" {
-		return fmt.Errorf("roxie.imageRegistry must include a repository path (e.g. %s), got: %s", constants.DefaultRegistry, registry)
+	host, orgPath, hasPath := strings.Cut(registry, "/")
+	if !hasPath || orgPath == "" {
+		return fmt.Errorf("roxie.imageRegistry must include a registry host and org path (e.g. quay.io/rhacs-eng), got: %s", registry)
 	}
 	if _, err := name.NewRegistry(host); err != nil {
 		return fmt.Errorf("roxie.imageRegistry has an invalid registry host %q: %w", host, err)
 	}
-	if _, err := name.NewRepository(repoPath); err != nil {
-		return fmt.Errorf("roxie.imageRegistry has an invalid repository path %q: %w", repoPath, err)
+	if _, err := name.NewRepository(registry); err != nil {
+		return fmt.Errorf("roxie.imageRegistry has an invalid org path: %w", err)
 	}
 	return nil
 }

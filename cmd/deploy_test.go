@@ -330,13 +330,13 @@ func TestValidateImageRegistry(t *testing.T) {
 			name:          "bare host with no path is rejected",
 			registry:      "justahost",
 			expectError:   true,
-			errorContains: "must include a repository path",
+			errorContains: "must include a registry host and org path",
 		},
 		{
 			name:          "trailing slash with no path is rejected",
 			registry:      "quay.io/",
 			expectError:   true,
-			errorContains: "must include a repository path",
+			errorContains: "must include a registry host and org path",
 		},
 		{
 			name:          "invalid registry host",
@@ -345,10 +345,10 @@ func TestValidateImageRegistry(t *testing.T) {
 			errorContains: "invalid registry host",
 		},
 		{
-			name:          "invalid repository path characters",
+			name:          "invalid characters (uppercase) in org path",
 			registry:      "quay.io/RHACS-ENG",
 			expectError:   true,
-			errorContains: "invalid repository path",
+			errorContains: "invalid org path",
 		},
 	}
 
