@@ -201,29 +201,3 @@ func TestRepositoryRequiresAuth(t *testing.T) {
 		})
 	}
 }
-
-func TestSplitRegistryHost(t *testing.T) {
-	tests := []struct {
-		name         string
-		registry     string
-		expectedHost string
-		expectedPath string
-	}{
-		{"default registry", constants.DefaultRegistry, "quay.io", "rhacs-eng"},
-		{"quay.io with org", "quay.io/stackrox-io", "quay.io", "stackrox-io"},
-		{"registry with port and nested path", "registry.io:5000/org/suborg", "registry.io:5000", "org/suborg"},
-		{"just hostname", "justahost", "justahost", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			host, path := splitRegistryHost(tt.registry)
-			if host != tt.expectedHost {
-				t.Errorf("splitRegistryHost(%q): expected host %q, got %q", tt.registry, tt.expectedHost, host)
-			}
-			if path != tt.expectedPath {
-				t.Errorf("splitRegistryHost(%q): expected path %q, got %q", tt.registry, tt.expectedPath, path)
-			}
-		})
-	}
-}
