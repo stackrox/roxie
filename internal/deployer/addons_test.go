@@ -237,10 +237,9 @@ func TestResolveAddOns(t *testing.T) {
 		},
 	}
 
-	addOnCfg := AddOnConfig{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resolved, err := resolveEnabledAddOns(tt.cfg, addOnCfg)
+			resolved, err := resolveEnabledAddOns(tt.cfg)
 			tt.assert(t, resolved, err)
 		})
 	}
