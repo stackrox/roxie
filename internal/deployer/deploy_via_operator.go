@@ -468,7 +468,7 @@ func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}
 	if log.IsVerbose() {
 		if env.RunningInteractively {
 			log.Debug("Central CR YAML:")
-			log.LogMultilineYaml(cr)
+			log.DebugMultilineYaml(cr)
 		} else {
 			log.Debug("Skipping emitting Central CR in non-interactive mode, because it could leak confidential information")
 		}
