@@ -441,7 +441,7 @@ func configureConfig(components component.Component, deploySettings *deployer.Co
 		return err
 	}
 	log.Debugf("Applying the following defaults based on cluster type %v:", clusterType)
-	log.LogMultilineYaml(defaults)
+	log.DebugMultilineYaml(defaults)
 
 	// Deal with the "auto" resourceProfile.
 	if deploySettings.Central.ResourceProfile == types.ResourceProfileAuto {
@@ -480,7 +480,7 @@ func configureConfig(components component.Component, deploySettings *deployer.Co
 		}
 	}
 	log.Debug("Deployment configuration:")
-	log.LogMultilineYaml(deploySettings)
+	log.DebugMultilineYaml(deploySettings)
 
 	if !deploySettings.Central.PortForwardingSet() && !deploySettings.Central.ExposureEnabled() {
 		log.Info("Enabling port-forwarding due to no exposure")

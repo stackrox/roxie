@@ -12,7 +12,6 @@ import (
 
 // New creates a helmAddOn that installs a chart from a local stackrox repository checkout.
 func (h *StackRoxRepoHelmChartAddOn) New(
-	addOnCfg AddOnConfig,
 	commonProperties CommonAddOnProperties,
 	name, namespace string,
 ) (AddOn, error) {
@@ -47,5 +46,5 @@ func (h *StackRoxRepoHelmChartAddOn) New(
 	}
 	opts.Values = values
 
-	return newHelmAddOn(addOnCfg, commonProperties, name, namespace, opts)
+	return newHelmAddOn(commonProperties, name, namespace, opts)
 }

@@ -44,7 +44,6 @@ func (a *helmAddOn) Teardown(ctx context.Context) error {
 }
 
 func newHelmAddOn(
-	addOnCfg AddOnConfig,
 	commonProperties CommonAddOnProperties,
 	name, namespace string,
 	opts helm.InstallOptions,
@@ -66,7 +65,6 @@ func newHelmAddOn(
 
 // New creates a helmAddOn that installs a chart from a public Helm repository.
 func (h *HelmChartRepoAddOn) New(
-	addOnCfg AddOnConfig,
 	commonProperties CommonAddOnProperties,
 	name, namespace string) (AddOn, error) {
 	log.Infof("Add-on %s: using Helm chart %s from %s", name, h.Chart, h.Repo)
@@ -82,5 +80,5 @@ func (h *HelmChartRepoAddOn) New(
 		Values:       values,
 	}
 
-	return newHelmAddOn(addOnCfg, commonProperties, name, namespace, opts)
+	return newHelmAddOn(commonProperties, name, namespace, opts)
 }
