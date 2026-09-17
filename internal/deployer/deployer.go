@@ -54,14 +54,14 @@ type Deployer struct {
 	config Config
 
 	// State
-	centralEndpoint            string
-	centralPassword            string
-	roxCACertFile              string
-	tempDir                    string
-	portForward                *portforward.Manager
-	portForwardPID             int
-	useOperatorPullSecrets     bool
-	customRegistryAuthRequired *bool
+	centralEndpoint        string
+	centralPassword        string
+	roxCACertFile          string
+	tempDir                string
+	portForward            *portforward.Manager
+	portForwardPID         int
+	useOperatorPullSecrets bool
+	repoAuthCache          map[string]*bool
 }
 
 type ResourceToDelete struct {
@@ -301,35 +301,52 @@ func (d *Deployer) stopDetachedPortForward() {
 	d.portForwardPID = 0
 }
 
-// NeedsPullSecrets reports whether roxie needs to set up image pull secrets itself.
+// NeedsPullSecrets reports whether roxie needs to set up image pull secrets for workload images.
 func (d *Deployer) NeedsPullSecrets(ctx context.Context) bool {
-	if d.config.Roxie.UsesCustomRegistry() {
-		return d.customRegistryRequiresAuth(ctx)
+	// We assume that the other repositories (scanner, collector etc) have the same auth requirements as "main"
+	return d.needsPullSecrets(ctx, d.config.Roxie.ImageRegistry+"/main")
+}
+
+// needsPullSecrets reports whether a pull secret is needed for the given repository.
+func (d *Deployer) needsPullSecrets(ctx context.Context, repository string) bool {
+	if !d.repoRequiresAuth(ctx, repository) {
+		// Repo is public.
+		return false
 	}
+	// Repo is private.
+	if d.config.Roxie.UsesCustomRegistry() {
+		// Cluster never has pre-configured creds for custom registries.
+		return true
+	}
+	// Standard registry. Does the cluster already have credentials?
 	return d.config.Roxie.ClusterType.NeedsDefaultRegistryPullSecrets()
 }
 
-// customRegistryRequiresAuth reports whether the configured custom registry
-// requires authentication, probing it once and caching the result.
-func (d *Deployer) customRegistryRequiresAuth(ctx context.Context) bool {
-	if d.customRegistryAuthRequired != nil {
-		return *d.customRegistryAuthRequired
+// repoRequiresAuth probes whether the given repository requires authentication,
+// caching the result per repository.
+func (d *Deployer) repoRequiresAuth(ctx context.Context, repo string) bool {
+	if d.repoAuthCache != nil {
+		if cached, ok := d.repoAuthCache[repo]; ok {
+			return *cached
+		}
 	}
 
-	registry := d.config.Roxie.ImageRegistry
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-
-	requiresAuth, err := d.dockerAuth.RegistryRequiresAuth(ctx, registry)
+	requiresAuth, err := d.dockerAuth.RepositoryRequiresAuth(ctx, repo)
 	if err != nil {
-		d.logger.Warningf("Could not determine if %s requires auth, will require credentials: %v", registry, err)
+		d.logger.Warningf("Could not determine if %s requires auth, will require credentials: %v", repo, err)
 		requiresAuth = true
 	} else if requiresAuth {
-		d.logger.Dimf("Registry %s requires authentication", registry)
+		d.logger.Dimf("Repository %s requires authentication", repo)
 	} else {
-		d.logger.Dimf("Registry %s is public, no authentication required", registry)
+		d.logger.Dimf("Repository %s is public, no authentication required", repo)
 	}
-	d.customRegistryAuthRequired = &requiresAuth
+
+	if d.repoAuthCache == nil {
+		d.repoAuthCache = make(map[string]*bool)
+	}
+	d.repoAuthCache[repo] = &requiresAuth
 	return requiresAuth
 }
 

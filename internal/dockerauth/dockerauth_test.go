@@ -105,7 +105,7 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	}
 }
 
-func TestRegistryRequiresAuth(t *testing.T) {
+func TestRepositoryRequiresAuth(t *testing.T) {
 	tests := []struct {
 		name             string
 		challengeAuth    bool // whether /v2/ demands a Bearer challenge at all
@@ -182,7 +182,7 @@ func TestRegistryRequiresAuth(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"token":"fake-anonymous-token"}`))
 			})
-			mux.HandleFunc("/v2/some-org/main/tags/list", func(w http.ResponseWriter, r *http.Request) {
+			mux.HandleFunc("/v2/some-org/some-repo/tags/list", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.tagsListStatus)
 			})
 
@@ -191,7 +191,7 @@ func TestRegistryRequiresAuth(t *testing.T) {
 			registryAddr = strings.TrimPrefix(server.URL, "http://")
 
 			da := &DockerAuth{logger: logger.New()}
-			requiresAuth, err := da.RegistryRequiresAuth(context.Background(), registryAddr+"/some-org")
+			requiresAuth, err := da.RepositoryRequiresAuth(context.Background(), registryAddr+"/some-org/some-repo")
 			assert.Equal(t, tt.expectedRequires, requiresAuth)
 			if tt.expectErr {
 				assert.Error(t, err)

@@ -224,13 +224,22 @@ func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInst
 	return bundleImage, nil
 }
 
-// needsOperatorPullSecrets reports whether a pull secret should be created for the
+// needsPullSecretsForOperatorManager reports whether a pull secret should be created for the
 // operator's own deployment namespace.
-func (d *Deployer) needsOperatorPullSecrets(ctx context.Context, instance OperatorInstanceConfig) bool {
-	if d.config.Roxie.UsesCustomRegistry() {
-		return d.customRegistryRequiresAuth(ctx)
+func (d *Deployer) needsPullSecretsForOperatorManager(ctx context.Context, instance OperatorInstanceConfig) (bool, error) {
+	repo, err := repoFromImage(instance.OperatorImage())
+	if err != nil {
+		return false, err
 	}
-	return instance.KonfluxImagesEnabled() && d.config.Roxie.ClusterType.NeedsDefaultRegistryPullSecrets()
+	return d.needsPullSecrets(ctx, repo), nil
+}
+
+// repoFromImage strips the tag from an image reference, returning the repository.
+func repoFromImage(image string) (string, error) {
+	if at := strings.LastIndex(image, ":"); at > strings.LastIndex(image, "/") {
+		return image[:at], nil
+	}
+	return "", fmt.Errorf("image reference %q has no tag", image)
 }
 
 // deployOperatorFromCSV deploys the operator from CSV into the given instance namespace.
@@ -248,7 +257,11 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string, 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	d.useOperatorPullSecrets = d.needsOperatorPullSecrets(ctx, instance)
+	useOperatorPullSecrets, err := d.needsPullSecretsForOperatorManager(ctx, instance)
+	if err != nil {
+		return err
+	}
+	d.useOperatorPullSecrets = useOperatorPullSecrets
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dimf("  • Namespace: %s", instance.Namespace)

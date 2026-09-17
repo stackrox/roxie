@@ -210,19 +210,17 @@ func (d *DockerAuth) VerifyCredentials(ctx context.Context, username, password, 
 	return nil
 }
 
-// RegistryRequiresAuth makes a best-effort check for whether registry requires
-// authentication to pull images, by sending a single anonymous tags-list
-// request against a well-known repository path. Anything short of a confirmed
-// successful response fails safe by reporting that auth is required, alongside
-// an error explaining why the check was inconclusive.
-func (d *DockerAuth) RegistryRequiresAuth(ctx context.Context, registry string) (bool, error) {
-	host, orgPath := splitRegistryHost(registry)
-
-	reg, err := name.NewRegistry(host)
+// RepositoryRequiresAuth makes a best-effort check for whether the given
+// repository requires authentication, by sending a single anonymous tags-list
+// request. Anything short of a confirmed successful response fails safe by
+// reporting that auth is required, alongside an error explaining why the check
+// was inconclusive.
+func (d *DockerAuth) RepositoryRequiresAuth(ctx context.Context, repository string) (bool, error) {
+	repo, err := name.NewRepository(repository)
 	if err != nil {
-		return true, fmt.Errorf("invalid registry host %q: %w", host, err)
+		return true, fmt.Errorf("invalid repository %q: %w", repository, err)
 	}
-	repo := reg.Repo(orgPath, "main")
+	reg := repo.Registry
 
 	tr, err := transport.NewWithContext(ctx, reg, authn.Anonymous, http.DefaultTransport, []string{repo.Scope("pull")})
 	if err != nil {
@@ -230,18 +228,18 @@ func (d *DockerAuth) RegistryRequiresAuth(ctx context.Context, registry string) 
 		if errors.As(err, &te) && requiresAuth(te.StatusCode) {
 			return true, nil
 		}
-		return true, fmt.Errorf("negotiating anonymous access to %s: %w", host, err)
+		return true, fmt.Errorf("negotiating anonymous access to %s: %w", reg, err)
 	}
 
 	url := fmt.Sprintf("%s://%s/v2/%s/tags/list?n=1", repo.Scheme(), repo.RegistryStr(), repo.RepositoryStr())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return true, fmt.Errorf("building request for %s: %w", host, err)
+		return true, fmt.Errorf("building request for %s: %w", repository, err)
 	}
 
 	resp, err := (&http.Client{Transport: tr}).Do(req)
 	if err != nil {
-		return true, fmt.Errorf("checking %s: %w", host, err)
+		return true, fmt.Errorf("checking %s: %w", repository, err)
 	}
 	defer resp.Body.Close()
 
@@ -251,7 +249,7 @@ func (d *DockerAuth) RegistryRequiresAuth(ctx context.Context, registry string) 
 	if requiresAuth(resp.StatusCode) {
 		return true, nil
 	}
-	return true, fmt.Errorf("unexpected status %s from %s", resp.Status, host)
+	return true, fmt.Errorf("unexpected status %s from %s", resp.Status, repository)
 }
 
 func requiresAuth(code int) bool {
