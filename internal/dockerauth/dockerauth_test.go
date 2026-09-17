@@ -24,7 +24,7 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	da := New(log)
 	da.skipCredVerification = true // Skip verification in tests
 
-	creds, err := da.GetAndVerifyCredentials(context.Background(), constants.DefaultRegistry)
+	creds, err := da.GetAndVerifyCredentials(t.Context(), constants.DefaultRegistry)
 	if err != nil {
 		t.Fatalf("GetAndVerifyCredentials failed: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	da := New(log)
 	da.skipCredVerification = true // Skip verification in tests
 
-	_, err := da.GetAndVerifyCredentials(context.Background(), constants.DefaultRegistry)
+	_, err := da.GetAndVerifyCredentials(t.Context(), constants.DefaultRegistry)
 	if err == nil {
 		t.Error("Expected error when no credentials are available")
 	}
