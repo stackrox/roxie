@@ -61,6 +61,7 @@ type Deployer struct {
 	portForward            *portforward.Manager
 	portForwardPID         int
 	useOperatorPullSecrets bool
+	repoAuthCache          map[string]bool
 }
 
 type ResourceToDelete struct {
@@ -300,12 +301,59 @@ func (d *Deployer) stopDetachedPortForward() {
 	d.portForwardPID = 0
 }
 
+// NeedsPullSecrets reports whether roxie needs to set up image pull secrets for workload images.
+func (d *Deployer) NeedsPullSecrets(ctx context.Context) bool {
+	// We assume that the other repositories (scanner, collector etc) have the same auth requirements as "main"
+	return d.needsPullSecrets(ctx, d.config.Roxie.ImageRegistry+"/main")
+}
+
+// needsPullSecrets reports whether a pull secret is needed for the given repository.
+func (d *Deployer) needsPullSecrets(ctx context.Context, repository string) bool {
+	if !d.repoRequiresAuth(ctx, repository) {
+		// Repo is public.
+		return false
+	}
+	// Repo is private.
+	if d.config.Roxie.UsesCustomRegistry() {
+		// Cluster never has pre-configured creds for custom registries.
+		return true
+	}
+	// Standard registry. Does the cluster already have credentials?
+	return d.config.Roxie.ClusterType.NeedsDefaultRegistryPullSecrets()
+}
+
+// repoRequiresAuth probes whether the given repository requires authentication,
+// caching the result per repository.
+func (d *Deployer) repoRequiresAuth(ctx context.Context, repo string) bool {
+	if cached, ok := d.repoAuthCache[repo]; ok {
+		return cached
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	requiresAuth, err := d.dockerAuth.RepositoryRequiresAuth(ctx, repo)
+	if err != nil {
+		d.logger.Warningf("Could not determine if %s requires auth, will require credentials: %v", repo, err)
+		requiresAuth = true
+	} else if requiresAuth {
+		d.logger.Dimf("Repository %s requires authentication", repo)
+	} else {
+		d.logger.Dimf("Repository %s is public, no authentication required", repo)
+	}
+
+	if d.repoAuthCache == nil {
+		d.repoAuthCache = make(map[string]bool)
+	}
+	d.repoAuthCache[repo] = requiresAuth
+	return requiresAuth
+}
+
 // Deploy deploys the specified components to the cluster.
 func (d *Deployer) Deploy(ctx context.Context, components component.Component) error {
 	// Prepare and verify credentials early to fail fast.
-	needPullSecrets := d.config.Roxie.ClusterType.NeedsPullSecrets()
+	needPullSecrets := d.NeedsPullSecrets(ctx)
 	if needPullSecrets {
-		if err := d.prepareCredentials(); err != nil {
+		if err := d.prepareCredentials(ctx); err != nil {
 			return fmt.Errorf("failed to prepare credentials: %w", err)
 		}
 	}
@@ -354,11 +402,11 @@ func (d *Deployer) Deploy(ctx context.Context, components component.Component) e
 
 // prepareCredentials prepares and verifies Docker credentials early to allow failing fast.
 // The verified credentials are stored in the Deployer object for later use.
-func (d *Deployer) prepareCredentials() error {
+func (d *Deployer) prepareCredentials(ctx context.Context) error {
 	d.logger.Dimf("Preparing and verifying Docker credentials...")
 
 	// This will retrieve and verify credentials, returning error if invalid
-	creds, err := d.dockerAuth.GetAndVerifyCredentials()
+	creds, err := d.dockerAuth.GetAndVerifyCredentials(ctx, d.config.Roxie.ImageRegistry)
 	if err != nil {
 		return err
 	}

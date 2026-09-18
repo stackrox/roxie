@@ -58,12 +58,14 @@ func (c *Config) HasMixedVersions() bool {
 // When versions match, a single operator is deployed to rhacs-operator-system.
 // When they differ, two operators are deployed with reconciler toggles.
 func (c *Config) OperatorInstances() []OperatorInstanceConfig {
+	registry := c.Roxie.ImageRegistry
 	if !c.HasMixedVersions() {
 		return []OperatorInstanceConfig{{
 			Version:       c.CentralVersion(), // Per-component overrides may both equal each other but differ from Operator.Version.
 			Namespace:     operatorNamespaceSystem,
 			EnvVars:       maps.Clone(c.Operator.EnvVars),
 			KonfluxImages: c.resolveKonfluxImages(&c.Operator.OperatorInstanceConfig),
+			ImageRegistry: registry,
 		}}
 	}
 
@@ -82,6 +84,7 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 			EnvVars:        centralOperatorEnvVars,
 			RoleNameSuffix: roleNameSuffixCentral,
 			KonfluxImages:  c.resolveKonfluxImages(&c.Central.Operator),
+			ImageRegistry:  registry,
 		},
 		{
 			Version:        c.SecuredClusterVersion(),
@@ -89,6 +92,7 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 			EnvVars:        sensorOperatorEnvVars,
 			RoleNameSuffix: roleNameSuffixSensor,
 			KonfluxImages:  c.resolveKonfluxImages(&c.SecuredCluster.Operator),
+			ImageRegistry:  registry,
 		},
 	}
 }

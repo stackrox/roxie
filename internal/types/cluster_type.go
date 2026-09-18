@@ -77,7 +77,9 @@ func (ct *ClusterType) UnmarshalYAML(unmarshal func(any) error) error {
 	return fmt.Errorf("unknown cluster type identifier: %q", s)
 }
 
-func (ct ClusterType) NeedsPullSecrets() bool {
+// NeedsDefaultRegistryPullSecrets reports whether this cluster type lacks
+// auto-configured credentials for the default image registry (quay.io/rhacs-eng).
+func (ct ClusterType) NeedsDefaultRegistryPullSecrets() bool {
 	return ct != ClusterTypeInfraOpenShift4
 }
 
