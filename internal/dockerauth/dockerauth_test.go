@@ -163,32 +163,8 @@ func TestRepositoryRequiresAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var registryAddr string
-
-			mux := http.NewServeMux()
-			mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
-				if !tt.challengeAuth {
-					w.WriteHeader(http.StatusOK)
-					return
-				}
-				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="http://%s/token",service="test-registry"`, registryAddr))
-				w.WriteHeader(http.StatusUnauthorized)
-			})
-			mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
-				if tt.tokenStatus != http.StatusOK {
-					w.WriteHeader(tt.tokenStatus)
-					return
-				}
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`{"token":"fake-anonymous-token"}`))
-			})
-			mux.HandleFunc("/v2/some-org/some-repo/tags/list", func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tt.tagsListStatus)
-			})
-
-			server := httptest.NewServer(mux)
-			defer server.Close()
-			registryAddr = strings.TrimPrefix(server.URL, "http://")
+			registryAddr, cleanup := newFakeRegistry(t, tt.challengeAuth, tt.tokenStatus, tt.tagsListStatus)
+			defer cleanup()
 
 			da := &DockerAuth{logger: logger.New()}
 			requiresAuth, err := da.RepositoryRequiresAuth(context.Background(), registryAddr+"/some-org/some-repo")
@@ -200,4 +176,36 @@ func TestRepositoryRequiresAuth(t *testing.T) {
 			}
 		})
 	}
+}
+
+// newFakeRegistry starts an httptest server that simulates an OCI registry's
+// authentication and tags-list endpoints.
+func newFakeRegistry(t *testing.T, challengeAuth bool, tokenStatus, tagsListStatus int) (string, func()) {
+	t.Helper()
+	var registryAddr string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
+		if !challengeAuth {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="http://%s/token",service="test-registry"`, registryAddr))
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		if tokenStatus != http.StatusOK {
+			w.WriteHeader(tokenStatus)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"token":"fake-anonymous-token"}`))
+	})
+	mux.HandleFunc("/v2/some-org/some-repo/tags/list", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(tagsListStatus)
+	})
+
+	server := httptest.NewServer(mux)
+	registryAddr = strings.TrimPrefix(server.URL, "http://")
+	return registryAddr, server.Close
 }
