@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -226,20 +227,27 @@ func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInst
 
 // needsPullSecretsForOperatorManager reports whether a pull secret should be created for the
 // operator's own deployment namespace.
-func (d *Deployer) needsPullSecretsForOperatorManager(ctx context.Context, instance OperatorInstanceConfig) (bool, error) {
+func (d *Deployer) needsPullSecretsForOperatorManager(ctx context.Context, instance OperatorInstanceConfig) bool {
 	repo, err := repoFromImage(instance.OperatorImage())
 	if err != nil {
-		return false, err
+		d.logger.Warningf("Could not parse operator image, assuming pull secrets needed: %v", err)
+		return true
 	}
-	return d.needsPullSecrets(ctx, repo), nil
+	return d.needsPullSecrets(ctx, repo)
 }
 
-// repoFromImage strips the tag from an image reference, returning the repository.
+// repoFromImage strips the tag or digest from an image reference, returning the repository.
 func repoFromImage(image string) (string, error) {
-	if at := strings.LastIndex(image, ":"); at > strings.LastIndex(image, "/") {
-		return image[:at], nil
+	if strings.Count(image, "/") < 2 {
+		// name.ParseReference() falls back to Docker Hub if there is no registry, but we don't want that.
+		// So we require a registry/org/image format.
+		return "", fmt.Errorf("image reference %q must be in registry/org/image format", image)
 	}
-	return "", fmt.Errorf("image reference %q has no tag", image)
+	ref, err := name.ParseReference(image)
+	if err != nil {
+		return "", fmt.Errorf("invalid image reference %q: %w", image, err)
+	}
+	return ref.Context().String(), nil
 }
 
 // deployOperatorFromCSV deploys the operator from CSV into the given instance namespace.
@@ -257,11 +265,7 @@ func (d *Deployer) deployOperatorFromCSV(ctx context.Context, bundleDir string, 
 	}
 
 	serviceAccountName := deploymentSpec["service_account"].(string)
-	useOperatorPullSecrets, err := d.needsPullSecretsForOperatorManager(ctx, instance)
-	if err != nil {
-		return err
-	}
-	d.useOperatorPullSecrets = useOperatorPullSecrets
+	d.useOperatorPullSecrets = d.needsPullSecretsForOperatorManager(ctx, instance)
 
 	d.logger.Info("📋 Operator deployment plan:")
 	d.logger.Dimf("  • Namespace: %s", instance.Namespace)
