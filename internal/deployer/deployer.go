@@ -61,7 +61,7 @@ type Deployer struct {
 	portForward            *portforward.Manager
 	portForwardPID         int
 	useOperatorPullSecrets bool
-	repoAuthCache          map[string]*bool
+	repoAuthCache          map[string]bool
 }
 
 type ResourceToDelete struct {
@@ -325,10 +325,8 @@ func (d *Deployer) needsPullSecrets(ctx context.Context, repository string) bool
 // repoRequiresAuth probes whether the given repository requires authentication,
 // caching the result per repository.
 func (d *Deployer) repoRequiresAuth(ctx context.Context, repo string) bool {
-	if d.repoAuthCache != nil {
-		if cached, ok := d.repoAuthCache[repo]; ok {
-			return *cached
-		}
+	if cached, ok := d.repoAuthCache[repo]; ok {
+		return cached
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -344,9 +342,9 @@ func (d *Deployer) repoRequiresAuth(ctx context.Context, repo string) bool {
 	}
 
 	if d.repoAuthCache == nil {
-		d.repoAuthCache = make(map[string]*bool)
+		d.repoAuthCache = make(map[string]bool)
 	}
-	d.repoAuthCache[repo] = &requiresAuth
+	d.repoAuthCache[repo] = requiresAuth
 	return requiresAuth
 }
 

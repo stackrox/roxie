@@ -14,15 +14,15 @@ func TestNeedsPullSecretsForOperatorManager(t *testing.T) {
 		name          string
 		instance      OperatorInstanceConfig
 		roxieConfig   RoxieConfig
-		repoAuthCache map[string]*bool
+		repoAuthCache map[string]bool
 		expected      bool
 	}{
 		{
 			name:        "default registry, non-Konflux: operator image is public, no pull secrets",
 			instance:    OperatorInstanceConfig{ImageRegistry: constants.DefaultRegistry},
 			roxieConfig: RoxieConfig{ImageRegistry: constants.DefaultRegistry, ClusterType: types.ClusterTypeGKE},
-			repoAuthCache: map[string]*bool{
-				constants.DefaultRegistry + "/stackrox-operator": new(false),
+			repoAuthCache: map[string]bool{
+				constants.DefaultRegistry + "/stackrox-operator": false,
 			},
 			expected: false,
 		},
@@ -30,8 +30,8 @@ func TestNeedsPullSecretsForOperatorManager(t *testing.T) {
 			name:        "default registry, Konflux: operator image is private, pull secrets needed",
 			instance:    OperatorInstanceConfig{KonfluxImages: new(true), ImageRegistry: constants.DefaultRegistry},
 			roxieConfig: RoxieConfig{ImageRegistry: constants.DefaultRegistry, ClusterType: types.ClusterTypeGKE},
-			repoAuthCache: map[string]*bool{
-				constants.DefaultRegistry + "/release-operator": new(true),
+			repoAuthCache: map[string]bool{
+				constants.DefaultRegistry + "/release-operator": true,
 			},
 			expected: true,
 		},
@@ -39,8 +39,8 @@ func TestNeedsPullSecretsForOperatorManager(t *testing.T) {
 			name:        "default registry, Konflux on a cluster type that auto-configures credentials: no pull secrets",
 			instance:    OperatorInstanceConfig{KonfluxImages: new(true), ImageRegistry: constants.DefaultRegistry},
 			roxieConfig: RoxieConfig{ImageRegistry: constants.DefaultRegistry, ClusterType: types.ClusterTypeInfraOpenShift4},
-			repoAuthCache: map[string]*bool{
-				constants.DefaultRegistry + "/release-operator": new(true),
+			repoAuthCache: map[string]bool{
+				constants.DefaultRegistry + "/release-operator": true,
 			},
 			expected: false,
 		},
@@ -48,8 +48,8 @@ func TestNeedsPullSecretsForOperatorManager(t *testing.T) {
 			name:        "private custom registry: pull secrets needed",
 			instance:    OperatorInstanceConfig{ImageRegistry: "quay.io/stackrox-io"},
 			roxieConfig: RoxieConfig{ImageRegistry: "quay.io/stackrox-io", ClusterType: types.ClusterTypeGKE},
-			repoAuthCache: map[string]*bool{
-				"quay.io/stackrox-io/stackrox-operator": new(true),
+			repoAuthCache: map[string]bool{
+				"quay.io/stackrox-io/stackrox-operator": true,
 			},
 			expected: true,
 		},
@@ -57,8 +57,8 @@ func TestNeedsPullSecretsForOperatorManager(t *testing.T) {
 			name:        "private custom registry on InfraOpenShift4: pull secrets still needed",
 			instance:    OperatorInstanceConfig{ImageRegistry: "quay.io/stackrox-io"},
 			roxieConfig: RoxieConfig{ImageRegistry: "quay.io/stackrox-io", ClusterType: types.ClusterTypeInfraOpenShift4},
-			repoAuthCache: map[string]*bool{
-				"quay.io/stackrox-io/stackrox-operator": new(true),
+			repoAuthCache: map[string]bool{
+				"quay.io/stackrox-io/stackrox-operator": true,
 			},
 			expected: true,
 		},
@@ -66,8 +66,8 @@ func TestNeedsPullSecretsForOperatorManager(t *testing.T) {
 			name:        "public custom registry: no pull secrets needed",
 			instance:    OperatorInstanceConfig{ImageRegistry: "quay.io/stackrox-io"},
 			roxieConfig: RoxieConfig{ImageRegistry: "quay.io/stackrox-io", ClusterType: types.ClusterTypeGKE},
-			repoAuthCache: map[string]*bool{
-				"quay.io/stackrox-io/stackrox-operator": new(false),
+			repoAuthCache: map[string]bool{
+				"quay.io/stackrox-io/stackrox-operator": false,
 			},
 			expected: false,
 		},
@@ -75,8 +75,8 @@ func TestNeedsPullSecretsForOperatorManager(t *testing.T) {
 			name:        "registry with port: correctly strips tag, not port",
 			instance:    OperatorInstanceConfig{ImageRegistry: "registry.io:5000/org"},
 			roxieConfig: RoxieConfig{ImageRegistry: "registry.io:5000/org", ClusterType: types.ClusterTypeGKE},
-			repoAuthCache: map[string]*bool{
-				"registry.io:5000/org/stackrox-operator": new(true),
+			repoAuthCache: map[string]bool{
+				"registry.io:5000/org/stackrox-operator": true,
 			},
 			expected: true,
 		},
@@ -123,38 +123,38 @@ func TestDeployer_NeedsPullSecrets(t *testing.T) {
 	tests := []struct {
 		name          string
 		roxie         RoxieConfig
-		repoAuthCache map[string]*bool
+		repoAuthCache map[string]bool
 		expected      bool
 	}{
 		{
 			name:  "default registry, InfraOpenShift4: no pull secrets",
 			roxie: RoxieConfig{ImageRegistry: constants.DefaultRegistry, ClusterType: types.ClusterTypeInfraOpenShift4},
-			repoAuthCache: map[string]*bool{
-				constants.DefaultRegistry + "/main": new(true),
+			repoAuthCache: map[string]bool{
+				constants.DefaultRegistry + "/main": true,
 			},
 			expected: false,
 		},
 		{
 			name:  "default registry, GKE: pull secrets needed",
 			roxie: RoxieConfig{ImageRegistry: constants.DefaultRegistry, ClusterType: types.ClusterTypeGKE},
-			repoAuthCache: map[string]*bool{
-				constants.DefaultRegistry + "/main": new(true),
+			repoAuthCache: map[string]bool{
+				constants.DefaultRegistry + "/main": true,
 			},
 			expected: true,
 		},
 		{
 			name:  "private custom registry on InfraOpenShift4: pull secrets still needed",
 			roxie: RoxieConfig{ImageRegistry: "quay.io/stackrox-io", ClusterType: types.ClusterTypeInfraOpenShift4},
-			repoAuthCache: map[string]*bool{
-				"quay.io/stackrox-io/main": new(true),
+			repoAuthCache: map[string]bool{
+				"quay.io/stackrox-io/main": true,
 			},
 			expected: true,
 		},
 		{
 			name:  "public custom registry: no pull secrets needed",
 			roxie: RoxieConfig{ImageRegistry: "quay.io/stackrox-io", ClusterType: types.ClusterTypeInfraOpenShift4},
-			repoAuthCache: map[string]*bool{
-				"quay.io/stackrox-io/main": new(false),
+			repoAuthCache: map[string]bool{
+				"quay.io/stackrox-io/main": false,
 			},
 			expected: false,
 		},
