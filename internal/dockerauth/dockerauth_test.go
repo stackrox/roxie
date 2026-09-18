@@ -13,6 +13,7 @@ import (
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
@@ -79,9 +80,8 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	}
 
 	auths, ok := data["auths"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Decoded JSON should contain 'auths' key")
-	}
+	require.True(t, ok, "Decoded JSON should contain 'auths' key")
+	require.Containsf(t, auths, "registry.example.com", "Expected auths to be keyed by the registry host 'registry.example.com', got %v", auths)
 	if _, ok := auths["registry.example.com"]; !ok {
 		t.Errorf("Expected auths to be keyed by the registry host 'registry.example.com', got %v", auths)
 	}
@@ -100,9 +100,7 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	da.skipCredVerification = true // Skip verification in tests
 
 	_, err := da.GetAndVerifyCredentials(t.Context(), constants.DefaultRegistry)
-	if err == nil {
-		t.Error("Expected error when no credentials are available")
-	}
+	assert.Errorf(t, err, "Expected error when no credentials are available")
 }
 
 func TestRepositoryRequiresAuth(t *testing.T) {

@@ -243,7 +243,7 @@ func (d *DockerAuth) RepositoryRequiresAuth(ctx context.Context, repository stri
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
 		return false, nil
 	}
 	if requiresAuth(resp.StatusCode) {
