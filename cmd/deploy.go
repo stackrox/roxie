@@ -287,15 +287,15 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	d.SetVerbose(verbose)
 	d.SetConfig(deploySettings)
 
+	if dryRun {
+		log.Info("Exiting because of enabled dry run mode.")
+		return nil
+	}
+
 	if env.RunningInRoxieContainer && d.NeedsPullSecrets(ctx) {
 		if err := validateContainerizedCredentials(deploySettings.Roxie.ImageRegistry, deploySettings.Roxie.ClusterType); err != nil {
 			return err
 		}
-	}
-
-	if dryRun {
-		log.Info("Exiting because of enabled dry run mode.")
-		return nil
 	}
 
 	// If we are deploying to a local cluster and the images exist locally, then we transfer them
