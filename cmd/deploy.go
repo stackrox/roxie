@@ -526,6 +526,10 @@ func deployValidate(log *logger.Logger, components component.Component, deploySe
 		return errors.New("skipping operator deployment while also requesting deploying via OLM at the same time does not make sense")
 	}
 
+	if deploySettings.Operator.DeployViaOlmEnabled() && deploySettings.Roxie.UsesCustomRegistry() {
+		return fmt.Errorf("deploying operator via OLM with a custom image registry (%s) is not supported", deploySettings.Roxie.ImageRegistry)
+	}
+
 	if deploySettings.Roxie.KonfluxImagesEnabled() {
 		if deploySettings.Operator.DeployViaOlmEnabled() {
 			return errors.New("using Konflux images while deploying operator via OLM is not supported")
