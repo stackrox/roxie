@@ -103,7 +103,7 @@ func (d *DockerAuth) GetAndVerifyCredentials(ctx context.Context, registry strin
 
 	// Verify credentials.
 	if !d.skipCredVerification {
-		if err := d.VerifyCredentials(ctx, username, password, host, mainImageRepository); err != nil {
+		if err := d.verifyCredentials(ctx, username, password, host, mainImageRepository); err != nil {
 			return nil, fmt.Errorf("credentials are invalid: %w", err)
 		}
 	}
@@ -190,10 +190,10 @@ func (d *DockerAuth) getCredentialFromHelper(helperName, registry string) (*Cred
 	return &credData, nil
 }
 
-// VerifyCredentials verifies that the given credentials grant pull access to
+// verifyCredentials verifies that the given credentials grant pull access to
 // the given repository on the given registry host. It works for registries
 // that follow the standard OCI Distribution v2 challenge/token protocol.
-func (d *DockerAuth) VerifyCredentials(ctx context.Context, username, password, host, repository string) error {
+func (d *DockerAuth) verifyCredentials(ctx context.Context, username, password, host, repository string) error {
 	reg, err := name.NewRegistry(host)
 	if err != nil {
 		return fmt.Errorf("invalid registry host %q: %w", host, err)
