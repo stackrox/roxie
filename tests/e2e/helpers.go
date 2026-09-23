@@ -383,20 +383,20 @@ func testCentralAPI(t *testing.T, endpoint, caCertFile string) {
 	t.Logf("Central at %s responded with status: %d", endpoint, resp.StatusCode)
 }
 
-func verifyHelmReleaseExists(t *testing.T, helmCtx helm.HelmCtx, releaseName, namespace string) {
+func verifyHelmReleaseExists(t *testing.T, ctx context.Context, releaseName, namespace string) {
 	t.Helper()
 
-	releases, err := helm.ListByPrefix(helmCtx, releaseName, namespace)
+	releases, err := helm.ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err, "listing Helm releases in namespace %s", namespace)
 	if !slices.Contains(releases, releaseName) {
 		t.Fatalf("Helm release %s does not exist in namespace %s", releaseName, namespace)
 	}
 }
 
-func verifyHelmReleaseNotExists(t *testing.T, helmCtx helm.HelmCtx, releaseName, namespace string) {
+func verifyHelmReleaseNotExists(t *testing.T, ctx context.Context, releaseName, namespace string) {
 	t.Helper()
 
-	releases, err := helm.ListByPrefix(helmCtx, releaseName, namespace)
+	releases, err := helm.ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err, "listing Helm releases in namespace %s", namespace)
 	if slices.Contains(releases, releaseName) {
 		t.Fatalf("Helm release %s already exists in namespace %s", releaseName, namespace)

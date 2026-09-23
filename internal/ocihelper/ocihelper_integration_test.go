@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/stackrox/roxie/internal/logger"
 )
 
 func TestExtractManifestsFromImage_Integration(t *testing.T) {
@@ -23,11 +21,10 @@ func TestExtractManifestsFromImage_Integration(t *testing.T) {
 	}
 	defer os.RemoveAll(destDir)
 
-	log := logger.New()
 	ctx := context.Background()
 
 	t.Logf("Extracting manifests from %s", bundleImage)
-	err = ExtractManifestsFromImage(ctx, log, bundleImage, destDir, "")
+	err = ExtractManifestsFromImage(ctx, bundleImage, destDir, "")
 	if err != nil {
 		t.Fatalf("ExtractManifestsFromImage failed: %v", err)
 	}
@@ -85,12 +82,11 @@ func TestExtractManifestsFromImage_Integration(t *testing.T) {
 func TestVerifyImageExistence_Integration(t *testing.T) {
 	bundleImage := "quay.io/rhacs-eng/stackrox-operator-bundle:v4.10.0"
 
-	log := logger.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	t.Logf("Verifying image %s exists", bundleImage)
-	err := VerifyImageExistence(ctx, log, bundleImage)
+	err := VerifyImageExistence(ctx, bundleImage)
 	if err != nil {
 		t.Fatalf("VerifyImageExistence failed: %v", err)
 	}
@@ -101,12 +97,11 @@ func TestVerifyImageExistence_Integration(t *testing.T) {
 func TestVerifyImageExistence_NonExistent_Integration(t *testing.T) {
 	nonExistentImage := "quay.io/rhacs-eng/this-image-does-not-exist:v999.999.999"
 
-	log := logger.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	t.Logf("Verifying image %s does not exist", nonExistentImage)
-	err := VerifyImageExistence(ctx, log, nonExistentImage)
+	err := VerifyImageExistence(ctx, nonExistentImage)
 	if err == nil {
 		t.Fatal("Expected VerifyImageExistence to fail for non-existent image, but it succeeded")
 	}

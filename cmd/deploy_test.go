@@ -12,7 +12,6 @@ import (
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/imagetag"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/paths"
 	"github.com/stackrox/roxie/internal/types"
 	"github.com/stretchr/testify/assert"
@@ -366,8 +365,6 @@ func TestValidateImageRegistry(t *testing.T) {
 }
 
 func TestApplyUserDefaults(t *testing.T) {
-	log := logger.New()
-
 	tests := []struct {
 		name     string
 		config   deployer.Config
@@ -455,7 +452,7 @@ func TestApplyUserDefaults(t *testing.T) {
 
 			cfg := deployer.NewConfig()
 			require.NoError(t, mergo.Merge(&cfg, &tt.config, mergo.WithOverride, mergo.WithoutDereference))
-			require.NoError(t, tryApplyUserDefaults(log, &cfg))
+			require.NoError(t, tryApplyUserDefaults(&cfg))
 
 			expected := deployer.NewConfig()
 			require.NoError(t, mergo.Merge(&expected, &tt.expected, mergo.WithOverride, mergo.WithoutDereference))
@@ -475,7 +472,7 @@ func TestApplyUserDefaults(t *testing.T) {
 		require.NoError(t, os.WriteFile(configPath, []byte(`invalid: [yaml`), 0o644))
 
 		cfg := deployer.NewConfig()
-		assert.Error(t, tryApplyUserDefaults(log, &cfg))
+		assert.Error(t, tryApplyUserDefaults(&cfg))
 	})
 }
 

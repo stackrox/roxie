@@ -18,7 +18,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 // splitRegistryHost splits a resolved image registry (e.g. "quay.io/stackrox-io")
@@ -30,7 +30,6 @@ func splitRegistryHost(registry string) (host, path string) {
 
 // DockerAuth handles Docker authentication and pull secret management.
 type DockerAuth struct {
-	logger               *logger.Logger
 	skipCredVerification bool
 }
 
@@ -59,10 +58,8 @@ type Credentials struct {
 }
 
 // New creates a new DockerAuth instance.
-func New(log *logger.Logger) *DockerAuth {
-	return &DockerAuth{
-		logger: log,
-	}
+func New() *DockerAuth {
+	return &DockerAuth{}
 }
 
 // GetAndVerifyCredentials retrieves and verifies Docker credentials.
@@ -87,7 +84,7 @@ func (d *DockerAuth) GetAndVerifyCredentials(ctx context.Context, registry strin
 	if username == "" {
 		// Try to get from Docker config file.
 		dockerConfigPath := filepath.Join(os.Getenv("HOME"), ".docker", "config.json")
-		d.logger.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain Docker credentials from config file: %s", dockerConfigPath)
+		log.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain Docker credentials from config file: %s", dockerConfigPath)
 		if _, err := os.Stat(dockerConfigPath); err == nil {
 			var err error
 			username, password, err = d.getCredentialsFromDockerConfig(dockerConfigPath, host)
@@ -206,7 +203,7 @@ func (d *DockerAuth) verifyCredentials(ctx context.Context, username, password, 
 		return fmt.Errorf("credential verification failed for %s: %w", host, err)
 	}
 
-	d.logger.Dimf("Successfully verified credentials for %s (repository: %s)", host, repository)
+	log.Dimf("Successfully verified credentials for %s (repository: %s)", host, repository)
 	return nil
 }
 

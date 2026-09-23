@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,8 +20,7 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	t.Setenv("REGISTRY_USERNAME", "user")
 	t.Setenv("REGISTRY_PASSWORD", "pass")
 
-	log := logger.New()
-	da := New(log)
+	da := New()
 	da.skipCredVerification = true // Skip verification in tests
 
 	creds, err := da.GetAndVerifyCredentials(t.Context(), constants.DefaultRegistry)
@@ -92,8 +90,7 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	// Use a temporary home directory to simulate missing credentials.
 	t.Setenv("HOME", t.TempDir())
 
-	log := logger.New()
-	da := New(log)
+	da := New()
 	da.skipCredVerification = true // Skip verification in tests
 
 	_, err := da.GetAndVerifyCredentials(t.Context(), constants.DefaultRegistry)
@@ -161,7 +158,7 @@ func TestRepositoryRequiresAuth(t *testing.T) {
 			registryAddr, cleanup := newFakeRegistry(t, tt.challengeAuth, tt.tokenStatus, tt.tagsListStatus)
 			defer cleanup()
 
-			da := &DockerAuth{logger: logger.New()}
+			da := &DockerAuth{}
 			requiresAuth, err := da.RepositoryRequiresAuth(context.Background(), registryAddr+"/some-org/some-repo")
 			assert.Equal(t, tt.expectedRequires, requiresAuth)
 			if tt.expectErr {

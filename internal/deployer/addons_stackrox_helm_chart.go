@@ -7,16 +7,16 @@ import (
 
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helm"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 // New creates a helmAddOn that installs a chart from a local stackrox repository checkout.
 func (h *StackRoxRepoHelmChartAddOn) New(
-	addOnCfg AddOnConfig,
 	commonProperties CommonAddOnProperties,
 	name, namespace string,
 ) (AddOn, error) {
-	if !env.IsInStackroxRepository(addOnCfg.log) {
-		addOnCfg.log.Errorf("the Helm chart add-on %q uses stackroxRepoHelmChart but roxie is not running from a stackrox checkout", name)
+	if !env.IsInStackroxRepository() {
+		log.Errorf("the Helm chart add-on %q uses stackroxRepoHelmChart but roxie is not running from a stackrox checkout", name)
 		return nil, errors.New("not invoked in StackRox repository")
 	}
 	topLevelDir, err := env.GetStackRoxTopLevelDir()
@@ -25,14 +25,14 @@ func (h *StackRoxRepoHelmChartAddOn) New(
 	}
 
 	chartPath := filepath.Join(topLevelDir, h.Path)
-	if err := helm.BuildDependencies(addOnCfg.log, chartPath); err != nil {
+	if err := helm.BuildDependencies(chartPath); err != nil {
 		return nil, fmt.Errorf("building dependencies for Helm chart add-on %q: %w", name, err)
 	}
 
 	opts := helm.InstallOptions{
 		ChartPath: chartPath,
 	}
-	addOnCfg.log.Infof("Add-on %q: using Helm chart add-on from stackrox repo at %s", name, opts.ChartPath)
+	log.Infof("Add-on %q: using Helm chart add-on from stackrox repo at %s", name, opts.ChartPath)
 
 	// Shallow copy, because we modify the ValuesFile and don't want to mutate the actual receiver:
 	hCopy := *h
@@ -46,5 +46,5 @@ func (h *StackRoxRepoHelmChartAddOn) New(
 	}
 	opts.Values = values
 
-	return newHelmAddOn(addOnCfg, commonProperties, name, namespace, opts)
+	return newHelmAddOn(commonProperties, name, namespace, opts)
 }
