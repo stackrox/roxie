@@ -145,4 +145,3 @@ func createAddOnFromDefinition(
 
 	return addOn, nil
 }
-
