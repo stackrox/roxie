@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -159,7 +158,7 @@ func TestRepositoryRequiresAuth(t *testing.T) {
 			registryAddr, cleanup := newFakeRegistry(t, tt.challengeAuth, tt.tokenStatus, tt.tagsListStatus)
 			defer cleanup()
 
-			da := &DockerAuth{logger: logger.New()}
+			da := &DockerAuth{}
 			requiresAuth, err := da.RepositoryRequiresAuth(context.Background(), registryAddr+"/some-org/some-repo")
 			assert.Equal(t, tt.expectedRequires, requiresAuth)
 			if tt.expectErr {
