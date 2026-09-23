@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -164,6 +165,7 @@ func (l *Logger) DebugMultilineYaml(v any) {
 
 // handler implements slog.Handler with roxie's CLI output format.
 type handler struct {
+	mu        sync.Mutex
 	level     *slog.LevelVar
 	startTime time.Time
 	stdout    io.Writer
@@ -191,6 +193,8 @@ func (h *handler) Handle(_ context.Context, r slog.Record) error {
 		w = h.stderr
 	}
 
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	fmt.Fprintf(w, "%s %s\n", timestamp, message)
 	return nil
 }

@@ -9,7 +9,7 @@ import (
 )
 
 func TestDetectClusterType_Integration(t *testing.T) {
-	err := Initialize(nil)
+	err := Initialize()
 	if err != nil {
 		t.Fatalf("Initialize() failed: %v", err)
 	}
