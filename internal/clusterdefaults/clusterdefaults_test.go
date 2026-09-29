@@ -103,6 +103,26 @@ func TestClusterDefaults(t *testing.T) {
 			},
 		},
 		{
+			name:        "aks cluster",
+			clusterType: types.ClusterTypeAKS,
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       new(types.ExposureLoadBalancer),
+					PortForwarding: new(false),
+				},
+			},
+		},
+		{
+			name:        "infra aks cluster",
+			clusterType: types.ClusterTypeInfraAKS,
+			wantConfig: deployer.Config{
+				Central: deployer.CentralConfig{
+					Exposure:       new(types.ExposureLoadBalancer),
+					PortForwarding: new(false),
+				},
+			},
+		},
+		{
 			name:        "cluster does not override existing values",
 			clusterType: types.ClusterTypeInfraGKE,
 			config: deployer.Config{
@@ -180,6 +200,16 @@ func TestResolveAutoResourceProfile(t *testing.T) {
 		{
 			name:        "openshift cluster",
 			clusterType: types.ClusterTypeInfraOpenShift4,
+			want:        types.ResourceProfileMedium,
+		},
+		{
+			name:        "aks cluster",
+			clusterType: types.ClusterTypeAKS,
+			want:        types.ResourceProfileMedium,
+		},
+		{
+			name:        "infra aks cluster",
+			clusterType: types.ClusterTypeInfraAKS,
 			want:        types.ResourceProfileMedium,
 		},
 		{

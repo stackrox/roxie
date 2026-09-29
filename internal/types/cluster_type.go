@@ -24,6 +24,10 @@ const (
 	ClusterTypeK3s ClusterType = "K3s"
 	// ClusterTypeCRC represents a CRC (CodeReady Containers) cluster
 	ClusterTypeCRC ClusterType = "CRC"
+	// ClusterTypeAKS represents a generic AKS (Azure Kubernetes Service) cluster.
+	ClusterTypeAKS ClusterType = "AKS"
+	// ClusterTypeInfraAKS represents an AKS cluster created via Infra.
+	ClusterTypeInfraAKS ClusterType = "InfraAKS"
 )
 
 func (ct ClusterType) IsGKE() bool {
@@ -34,6 +38,10 @@ func (ct ClusterType) IsOpenShift() bool {
 	return ct == ClusterTypeInfraOpenShift4 || ct == ClusterTypeOpenShift4
 }
 
+func (ct ClusterType) IsAKS() bool {
+	return ct == ClusterTypeInfraAKS || ct == ClusterTypeAKS
+}
+
 // String returns the string representation of a ClusterType
 func (ct ClusterType) String() string {
 	switch ct {
@@ -41,6 +49,8 @@ func (ct ClusterType) String() string {
 		return "GKE (infra)"
 	case ClusterTypeInfraOpenShift4:
 		return "OpenShift4 (infra)"
+	case ClusterTypeInfraAKS:
+		return "AKS (infra)"
 	default:
 		return string(ct)
 	}
@@ -57,6 +67,8 @@ func AllClusterTypes() []ClusterType {
 		ClusterTypeCRC,
 		ClusterTypeInfraOpenShift4,
 		ClusterTypeOpenShift4,
+		ClusterTypeAKS,
+		ClusterTypeInfraAKS,
 	}
 }
 
@@ -89,4 +101,8 @@ func (ct ClusterType) IsLocal() bool {
 		return true
 	}
 	return false
+}
+
+func (ct ClusterType) SupportsLoadBalancer() bool {
+	return ct.IsGKE() || ct.IsOpenShift() || ct.IsAKS()
 }
