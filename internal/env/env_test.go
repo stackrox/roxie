@@ -20,7 +20,7 @@ func TestDetectClusterType_InfraGKE(t *testing.T) {
 	}
 	apiResources := []string{"pods", "services", "deployments"}
 
-	result := DetectClusterType(config, apiResources)
+	result := DetectClusterType(nil, config, apiResources)
 	if result != types.ClusterTypeInfraGKE {
 		t.Errorf("DetectClusterType() = %v (%s), want %v", result, result.String(), types.ClusterTypeInfraGKE)
 	}
@@ -38,10 +38,42 @@ func TestDetectClusterType_InfraGKE_ExactMatch(t *testing.T) {
 	}
 	apiResources := []string{"pods", "services"}
 
-	result := DetectClusterType(config, apiResources)
+	result := DetectClusterType(nil, config, apiResources)
 	if result != types.ClusterTypeInfraGKE {
 		t.Errorf("DetectClusterType() = %v (%s), want %v", result, result.String(), types.ClusterTypeInfraGKE)
 	}
+}
+
+func TestDetectClusterType_AKS(t *testing.T) {
+	config := KubeConfig{
+		CurrentContext: "my-aks-cluster",
+		Clusters: []KubeCluster{
+			{
+				Name:   "my-aks-cluster",
+				Server: "https://ABCDEF1234567890.some-region.azmk8s.io:443",
+			},
+		},
+	}
+	apiResources := []string{"pods", "services"}
+
+	result := DetectClusterType(nil, config, apiResources)
+	assert.Equal(t, types.ClusterTypeAKS, result)
+}
+
+func TestDetectClusterType_EKS(t *testing.T) {
+	config := KubeConfig{
+		CurrentContext: "my-eks-cluster",
+		Clusters: []KubeCluster{
+			{
+				Name:   "my-eks-cluster",
+				Server: "https://ABCDEF1234567890.some-region.eks.amazonaws.com:443",
+			},
+		},
+	}
+	apiResources := []string{"pods", "services"}
+
+	result := DetectClusterType(nil, config, apiResources)
+	assert.Equal(t, types.ClusterTypeEKS, result)
 }
 
 func TestDetectClusterType_InfraOpenShift4(t *testing.T) {
@@ -61,7 +93,7 @@ func TestDetectClusterType_InfraOpenShift4(t *testing.T) {
 		"clusteroperators.config.openshift.io",
 	}
 
-	result := DetectClusterType(config, apiResources)
+	result := DetectClusterType(nil, config, apiResources)
 	assert.Equal(t, types.ClusterTypeInfraOpenShift4, result)
 }
 
@@ -82,7 +114,7 @@ func TestDetectClusterType_OpenShift4(t *testing.T) {
 		"clusteroperators.config.openshift.io",
 	}
 
-	result := DetectClusterType(config, apiResources)
+	result := DetectClusterType(nil, config, apiResources)
 	assert.Equal(t, types.ClusterTypeOpenShift4, result)
 }
 
@@ -98,7 +130,7 @@ func TestDetectClusterType_OpenShift4_NoAPIResources(t *testing.T) {
 	}
 	apiResources := []string{"pods", "services"}
 
-	result := DetectClusterType(config, apiResources)
+	result := DetectClusterType(nil, config, apiResources)
 	if result != types.ClusterTypeUnknown {
 		t.Errorf("DetectClusterType() = %v (%s), want %v", result, result.String(), types.ClusterTypeUnknown)
 	}
@@ -116,7 +148,7 @@ func TestDetectClusterType_Kind(t *testing.T) {
 	}
 	apiResources := []string{"pods", "services"}
 
-	result := DetectClusterType(config, apiResources)
+	result := DetectClusterType(nil, config, apiResources)
 	if result != types.ClusterTypeKind {
 		t.Errorf("DetectClusterType() = %v (%s), want %v", result, result.String(), types.ClusterTypeKind)
 	}
@@ -134,7 +166,7 @@ func TestDetectClusterType_Kind_CaseInsensitive(t *testing.T) {
 	}
 	apiResources := []string{"pods"}
 
-	result := DetectClusterType(config, apiResources)
+	result := DetectClusterType(nil, config, apiResources)
 	if result != types.ClusterTypeKind {
 		t.Errorf("DetectClusterType() = %v (%s), want %v", result, result.String(), types.ClusterTypeKind)
 	}
@@ -147,7 +179,7 @@ func TestDetectClusterType_EmptyContext(t *testing.T) {
 	}
 	apiResources := []string{}
 
-	result := DetectClusterType(config, apiResources)
+	result := DetectClusterType(nil, config, apiResources)
 	if result != types.ClusterTypeUnknown {
 		t.Errorf("DetectClusterType() = %v (%s), want %v", result, result.String(), types.ClusterTypeUnknown)
 	}
@@ -165,7 +197,7 @@ func TestDetectClusterType_Minikube(t *testing.T) {
 	}
 	apiResources := []string{"pods", "services"}
 
-	result := DetectClusterType(config, apiResources)
+	result := DetectClusterType(nil, config, apiResources)
 	if result != types.ClusterTypeMinikube {
 		t.Errorf("DetectClusterType() = %v (%s), want %v", result, result.String(), types.ClusterTypeMinikube)
 	}
@@ -196,7 +228,7 @@ func TestDetectClusterType_GKE_DifferentProject(t *testing.T) {
 					},
 				},
 			}
-			result := DetectClusterType(config, []string{"pods"})
+			result := DetectClusterType(nil, config, []string{"pods"})
 			assert.Equal(t, types.ClusterTypeGKE, result)
 		})
 	}
@@ -327,6 +359,16 @@ func TestClusterTypeString(t *testing.T) {
 			want:        "Kind",
 		},
 		{
+			name:        "AKS",
+			clusterType: types.ClusterTypeAKS,
+			want:        "AKS",
+		},
+		{
+			name:        "EKS",
+			clusterType: types.ClusterTypeEKS,
+			want:        "EKS",
+		},
+		{
 			name:        "ClusterTypeUnknown",
 			clusterType: types.ClusterTypeUnknown,
 			want:        "Unknown",
@@ -428,7 +470,7 @@ func TestDefaultDetector_Detect(t *testing.T) {
 			kubeConfig := KubeConfig{
 				CurrentContext: tt.kubeContext,
 			}
-			got := DetectClusterType(kubeConfig, nil)
+			got := DetectClusterType(nil, kubeConfig, nil)
 			if got != tt.want {
 				t.Errorf("Detect(%q) = %v, want %v", tt.kubeContext, got, tt.want)
 			}
