@@ -19,6 +19,8 @@ import (
 	"golang.org/x/term"
 )
 
+const infraAWSAccountID = "051999192406"
+
 var (
 	RunningInRoxieContainer bool
 	RunningInteractively    bool
@@ -163,6 +165,14 @@ func DetectClusterType(log *logger.Logger, config KubeConfig, apiResources []str
 			return types.ClusterTypeInfraAKS
 		}
 		return types.ClusterTypeAKS
+	}
+
+	// EKS clusters have server hostnames ending in .eks.amazonaws.com
+	if parsedURL != nil && strings.HasSuffix(parsedURL.Hostname(), ".eks.amazonaws.com") {
+		if strings.Contains(config.CurrentContext, ":"+infraAWSAccountID+":") {
+			return types.ClusterTypeInfraEKS
+		}
+		return types.ClusterTypeEKS
 	}
 
 	// Minikube clusters typically have context name "minikube".

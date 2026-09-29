@@ -72,7 +72,7 @@ func ResolveAutoResourceProfile(clusterType types.ClusterType) types.ResourcePro
 	case clusterType.IsLocal():
 		return types.ResourceProfileSmall
 
-	case clusterType.IsGKE() || clusterType.IsOpenShift() || clusterType.IsAKS():
+	case clusterType.IsGKE() || clusterType.IsOpenShift() || clusterType.IsAKS() || clusterType.IsEKS():
 		return types.ResourceProfileMedium
 
 	default:

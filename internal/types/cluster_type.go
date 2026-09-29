@@ -28,6 +28,10 @@ const (
 	ClusterTypeAKS ClusterType = "AKS"
 	// ClusterTypeInfraAKS represents an AKS cluster created via Infra.
 	ClusterTypeInfraAKS ClusterType = "InfraAKS"
+	// ClusterTypeEKS represents a generic EKS (Amazon Elastic Kubernetes Service) cluster.
+	ClusterTypeEKS ClusterType = "EKS"
+	// ClusterTypeInfraEKS represents an EKS cluster created via Infra.
+	ClusterTypeInfraEKS ClusterType = "InfraEKS"
 )
 
 func (ct ClusterType) IsGKE() bool {
@@ -42,6 +46,10 @@ func (ct ClusterType) IsAKS() bool {
 	return ct == ClusterTypeInfraAKS || ct == ClusterTypeAKS
 }
 
+func (ct ClusterType) IsEKS() bool {
+	return ct == ClusterTypeInfraEKS || ct == ClusterTypeEKS
+}
+
 // String returns the string representation of a ClusterType
 func (ct ClusterType) String() string {
 	switch ct {
@@ -51,6 +59,8 @@ func (ct ClusterType) String() string {
 		return "OpenShift4 (infra)"
 	case ClusterTypeInfraAKS:
 		return "AKS (infra)"
+	case ClusterTypeInfraEKS:
+		return "EKS (infra)"
 	default:
 		return string(ct)
 	}
@@ -69,6 +79,8 @@ func AllClusterTypes() []ClusterType {
 		ClusterTypeOpenShift4,
 		ClusterTypeAKS,
 		ClusterTypeInfraAKS,
+		ClusterTypeEKS,
+		ClusterTypeInfraEKS,
 	}
 }
 
@@ -104,5 +116,5 @@ func (ct ClusterType) IsLocal() bool {
 }
 
 func (ct ClusterType) SupportsLoadBalancer() bool {
-	return ct.IsGKE() || ct.IsOpenShift() || ct.IsAKS()
+	return ct.IsGKE() || ct.IsOpenShift() || ct.IsAKS() || ct.IsEKS()
 }
