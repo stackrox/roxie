@@ -87,13 +87,24 @@ func (d *DockerAuth) GetAndVerifyCredentials(ctx context.Context, registry strin
 	if username == "" {
 		// Try to get from Docker config file.
 		dockerConfigPath := filepath.Join(os.Getenv("HOME"), ".docker", "config.json")
-		d.logger.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain Docker credentials from config file: %s", dockerConfigPath)
-		if _, err := os.Stat(dockerConfigPath); err == nil {
-			var err error
-			username, password, err = d.getCredentialsFromDockerConfig(dockerConfigPath, host)
-			if err != nil {
+		_, err := os.Stat(dockerConfigPath)
+		if err != nil {
+			// No .docker/config.json file found, check podman auth.json files
+			xdgRuntimePath := os.Getenv("XDG_RUNTIME_DIR")
+			if xdgRuntimePath != "" {
+				dockerConfigPath = filepath.Join(xdgRuntimePath, "containers", "auth.json")
+			} else {
+				dockerConfigPath = filepath.Join(os.Getenv("HOME"), ".config", "containers", "auth.json")
+			}
+
+			if _, err = os.Stat(dockerConfigPath); err != nil {
 				return nil, err
 			}
+		}
+		d.logger.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain Docker credentials from config file: %s", dockerConfigPath)
+		username, password, err = d.getCredentialsFromDockerConfig(dockerConfigPath, host)
+		if err != nil {
+			return nil, err
 		}
 	}
 
