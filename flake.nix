@@ -11,23 +11,39 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
+        # Version information derived from the flake source; git tags are not
+        # visible inside a flake build, so use the commit hash instead of the
+        # `git describe` scheme the Makefile uses.
+        version = self.shortRev or "dirty";
+        buildDate =
+          let d = self.lastModifiedDate or "19700101000000";
+          in with pkgs.lib.strings;
+          "${substring 0 4 d}-${substring 4 2 d}-${substring 6 2 d}T${substring 8 2 d}:${substring 10 2 d}:${substring 12 2 d}Z";
+
         # Build roxie
         roxie = pkgs.buildGoModule {
           pname = "roxie";
+          inherit version;
 
           src = ./.;
 
           # Let Nix handle vendoring by calculating the hash
           # To update: set to pkgs.lib.fakeHash, build, then use the hash from error
-          vendorHash = "sha256-bIlSwBh8WJtscEtjQIvxdIK9sFR7aQNV2BUeVNj8qbA=";
+          vendorHash = "sha256-CpzbXRNw8VYli3ZX6SZa6j3EpkuTRpY4LgNzAT/Qrkw=";
 
           # Inject version information at build time
           ldflags = [
-            "-X main.version=0.1"
-            "-X main.buildDate=1970-01-01T00:00:00Z"
+            "-X main.version=${version}"
+            "-X main.buildDate=${buildDate}"
           ];
 
           subPackages = [ "cmd" ];
+
+          # The main package lives in ./cmd, so the binary is named after
+          # that directory; rename it to the actual tool name.
+          postInstall = ''
+            mv $out/bin/cmd $out/bin/roxie
+          '';
 
           meta = with pkgs.lib; {
             description = "Fast, developer-friendly CLI to deploy and manage Red Hat Advanced Cluster Security (ACS)";
