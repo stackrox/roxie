@@ -24,7 +24,7 @@ jobs:
     outputs:
       cluster-name: ${{ inputs.cluster-name }}
     steps:
-      - uses: stackrox/actions/infra/create-cluster@v1.0.45
+      - uses: stackrox/actions/infra/create-cluster@v1.0.46
         with:
           flavor: ${{ inputs.flavor }}
           name: ${{ inputs.cluster-name }}
