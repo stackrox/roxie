@@ -115,11 +115,13 @@ func (d *DockerAuth) GetAndVerifyCredentials(ctx context.Context, registry strin
 }
 
 func (d *DockerAuth) findAuthConfigPath() (string, error) {
-	authFiles := []string{
-		filepath.Join(os.Getenv("HOME"), ".docker", "config.json"),
-		filepath.Join(os.Getenv("XDG_RUNTIME_DIR"), "containers", "auth.json"),
-		filepath.Join(os.Getenv("HOME"), ".config", "containers", "auth.json"),
+	authFiles := []string{filepath.Join(os.Getenv("HOME"), ".docker", "config.json")}
+	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if xdgRuntimeDir != "" {
+		authFiles = append(authFiles, filepath.Join(xdgRuntimeDir, "containers", "auth.json"))
 	}
+	authFiles = append(authFiles, filepath.Join(os.Getenv("HOME"), ".config", "containers", "auth.json"))
+
 	for _, path := range authFiles {
 		_, err := os.Stat(path)
 		if errors.Is(err, fs.ErrNotExist) {
