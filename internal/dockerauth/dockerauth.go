@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -85,24 +86,12 @@ func (d *DockerAuth) GetAndVerifyCredentials(ctx context.Context, registry strin
 	}
 
 	if username == "" {
-		// Try to get from Docker config file.
-		dockerConfigPath := filepath.Join(os.Getenv("HOME"), ".docker", "config.json")
-		_, err := os.Stat(dockerConfigPath)
+		registryAuthPath, err := d.findAuthConfigPath()
 		if err != nil {
-			// No .docker/config.json file found, check podman auth.json files
-			xdgRuntimePath := os.Getenv("XDG_RUNTIME_DIR")
-			if xdgRuntimePath != "" {
-				dockerConfigPath = filepath.Join(xdgRuntimePath, "containers", "auth.json")
-			} else {
-				dockerConfigPath = filepath.Join(os.Getenv("HOME"), ".config", "containers", "auth.json")
-			}
-
-			if _, err = os.Stat(dockerConfigPath); err != nil {
-				return nil, err
-			}
+			return nil, err
 		}
-		d.logger.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain Docker credentials from config file: %s", dockerConfigPath)
-		username, password, err = d.getCredentialsFromDockerConfig(dockerConfigPath, host)
+		d.logger.Dimf("REGISTRY_USERNAME/REGISTRY_PASSWORD unset. Trying to obtain registry credentials from config file: %s", registryAuthPath)
+		username, password, err = d.getCredentialsFromDockerConfig(registryAuthPath, host)
 		if err != nil {
 			return nil, err
 		}
@@ -123,6 +112,25 @@ func (d *DockerAuth) GetAndVerifyCredentials(ctx context.Context, registry strin
 		Username: username,
 		Password: password,
 	}, nil
+}
+
+func (d *DockerAuth) findAuthConfigPath() (string, error) {
+	authFiles := []string{
+		filepath.Join(os.Getenv("HOME"), ".docker", "config.json"),
+		filepath.Join(os.Getenv("XDG_RUNTIME_DIR"), "containers", "auth.json"),
+		filepath.Join(os.Getenv("HOME"), ".config", "containers", "auth.json"),
+	}
+	for _, path := range authFiles {
+		_, err := os.Stat(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			d.logger.Dimf("%q not found", path)
+		} else if err != nil {
+			return "", err
+		} else {
+			return path, nil
+		}
+	}
+	return "", errors.New("no registry authentication file found")
 }
 
 // getCredentialsFromDockerConfig extracts credentials from existing Docker config

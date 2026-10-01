@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -25,6 +27,41 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	da := New(log)
 	da.skipCredVerification = true // Skip verification in tests
 
+	testGetAndVerifyCredentials(t, da)
+}
+
+func TestGetAndVerifyCredentialsFromAuthFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		mockType uint32
+	}{
+		{
+			name:     "docker auth",
+			mockType: DOCKER_MOCK_AUTH,
+		}, {
+			name:     "podman auth",
+			mockType: PODMAN_MOCK_AUTH,
+		}, {
+			name:     "podman XDG auth",
+			mockType: PODMAN_XDG_MOCK_AUTH,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupMockAuthEnvironment(t)
+			createMockAuthFile(t, tt.mockType)
+
+			log := logger.New()
+			da := New(log)
+			da.skipCredVerification = true // Skip verification in tests
+
+			testGetAndVerifyCredentials(t, da)
+		})
+	}
+}
+
+func testGetAndVerifyCredentials(t *testing.T, da *DockerAuth) {
 	creds, err := da.GetAndVerifyCredentials(t.Context(), constants.DefaultRegistry)
 	if err != nil {
 		t.Fatalf("GetAndVerifyCredentials failed: %v", err)
@@ -89,8 +126,8 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	t.Setenv("REGISTRY_USERNAME", "")
 	t.Setenv("REGISTRY_PASSWORD", "")
 
-	// Use a temporary home directory to simulate missing credentials.
-	t.Setenv("HOME", t.TempDir())
+	// Use temporary directories to simulate missing credentials.
+	setupMockAuthEnvironment(t)
 
 	log := logger.New()
 	da := New(log)
@@ -173,6 +210,76 @@ func TestRepositoryRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestFindAuthConfigPath(t *testing.T) {
+	tests := []struct {
+		name          string
+		mockAuthTypes []uint32
+		expectType    uint32
+		expectErr     bool
+	}{
+		{
+			"empty auth types",
+			[]uint32{},
+			0,
+			true,
+		},
+		{
+			"docker auth",
+			[]uint32{DOCKER_MOCK_AUTH},
+			DOCKER_MOCK_AUTH,
+			false,
+		},
+		{
+			"podman auth",
+			[]uint32{PODMAN_MOCK_AUTH},
+			PODMAN_MOCK_AUTH,
+			false,
+		},
+		{
+			"podman XDG auth",
+			[]uint32{PODMAN_XDG_MOCK_AUTH},
+			PODMAN_XDG_MOCK_AUTH,
+			false,
+		},
+		{
+			"docker auth takes precedence",
+			[]uint32{DOCKER_MOCK_AUTH, PODMAN_MOCK_AUTH, PODMAN_XDG_MOCK_AUTH},
+			DOCKER_MOCK_AUTH,
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupMockAuthEnvironment(t)
+
+			for _, mockType := range tt.mockAuthTypes {
+				createMockAuthFile(t, mockType)
+			}
+			log := logger.New()
+			da := New(log)
+
+			authFile, err := da.findAuthConfigPath()
+			if tt.expectErr {
+				assert.Error(t, err)
+				return
+			} else {
+				assert.NoError(t, err)
+				var expectedPath string
+				switch tt.expectType {
+				case DOCKER_MOCK_AUTH:
+					expectedPath = filepath.Join(os.Getenv("HOME"), ".docker", "config.json")
+				case PODMAN_MOCK_AUTH:
+					expectedPath = filepath.Join(os.Getenv("HOME"), ".config", "containers", "auth.json")
+				case PODMAN_XDG_MOCK_AUTH:
+					expectedPath = filepath.Join(os.Getenv("XDG_RUNTIME_DIR"), "containers", "auth.json")
+				}
+				assert.Equal(t, authFile, expectedPath)
+			}
+		})
+	}
+}
+
 // newFakeRegistry starts an httptest server that simulates an OCI registry's
 // authentication and tags-list endpoints.
 func newFakeRegistry(t *testing.T, challengeAuth bool, tokenStatus, tagsListStatus int) (string, func()) {
@@ -203,4 +310,57 @@ func newFakeRegistry(t *testing.T, challengeAuth bool, tokenStatus, tagsListStat
 	server := httptest.NewServer(mux)
 	registryAddr = strings.TrimPrefix(server.URL, "http://")
 	return registryAddr, server.Close
+}
+
+func setupMockAuthEnvironment(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+}
+
+const (
+	_ uint32 = iota
+	DOCKER_MOCK_AUTH
+	PODMAN_MOCK_AUTH
+	PODMAN_XDG_MOCK_AUTH
+)
+
+func createMockAuthFile(t *testing.T, mockType uint32) {
+	var authDir string
+	var authFile string
+	switch mockType {
+	case DOCKER_MOCK_AUTH:
+		authDir = filepath.Join(os.Getenv("HOME"), ".docker")
+		authFile = filepath.Join(authDir, "config.json")
+	case PODMAN_MOCK_AUTH:
+		authDir = filepath.Join(os.Getenv("HOME"), ".config", "containers")
+		authFile = filepath.Join(authDir, "auth.json")
+	case PODMAN_XDG_MOCK_AUTH:
+		authDir = filepath.Join(os.Getenv("XDG_RUNTIME_DIR"), "containers")
+		authFile = filepath.Join(authDir, "auth.json")
+	}
+
+	err := os.MkdirAll(authDir, 0755)
+	if err != nil {
+		t.Fatalf("Auth directory creation failed: %s", err)
+	}
+
+	f, err := os.OpenFile(authFile, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("Auth file creation failed: %s", err)
+	}
+	defer f.Close()
+
+	mockCredentials := base64.StdEncoding.EncodeToString([]byte("user:pass"))
+	mockAuth := fmt.Sprintf(`{
+		"auths": {
+			"quay.io": {
+				"auth": %q
+			}
+		}
+	}`, mockCredentials)
+
+	_, err = f.WriteString(mockAuth)
+	if err != nil {
+		t.Fatalf("Writing credentials failed: %s", err)
+	}
 }
