@@ -33,6 +33,8 @@ func splitRegistryHost(registry string) (host, path string) {
 type DockerAuth struct {
 	logger               *logger.Logger
 	skipCredVerification bool
+
+	authFiles []string
 }
 
 // DockerConfig represents Docker configuration structure.
@@ -61,8 +63,16 @@ type Credentials struct {
 
 // New creates a new DockerAuth instance.
 func New(log *logger.Logger) *DockerAuth {
+	authFiles := []string{filepath.Join(os.Getenv("HOME"), ".docker", "config.json")}
+	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if xdgRuntimeDir != "" {
+		authFiles = append(authFiles, filepath.Join(xdgRuntimeDir, "containers", "auth.json"))
+	}
+	authFiles = append(authFiles, filepath.Join(os.Getenv("HOME"), ".config", "containers", "auth.json"))
+
 	return &DockerAuth{
-		logger: log,
+		logger:    log,
+		authFiles: authFiles,
 	}
 }
 
@@ -115,14 +125,7 @@ func (d *DockerAuth) GetAndVerifyCredentials(ctx context.Context, registry strin
 }
 
 func (d *DockerAuth) findAuthConfigPath() (string, error) {
-	authFiles := []string{filepath.Join(os.Getenv("HOME"), ".docker", "config.json")}
-	xdgRuntimeDir := os.Getenv("XDG_RUNTIME_DIR")
-	if xdgRuntimeDir != "" {
-		authFiles = append(authFiles, filepath.Join(xdgRuntimeDir, "containers", "auth.json"))
-	}
-	authFiles = append(authFiles, filepath.Join(os.Getenv("HOME"), ".config", "containers", "auth.json"))
-
-	for _, path := range authFiles {
+	for _, path := range d.authFiles {
 		_, err := os.Stat(path)
 		if errors.Is(err, fs.ErrNotExist) {
 			d.logger.Dimf("%q not found", path)

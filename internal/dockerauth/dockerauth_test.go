@@ -26,6 +26,7 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 	log := logger.New()
 	da := New(log)
 	da.skipCredVerification = true // Skip verification in tests
+	da.authFiles = []string{}
 
 	testGetAndVerifyCredentials(t, da)
 }
@@ -33,28 +34,29 @@ func TestGetAndVerifyCredentialsFromEnv(t *testing.T) {
 func TestGetAndVerifyCredentialsFromAuthFile(t *testing.T) {
 	tests := []struct {
 		name     string
-		mockType uint32
+		authFile string
 	}{
 		{
-			name:     "docker auth",
-			mockType: DOCKER_MOCK_AUTH,
+			name:     "docker style auth path",
+			authFile: filepath.Join(t.TempDir(), ".docker", "config.json"),
 		}, {
-			name:     "podman auth",
-			mockType: PODMAN_MOCK_AUTH,
+			name:     "podman style auth path",
+			authFile: filepath.Join(t.TempDir(), ".config", "containers", "auth.json"),
 		}, {
-			name:     "podman XDG auth",
-			mockType: PODMAN_XDG_MOCK_AUTH,
+			name:     "podman XDG style auth path",
+			authFile: filepath.Join(t.TempDir(), "containers", "auth.json"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			setupMockAuthEnvironment(t)
-			createMockAuthFile(t, tt.mockType)
+			authFile := createMockAuthFile(t, tt.authFile)
 
 			log := logger.New()
 			da := New(log)
 			da.skipCredVerification = true // Skip verification in tests
+			da.authFiles = []string{authFile}
 
 			testGetAndVerifyCredentials(t, da)
 		})
@@ -132,6 +134,7 @@ func TestGetAndVerifyCredentialsNoCredentials(t *testing.T) {
 	log := logger.New()
 	da := New(log)
 	da.skipCredVerification = true // Skip verification in tests
+	da.authFiles = []string{}
 
 	_, err := da.GetAndVerifyCredentials(t.Context(), constants.DefaultRegistry)
 	assert.Errorf(t, err, "Expected error when no credentials are available")
@@ -212,52 +215,75 @@ func TestRepositoryRequiresAuth(t *testing.T) {
 
 func TestFindAuthConfigPath(t *testing.T) {
 	tests := []struct {
-		name          string
-		mockAuthTypes []uint32
-		expectType    uint32
-		expectErr     bool
+		name                string
+		mockAuthPaths       []string
+		expectAuthFileIndex uint32
+		expectErr           bool
 	}{
 		{
 			"empty auth types",
-			[]uint32{},
+			[]string{},
 			0,
 			true,
 		},
 		{
-			"docker auth",
-			[]uint32{DOCKER_MOCK_AUTH},
-			DOCKER_MOCK_AUTH,
+			"docker style auth path",
+			[]string{filepath.Join(t.TempDir(), ".docker", "config.json")},
+			0,
 			false,
 		},
 		{
-			"podman auth",
-			[]uint32{PODMAN_MOCK_AUTH},
-			PODMAN_MOCK_AUTH,
+			"podman style auth path",
+			[]string{filepath.Join(t.TempDir(), ".config", "containers", "auth.json")},
+			0,
 			false,
 		},
 		{
-			"podman XDG auth",
-			[]uint32{PODMAN_XDG_MOCK_AUTH},
-			PODMAN_XDG_MOCK_AUTH,
+			"podman XDG style auth path",
+			[]string{filepath.Join(t.TempDir(), "containers", "auth.json")},
+			0,
 			false,
 		},
 		{
-			"docker auth takes precedence",
-			[]uint32{DOCKER_MOCK_AUTH, PODMAN_MOCK_AUTH, PODMAN_XDG_MOCK_AUTH},
-			DOCKER_MOCK_AUTH,
+			"Use first path",
+			[]string{
+				filepath.Join(t.TempDir(), ".docker", "config.json"),
+				filepath.Join(t.TempDir(), ".config", "containers", "auth.json"),
+				filepath.Join(t.TempDir(), "containers", "auth.json"),
+			},
+			0,
+			false,
+		},
+		{
+			"Use middle path",
+			[]string{
+				filepath.Join(t.TempDir(), ".docker", "config.json"),
+				filepath.Join(t.TempDir(), ".config", "containers", "auth.json"),
+				filepath.Join(t.TempDir(), "containers", "auth.json"),
+			},
+			1,
+			false,
+		}, {
+			"Use last path",
+			[]string{
+				filepath.Join(t.TempDir(), ".docker", "config.json"),
+				filepath.Join(t.TempDir(), ".config", "containers", "auth.json"),
+				filepath.Join(t.TempDir(), "containers", "auth.json"),
+			},
+			2,
 			false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			setupMockAuthEnvironment(t)
-
-			for _, mockType := range tt.mockAuthTypes {
-				createMockAuthFile(t, mockType)
+			if !tt.expectErr {
+				createMockAuthFile(t, tt.mockAuthPaths[tt.expectAuthFileIndex])
 			}
+
 			log := logger.New()
 			da := New(log)
+			da.authFiles = tt.mockAuthPaths
 
 			authFile, err := da.findAuthConfigPath()
 			if tt.expectErr {
@@ -265,16 +291,7 @@ func TestFindAuthConfigPath(t *testing.T) {
 				return
 			} else {
 				assert.NoError(t, err)
-				var expectedPath string
-				switch tt.expectType {
-				case DOCKER_MOCK_AUTH:
-					expectedPath = filepath.Join(os.Getenv("HOME"), ".docker", "config.json")
-				case PODMAN_MOCK_AUTH:
-					expectedPath = filepath.Join(os.Getenv("HOME"), ".config", "containers", "auth.json")
-				case PODMAN_XDG_MOCK_AUTH:
-					expectedPath = filepath.Join(os.Getenv("XDG_RUNTIME_DIR"), "containers", "auth.json")
-				}
-				assert.Equal(t, authFile, expectedPath)
+				assert.Equal(t, authFile, tt.mockAuthPaths[tt.expectAuthFileIndex])
 			}
 		})
 	}
@@ -317,29 +334,8 @@ func setupMockAuthEnvironment(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 }
 
-const (
-	_ uint32 = iota
-	DOCKER_MOCK_AUTH
-	PODMAN_MOCK_AUTH
-	PODMAN_XDG_MOCK_AUTH
-)
-
-func createMockAuthFile(t *testing.T, mockType uint32) {
-	var authDir string
-	var authFile string
-	switch mockType {
-	case DOCKER_MOCK_AUTH:
-		authDir = filepath.Join(os.Getenv("HOME"), ".docker")
-		authFile = filepath.Join(authDir, "config.json")
-	case PODMAN_MOCK_AUTH:
-		authDir = filepath.Join(os.Getenv("HOME"), ".config", "containers")
-		authFile = filepath.Join(authDir, "auth.json")
-	case PODMAN_XDG_MOCK_AUTH:
-		authDir = filepath.Join(os.Getenv("XDG_RUNTIME_DIR"), "containers")
-		authFile = filepath.Join(authDir, "auth.json")
-	}
-
-	err := os.MkdirAll(authDir, 0755)
+func createMockAuthFile(t *testing.T, authFile string) string {
+	err := os.MkdirAll(filepath.Dir(authFile), 0755)
 	if err != nil {
 		t.Fatalf("Auth directory creation failed: %s", err)
 	}
@@ -363,4 +359,6 @@ func createMockAuthFile(t *testing.T, mockType uint32) {
 	if err != nil {
 		t.Fatalf("Writing credentials failed: %s", err)
 	}
+
+	return authFile
 }
