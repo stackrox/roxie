@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDebugOnlyEmitsWhenVerbose(t *testing.T) {
@@ -30,4 +32,23 @@ func TestDebugOnlyEmitsWhenVerbose(t *testing.T) {
 	if stdout.Len() != before {
 		t.Fatalf("expected no new output after SetVerbose(false), got %q", stdout.String()[before:])
 	}
+}
+
+// TestSetDefaultNilIsSafe verifies that storing a nil logger as the package
+// default does not cause package-level log calls to panic.
+func TestSetDefaultNilIsSafe(t *testing.T) {
+	old := SetDefault(nil)
+	t.Cleanup(func() { SetDefault(old) })
+
+	assert.Nil(Default(), "expected Default() to return the nil logger that was stored")
+
+	SetVerbose(true)
+	assert.False(t, IsVerbose(), "expected IsVerbose() to report false for a nil default logger")
+
+	Info("x")
+	Error("x")
+	Success("x")
+	Warning("x")
+	Dim("x")
+	Debug("x")
 }
