@@ -73,7 +73,7 @@ func ensureInitialized() error {
 		if err != nil {
 			return err
 		}
-		currentClusterType = DetectClusterType(log, kubeConfig, apiResources)
+		currentClusterType = DetectClusterType(kubeConfig, apiResources)
 		initialized = true
 	}
 	return nil
@@ -133,7 +133,7 @@ func Initialize() error {
 
 // DetectClusterType implements the cluster type detection logic
 // This function is pure and testable - it doesn't invoke kubectl itself
-func DetectClusterType(log *logger.Logger, config KubeConfig, apiResources []string) types.ClusterType {
+func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterType {
 	if config.CurrentContext == "" {
 		return types.ClusterTypeUnknown
 	}
