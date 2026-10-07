@@ -22,7 +22,10 @@ const (
 // Logger wraps slog.Logger with roxie's CLI output style:
 // elapsed MM:SS timestamps, per-level coloring, and stdout/stderr routing.
 type Logger struct {
-	log   *slog.Logger
+	log *slog.Logger
+
+	// We store a reference to the (atomic!) level used by the internal slog Handler here
+	// for easier access.
 	level *slog.LevelVar
 }
 
@@ -149,9 +152,7 @@ func (l *Logger) Debugf(format string, args ...any) {
 // It is a no-op unless verbose mode is enabled, so callers need no guard.
 func (l *Logger) DebugMultilineYaml(v any) {
 	// Short circuit and skip the marshalling when debug output is disabled.
-	// This routes through the same handler.Enabled check that every log call
-	// uses, keeping a single source of truth for the level decision.
-	if l == nil || !l.log.Enabled(context.Background(), slog.LevelDebug) {
+	if l == nil || !l.IsVerbose() {
 		return
 	}
 	bytes, err := yaml.Marshal(v)
@@ -175,7 +176,7 @@ type handler struct {
 	stderr    io.Writer
 }
 
-// Retrurns true if the given log level is enabled for the provided log handler.
+// Returns true if the given log level is enabled for the provided log handler.
 func (h *handler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.level.Level()
 }
