@@ -237,7 +237,7 @@ func centralVerifyFunc(conf *tls.Config) func([][]byte, [][]*x509.Certificate) e
 func (d *Deployer) applyCRS(ctx context.Context, crsContent string) error {
 	log.Info("Applying CRS to sensor namespace")
 
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-n", d.config.SecuredCluster.Namespace, "-f", "-"},
 		Stdin: strings.NewReader(crsContent),
 	})

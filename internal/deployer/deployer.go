@@ -83,7 +83,7 @@ func (d *Deployer) deleteResources(ctx context.Context, namespace string, resour
 		"--grace-period=0",
 	}
 	finalArgs = append(finalArgs, args...)
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{Args: finalArgs})
+	_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{Args: finalArgs})
 	return err
 }
 
@@ -554,7 +554,7 @@ func (d *Deployer) ensureNamespaceExists(namespace string) error {
 	}
 
 	log.Infof("Creating namespace %s", namespace)
-	_, err := d.runKubectl(context.Background(), k8s.KubectlOptions{
+	_, err := k8s.RunKubectl(context.Background(), k8s.KubectlOptions{
 		Args: []string{"create", "namespace", namespace},
 	})
 	if err != nil {
@@ -562,7 +562,7 @@ func (d *Deployer) ensureNamespaceExists(namespace string) error {
 	}
 
 	// Label namespace as managed by roxie since we just created it
-	_, err = d.runKubectl(context.Background(), k8s.KubectlOptions{
+	_, err = k8s.RunKubectl(context.Background(), k8s.KubectlOptions{
 		Args: []string{"label", "namespace", namespace,
 			"app.kubernetes.io/managed-by=roxie", "--overwrite"},
 	})
@@ -574,7 +574,7 @@ func (d *Deployer) ensureNamespaceExists(namespace string) error {
 }
 
 func (d *Deployer) namespaceExists(namespace string) bool {
-	_, err := d.runKubectl(context.Background(), k8s.KubectlOptions{
+	_, err := k8s.RunKubectl(context.Background(), k8s.KubectlOptions{
 		Args: []string{"get", "namespace", namespace},
 	})
 	return err == nil
@@ -647,7 +647,7 @@ func (d *Deployer) SetEnvrcFile(path string) {
 }
 
 func (d *Deployer) doesResourceExist(ctx context.Context, resourceType, resourceName, namespace string) bool {
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
 			"get", resourceType, resourceName,
 			"-n", namespace,
@@ -657,7 +657,7 @@ func (d *Deployer) doesResourceExist(ctx context.Context, resourceType, resource
 }
 
 func (d *Deployer) addPauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
 			"annotate", resourceType, resourceName,
 			"-n", namespace,
@@ -673,7 +673,7 @@ func (d *Deployer) addPauseReconcileAnnotation(ctx context.Context, resourceType
 }
 
 func (d *Deployer) removePauseReconcileAnnotation(ctx context.Context, resourceType, resourceName, namespace string) error {
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
 			"annotate", resourceType, resourceName,
 			"-n", namespace,
@@ -861,7 +861,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 // checkDeploymentProgressInNamespace checks for deployment state changes in a specific namespace and reports them.
 // Returns true, if relevant state changes have been observed, false otherwise.
 func (d *Deployer) checkDeploymentProgressInNamespace(ctx context.Context, namespace string, seenDeployments map[string]string) (bool, error) {
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "deployments", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{'|'}{.status.replicas}{'|'}{.status.readyReplicas}{'|'}{.status.availableReplicas}{'\\n'}{end}"},
 	})
 	if err != nil {
@@ -912,7 +912,7 @@ func (d *Deployer) checkDeploymentProgressInNamespace(ctx context.Context, names
 // checkPodProgressInNamespace checks for pod state changes in a specific namespace and reports them.
 // Returns true, if relevant state changes have been observed, false otherwise.
 func (d *Deployer) checkPodProgressInNamespace(ctx context.Context, namespace string, seenPods map[string]string) (bool, error) {
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "pods", "-n", namespace, "-o", "jsonpath={range .items[*]}{.metadata.name}{'|'}{.status.phase}{'|'}{.status.containerStatuses[0].ready}{'\\n'}{end}"},
 	})
 	if err != nil {

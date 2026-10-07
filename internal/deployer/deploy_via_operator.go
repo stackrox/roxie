@@ -269,7 +269,7 @@ func (d *Deployer) isOperatorImageCorrect(ctx context.Context, instance Operator
 
 // getDeployedOperatorImage gets the image of the currently deployed operator in a namespace.
 func (d *Deployer) getDeployedOperatorImage(ctx context.Context, namespace string) (string, error) {
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "deployment", operatorDeploymentName, "-n", namespace,
 			"-o", "jsonpath={.spec.template.spec.containers[0].image}"},
 	})
@@ -304,7 +304,7 @@ func (d *Deployer) ensurePullSecretExists(ctx context.Context, namespace string)
 	}
 
 	pullSecretYAML := d.dockerAuth.CreatePullSecretYAMLFromCredentials(*d.dockerCreds, namespace, d.config.Roxie.ImageRegistry)
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: strings.NewReader(pullSecretYAML),
 	})
@@ -335,7 +335,7 @@ func (d *Deployer) createAdminPasswordSecret(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal secret: %w", err)
 	}
 
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -477,7 +477,7 @@ func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}
 		return fmt.Errorf("failed to marshal Central CR: %w", err)
 	}
 
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -501,7 +501,7 @@ func (d *Deployer) waitForAvailableCondition(ctx context.Context, resource, name
 		return fmt.Errorf("error waiting for resource %s in namespace %s to exist: %v", resource, namespace, err)
 	}
 
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
 			"wait",
 			"--for=condition=Available",
@@ -528,7 +528,7 @@ func (d *Deployer) waitForAvailableCondition(ctx context.Context, resource, name
 func (d *Deployer) waitForResourceToExist(ctx context.Context, resource, namespace string) error {
 	log.Infof("Waiting for resource %s to exist in namespace %s...", resource, namespace)
 	for {
-		_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", resource, "-n", namespace},
 		})
 		if err == nil {
@@ -623,7 +623,7 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 
 	start := time.Now()
 	for time.Since(start) < time.Duration(timeout)*time.Second {
-		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "svc", serviceName, "-n", namespace, "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}"},
 		})
 		if err == nil && result.Stdout != "" {
@@ -639,7 +639,7 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 		}
 
 		// Also check for hostname (some cloud providers use hostname instead of IP)
-		result, err = d.runKubectl(ctx, k8s.KubectlOptions{
+		result, err = k8s.RunKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "svc", serviceName, "-n", namespace, "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"},
 		})
 		if err == nil && result.Stdout != "" {
@@ -723,7 +723,7 @@ func (d *Deployer) defaultTLSSecretName() string {
 // fetchSecretField fetches a single base64-encoded field from a Kubernetes secret
 // in the Central namespace and returns the decoded PEM bytes.
 func (d *Deployer) fetchSecretField(ctx context.Context, secretName, jsonpathField string) ([]byte, error) {
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "secret", secretName, "-n", d.config.Central.Namespace, "-o", fmt.Sprintf("jsonpath={.data.%s}", jsonpathField)},
 	})
 	if err != nil {
@@ -939,7 +939,7 @@ func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]inte
 		return fmt.Errorf("failed to marshal SecuredCluster CR: %w", err)
 	}
 
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-n", d.config.SecuredCluster.Namespace, "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
