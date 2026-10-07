@@ -465,13 +465,11 @@ func getCentralResourcesOperator(resourcesProfile types.ResourceProfile) map[str
 func (d *Deployer) applyCentralCR(ctx context.Context, cr map[string]interface{}) error {
 	log.Info("Applying Central custom resource")
 
-	if log.IsVerbose() {
-		if env.RunningInteractively {
-			log.Debug("Central CR YAML:")
-			log.DebugMultilineYaml(cr)
-		} else {
-			log.Debug("Skipping emitting Central CR in non-interactive mode, because it could leak confidential information")
-		}
+	if env.RunningInteractively {
+		log.Debug("Central CR YAML:")
+		log.DebugMultilineYaml(cr)
+	} else {
+		log.Debug("Skipping emitting Central CR in non-interactive mode, because it could leak confidential information")
 	}
 
 	yamlData, err := yaml.Marshal(cr)
@@ -929,18 +927,16 @@ func getSecuredClusterResourcesOperator(resourceProfile types.ResourceProfile) m
 func (d *Deployer) applySecuredClusterCR(ctx context.Context, cr map[string]interface{}) error {
 	log.Info("Applying SecuredCluster custom resource")
 
+	if env.RunningInteractively {
+		log.Debug("SecuredCluster CR YAML:")
+		log.DebugMultilineYaml(cr)
+	} else {
+		log.Debug("Skipping emitting SecuredCluster CR in non-interactive mode, because it could leak confidential information")
+	}
+
 	yamlData, err := yaml.Marshal(cr)
 	if err != nil {
 		return fmt.Errorf("failed to marshal SecuredCluster CR: %w", err)
-	}
-
-	if log.IsVerbose() {
-		if env.RunningInteractively {
-			log.Debug("SecuredCluster CR YAML:")
-			log.Debug(string(yamlData))
-		} else {
-			log.Debug("Skipping emitting SecuredCluster CR in non-interactive mode, because it could leak confidential information")
-		}
 	}
 
 	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
