@@ -73,7 +73,7 @@ func ensureInitialized(log *logger.Logger) error {
 		if err != nil {
 			return err
 		}
-		currentClusterType = DetectClusterType(kubeConfig, apiResources)
+		currentClusterType = DetectClusterType(log, kubeConfig, apiResources)
 		initialized = true
 	}
 	return nil
@@ -136,7 +136,7 @@ func Initialize(log *logger.Logger) error {
 
 // DetectClusterType implements the cluster type detection logic
 // This function is pure and testable - it doesn't invoke kubectl itself
-func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterType {
+func DetectClusterType(log *logger.Logger, config KubeConfig, apiResources []string) types.ClusterType {
 	if config.CurrentContext == "" {
 		return types.ClusterTypeUnknown
 	}
@@ -149,6 +149,22 @@ func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterTy
 	}
 	if strings.HasPrefix(config.CurrentContext, "gke_") {
 		return types.ClusterTypeGKE
+	}
+
+	serverURL := getServerURL(config)
+	parsedURL, err := url.Parse(serverURL)
+	if err != nil {
+		log.Warningf("Failed to parse cluster server URL %q: %v", serverURL, err)
+	}
+
+	// AKS clusters have server hostnames ending in .azmk8s.io
+	if parsedURL != nil && strings.HasSuffix(parsedURL.Hostname(), ".azmk8s.io") {
+		return types.ClusterTypeAKS
+	}
+
+	// EKS clusters have server hostnames ending in .eks.amazonaws.com
+	if parsedURL != nil && strings.HasSuffix(parsedURL.Hostname(), ".eks.amazonaws.com") {
+		return types.ClusterTypeEKS
 	}
 
 	// Minikube clusters typically have context name "minikube".

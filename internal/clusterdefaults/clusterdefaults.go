@@ -53,7 +53,7 @@ func getDefaultsForClusterType(clusterType types.ClusterType) *deployer.Config {
 			},
 		}
 
-	case clusterType.IsGKE() || clusterType.IsOpenShift():
+	case clusterType.SupportsLoadBalancer():
 		return &deployer.Config{
 			Central: deployer.CentralConfig{
 				Exposure:       ptr.To(types.ExposureLoadBalancer),
@@ -72,7 +72,7 @@ func ResolveAutoResourceProfile(clusterType types.ClusterType) types.ResourcePro
 	case clusterType.IsLocal():
 		return types.ResourceProfileSmall
 
-	case clusterType.IsGKE() || clusterType.IsOpenShift():
+	case clusterType.IsGKE() || clusterType.IsOpenShift() || clusterType.IsAKS() || clusterType.IsEKS():
 		return types.ResourceProfileMedium
 
 	default:
