@@ -148,7 +148,10 @@ func (l *Logger) Debugf(format string, args ...any) {
 // DebugMultilineYaml marshals v to YAML and logs it line by line at debug level.
 // It is a no-op unless verbose mode is enabled, so callers need no guard.
 func (l *Logger) DebugMultilineYaml(v any) {
-	if !l.IsVerbose() {
+	// Short circuit and skip the marshalling when debug output is disabled.
+	// This routes through the same handler.Enabled check that every log call
+	// uses, keeping a single source of truth for the level decision.
+	if l == nil || !l.log.Enabled(context.Background(), slog.LevelDebug) {
 		return
 	}
 	bytes, err := yaml.Marshal(v)
