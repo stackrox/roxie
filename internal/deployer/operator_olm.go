@@ -10,6 +10,7 @@ import (
 
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/k8s"
+	log "github.com/stackrox/roxie/internal/logger"
 	"gopkg.in/yaml.v3"
 )
 
@@ -32,13 +33,13 @@ const (
 
 // deployOperatorViaOLM deploys the RHACS operator using OLM.
 func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
-	d.logger.Info("🚀 Deploying operator via OLM...")
-	d.logger.Infof("Operator tag: %s", d.config.Operator.Version)
+	log.Info("🚀 Deploying operator via OLM...")
+	log.Infof("Operator tag: %s", d.config.Operator.Version)
 	if len(d.config.Operator.EnvVars) > 0 {
-		d.logger.Infof("Custom operator env vars: %d", len(d.config.Operator.EnvVars))
+		log.Infof("Custom operator env vars: %d", len(d.config.Operator.EnvVars))
 		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
 			ev := envVar.(map[string]interface{})
-			d.logger.Dimf("  %s=%s", ev["name"], ev["value"])
+			log.Dimf("  %s=%s", ev["name"], ev["value"])
 		}
 	}
 
@@ -47,7 +48,7 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 	}
 
 	indexImage := d.getOperatorIndexImage()
-	d.logger.Infof("Index image: %s", indexImage)
+	log.Infof("Index image: %s", indexImage)
 
 	if err := d.prepareNamespace(ctx, operatorNamespace, false); err != nil {
 		return err
@@ -77,7 +78,7 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 		return fmt.Errorf("failed waiting for operator in namespace %s to become ready: %w", operatorNamespace, err)
 	}
 
-	d.logger.Success("🎉 Operator deployed successfully via OLM!")
+	log.Success("🎉 Operator deployed successfully via OLM!")
 	return nil
 }
 
@@ -91,14 +92,14 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 		"clusterserviceversions.operators.coreos.com",
 	}
 
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"api-resources", "--api-group=operators.coreos.com", "-o", "name"},
 	})
 	if err != nil {
 		if result.Stderr != "" {
-			d.logger.Error("kubectl stderr:")
+			log.Error("kubectl stderr:")
 			for stderrLine := range strings.SplitSeq(result.Stderr, "\n") {
-				d.logger.Errorf("stderr: %s", stderrLine)
+				log.Errorf("stderr: %s", stderrLine)
 			}
 		}
 		return fmt.Errorf("failed to query api-group operators.coreos.com: %w", err)
@@ -118,12 +119,12 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 	}
 	if len(missingResources) > 0 {
 		for _, resource := range missingResources {
-			d.logger.Errorf("OLM resource not served by the API server: %s", resource)
+			log.Errorf("OLM resource not served by the API server: %s", resource)
 		}
 		return fmt.Errorf("OLM is not properly installed, %d required resource(s) missing", len(missingResources))
 	}
 
-	d.logger.Success("✓ OLM detected in cluster")
+	log.Success("✓ OLM detected in cluster")
 	return nil
 }
 
@@ -134,7 +135,7 @@ func (d *Deployer) getOperatorIndexImage() string {
 
 // createCatalogSource creates the CatalogSource for the operator.
 func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) error {
-	d.logger.Info("Creating CatalogSource...")
+	log.Info("Creating CatalogSource...")
 
 	catalogSource := map[string]interface{}{
 		"apiVersion": "operators.coreos.com/v1alpha1",
@@ -158,7 +159,7 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 		return fmt.Errorf("failed to marshal CatalogSource: %w", err)
 	}
 
-	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
+	_, err = k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		// Apply with --validate=ignore because securityContextConfig may not
 		// be in the CatalogSource CRD schema.
 		Args:  []string{"apply", "--validate=ignore", "-f", "-"},
@@ -168,13 +169,13 @@ func (d *Deployer) createCatalogSource(ctx context.Context, indexImage string) e
 		return fmt.Errorf("failed to create CatalogSource: %w", err)
 	}
 
-	d.logger.Success("✓ CatalogSource created")
+	log.Success("✓ CatalogSource created")
 	return nil
 }
 
 // createOperatorGroup creates the OperatorGroup.
 func (d *Deployer) createOperatorGroup(ctx context.Context) error {
-	d.logger.Info("Creating OperatorGroup...")
+	log.Info("Creating OperatorGroup...")
 
 	operatorGroup := map[string]interface{}{
 		"apiVersion": "operators.coreos.com/v1alpha2",
@@ -190,7 +191,7 @@ func (d *Deployer) createOperatorGroup(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal OperatorGroup: %w", err)
 	}
 
-	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
+	_, err = k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -198,13 +199,13 @@ func (d *Deployer) createOperatorGroup(ctx context.Context) error {
 		return fmt.Errorf("failed to create OperatorGroup: %w", err)
 	}
 
-	d.logger.Success("✓ OperatorGroup created")
+	log.Success("✓ OperatorGroup created")
 	return nil
 }
 
 // createSubscription creates the Subscription for the operator.
 func (d *Deployer) createSubscription(ctx context.Context) error {
-	d.logger.Info("Creating Subscription...")
+	log.Info("Creating Subscription...")
 
 	startingCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
 
@@ -238,7 +239,7 @@ func (d *Deployer) createSubscription(ctx context.Context) error {
 		return fmt.Errorf("failed to marshal Subscription: %w", err)
 	}
 
-	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
+	_, err = k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:  []string{"apply", "-f", "-"},
 		Stdin: bytes.NewReader(yamlData),
 	})
@@ -246,20 +247,20 @@ func (d *Deployer) createSubscription(ctx context.Context) error {
 		return fmt.Errorf("failed to create Subscription %s: %w", namespacedSubscriptionName, err)
 	}
 
-	d.logger.Success("✓ Subscription created")
+	log.Success("✓ Subscription created")
 	return nil
 }
 
 // waitForAndApproveInstallPlan waits for the InstallPlan to be created and approves it.
 func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
-	d.logger.Info("⏳ Waiting for InstallPlan to be created...")
+	log.Info("⏳ Waiting for InstallPlan to be created...")
 
 	// Wait for subscription to have InstallPlanPending condition.
 	start := time.Now()
 	timeout := 5 * time.Minute
 
 	for time.Since(start) < timeout {
-		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.conditions[?(@.type=='InstallPlanPending')].status}"},
 		})
 		if err == nil && strings.TrimSpace(result.Stdout) == "True" {
@@ -275,7 +276,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 
 	// Sanity check:Verify currentCSV matches expected version.
 	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.currentCSV}"},
 	})
 	if err != nil {
@@ -288,7 +289,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	}
 
 	// Get InstallPlan name.
-	result, err = d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err = k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.installPlanRef.name}"},
 	})
 	if err != nil {
@@ -300,36 +301,36 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 		return errors.New("InstallPlan name is empty")
 	}
 
-	d.logger.Infof("Approving InstallPlan: %s", installPlanName)
+	log.Infof("Approving InstallPlan: %s", installPlanName)
 
 	// Approve the InstallPlan.
-	_, err = d.runKubectl(ctx, k8s.KubectlOptions{
+	_, err = k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"patch", "installplan", installPlanName, "-n", operatorNamespace, "--type", "merge", "-p", `{"spec":{"approved":true}}`},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to approve InstallPlan %s for Subscription %s: %w", installPlanName, namespacedSubscriptionName, err)
 	}
 
-	d.logger.Success("✓ InstallPlan approved")
+	log.Success("✓ InstallPlan approved")
 	return nil
 }
 
 // waitForCSVSuccess waits for the CSV to reach Succeeded phase.
 func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
 	csvName := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
-	d.logger.Infof("⏳ Waiting for CSV %s to succeed...", csvName)
+	log.Infof("⏳ Waiting for CSV %s to succeed...", csvName)
 
 	start := time.Now()
 	timeout := 10 * time.Minute
 
 	for time.Since(start) < timeout {
-		result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+		result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "csv", csvName, "-n", operatorNamespace, "-o", "jsonpath={.status.phase}"},
 		})
 		if err == nil {
 			phase := strings.TrimSpace(result.Stdout)
 			if phase == "Succeeded" {
-				d.logger.Success("✓ CSV succeeded")
+				log.Success("✓ CSV succeeded")
 				return nil
 			}
 			if phase == "Failed" {
@@ -349,7 +350,7 @@ func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, Oper
 	const olmOwnerLabel = "olm.owner"
 
 	// First, check if a Subscription exists (OLM-specific resource)
-	_, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace},
 	})
 	if err == nil {
@@ -357,7 +358,7 @@ func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, Oper
 	}
 
 	// If no subscription, check if operator deployment exists/if it has the expected OLM label.
-	labelValue, err := k8s.RetrieveClusterResourceLabel(ctx, d.logger, operatorNamespace, "deployment", operatorDeploymentName, olmOwnerLabel)
+	labelValue, err := k8s.RetrieveClusterResourceLabel(ctx, operatorNamespace, "deployment", operatorDeploymentName, olmOwnerLabel)
 	if k8s.IsResourceNotFound(err) {
 		// No operator deployment found.
 		return false, OperatorModeNonOLM, nil
@@ -377,23 +378,23 @@ func (d *Deployer) detectOperatorDeploymentMode(ctx context.Context) (bool, Oper
 
 // teardownOperatorOLM removes the operator when installed via OLM.
 func (d *Deployer) teardownOperatorOLM(ctx context.Context) error {
-	d.logger.Info("🧹 Tearing down operator deployed via OLM...")
+	log.Info("🧹 Tearing down operator deployed via OLM...")
 
 	// Delete Subscription (this typically cascades CSV and operands depending on OLM behavior).
-	d.runKubectl(ctx, k8s.KubectlOptions{
+	k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "subscription", subscriptionName, "-n", operatorNamespace, "--ignore-not-found=true"},
 		IgnoreErrors: true,
 	})
 
 	// Find the CSV name (may match operatorTag, but query to be safe).
-	result, err := d.runKubectl(ctx, k8s.KubectlOptions{
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "csv", "-n", operatorNamespace, "-o", "jsonpath={.items[*].metadata.name}"},
 	})
 	if err == nil {
 		// Best-effort delete all matching CSVs for rhacs-operator.
 		for _, name := range strings.Fields(strings.TrimSpace(result.Stdout)) {
 			if strings.HasPrefix(name, "rhacs-operator.v") {
-				d.runKubectl(ctx, k8s.KubectlOptions{
+				k8s.RunKubectl(ctx, k8s.KubectlOptions{
 					Args:         []string{"delete", "csv", name, "-n", operatorNamespace, "--ignore-not-found=true"},
 					IgnoreErrors: true,
 				})
@@ -402,25 +403,25 @@ func (d *Deployer) teardownOperatorOLM(ctx context.Context) error {
 	}
 
 	// Delete CatalogSource and OperatorGroup.
-	d.runKubectl(ctx, k8s.KubectlOptions{
+	k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "catalogsource", catalogSourceName, "-n", operatorNamespace, "--ignore-not-found=true"},
 		IgnoreErrors: true,
 	})
-	d.runKubectl(ctx, k8s.KubectlOptions{
+	k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "operatorgroup", operatorGroupName, "-n", operatorNamespace, "--ignore-not-found=true"},
 		IgnoreErrors: true,
 	})
 
 	// Delete operator deployment namespace (contains deployment, SA, etc.).
-	d.runKubectl(ctx, k8s.KubectlOptions{
+	k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args:         []string{"delete", "namespace", operatorNamespace, "--ignore-not-found=true", "--wait=false"},
 		IgnoreErrors: true,
 	})
 
 	if err := d.waitForNamespaceDeletion(operatorNamespace); err != nil {
-		d.logger.Warningf("Namespace %s deletion incomplete: %v", operatorNamespace, err)
+		log.Warningf("Namespace %s deletion incomplete: %v", operatorNamespace, err)
 	}
 
-	d.logger.Success("✓ OLM operator resources removed")
+	log.Success("✓ OLM operator resources removed")
 	return nil
 }

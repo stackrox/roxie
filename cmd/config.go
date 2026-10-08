@@ -18,7 +18,7 @@ func assembleConfigForCommand(configBase *deployer.Config, configFromArgs deploy
 
 	// Apply user config on top (overriding defaults).
 	if !skipUserConfig {
-		if err := tryApplyUserDefaults(globalLogger, &config); err != nil {
+		if err := tryApplyUserDefaults(&config); err != nil {
 			return deployer.Config{}, fmt.Errorf("applying user config: %w", err)
 		}
 	}
