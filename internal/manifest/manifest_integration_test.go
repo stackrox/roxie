@@ -9,7 +9,6 @@ import (
 
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/k8s"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,10 +16,9 @@ import (
 
 func cleanupRoxieNamespace(t *testing.T) {
 	t.Helper()
-	log := logger.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	err := DeleteRoxieNamespace(ctx, log)
+	err := DeleteRoxieNamespace(ctx)
 	assert.NoError(t, err, "deleting roxie namespace failed")
 }
 
@@ -28,7 +26,6 @@ func TestCreateAndLoadManifest_Integration(t *testing.T) {
 	t.Cleanup(func() { cleanupRoxieNamespace(t) })
 	cleanupRoxieNamespace(t)
 
-	log := logger.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -47,10 +44,10 @@ func TestCreateAndLoadManifest_Integration(t *testing.T) {
 		},
 	}
 
-	err := CreateManifestSecretOnCluster(ctx, log, original)
+	err := CreateManifestSecretOnCluster(ctx, original)
 	require.NoError(t, err)
 
-	loaded, err := LoadManifestSecret(ctx, log)
+	loaded, err := LoadManifestSecret(ctx)
 	require.NoError(t, err)
 
 	assert.Empty(t, loaded.RoxieEnvironment.RoxCaCertFile)
@@ -61,7 +58,6 @@ func TestDeleteManifest_Integration(t *testing.T) {
 	t.Cleanup(func() { cleanupRoxieNamespace(t) })
 	cleanupRoxieNamespace(t)
 
-	log := logger.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -71,10 +67,10 @@ func TestDeleteManifest_Integration(t *testing.T) {
 		},
 	}
 
-	err := CreateManifestSecretOnCluster(ctx, log, m)
+	err := CreateManifestSecretOnCluster(ctx, m)
 	require.NoError(t, err)
 
-	err = DeleteManifestSecret(ctx, log)
+	err = DeleteManifestSecret(ctx)
 	assert.NoError(t, err)
 }
 
@@ -82,17 +78,16 @@ func TestDeleteRoxieNamespace_Integration(t *testing.T) {
 	t.Cleanup(func() { cleanupRoxieNamespace(t) })
 	cleanupRoxieNamespace(t)
 
-	log := logger.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	err := ensureRoxieNamespace(ctx, log)
+	err := ensureRoxieNamespace(ctx)
 	require.NoError(t, err)
 
-	err = DeleteRoxieNamespace(ctx, log)
+	err = DeleteRoxieNamespace(ctx)
 	require.NoError(t, err)
 
-	_, err = k8s.RunKubectl(ctx, log, k8s.KubectlOptions{
+	_, err = k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "namespace", roxieNamespace},
 	})
 	assert.Error(t, err, "namespace should no longer exist")
@@ -102,10 +97,9 @@ func TestLoadManifest_NotFound_Integration(t *testing.T) {
 	t.Cleanup(func() { cleanupRoxieNamespace(t) })
 	cleanupRoxieNamespace(t)
 
-	log := logger.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, err := LoadManifestSecret(ctx, log)
+	_, err := LoadManifestSecret(ctx)
 	assert.Error(t, err)
 }

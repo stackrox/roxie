@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/ocihelper"
 	"github.com/stackrox/roxie/internal/stackroxversions"
 )
@@ -27,11 +26,10 @@ func lookupTwoReleasedTags(t *testing.T) (string, string) {
 		t.Fatalf("Failed to look up release tags: %v", err)
 	}
 
-	log := logger.New()
 	var verified []string
 	for _, tag := range tags {
 		mainImage := fmt.Sprintf("%s/main:%s", constants.DefaultRegistry, tag)
-		if err := ocihelper.VerifyImageExistence(ctx, log, mainImage); err != nil {
+		if err := ocihelper.VerifyImageExistence(ctx, mainImage); err != nil {
 			continue
 		}
 		verified = append(verified, tag)

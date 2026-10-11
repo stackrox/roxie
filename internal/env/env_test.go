@@ -44,6 +44,38 @@ func TestDetectClusterType_InfraGKE_ExactMatch(t *testing.T) {
 	}
 }
 
+func TestDetectClusterType_AKS(t *testing.T) {
+	config := KubeConfig{
+		CurrentContext: "my-aks-cluster",
+		Clusters: []KubeCluster{
+			{
+				Name:   "my-aks-cluster",
+				Server: "https://ABCDEF1234567890.some-region.azmk8s.io:443",
+			},
+		},
+	}
+	apiResources := []string{"pods", "services"}
+
+	result := DetectClusterType(config, apiResources)
+	assert.Equal(t, types.ClusterTypeAKS, result)
+}
+
+func TestDetectClusterType_EKS(t *testing.T) {
+	config := KubeConfig{
+		CurrentContext: "my-eks-cluster",
+		Clusters: []KubeCluster{
+			{
+				Name:   "my-eks-cluster",
+				Server: "https://ABCDEF1234567890.some-region.eks.amazonaws.com:443",
+			},
+		},
+	}
+	apiResources := []string{"pods", "services"}
+
+	result := DetectClusterType(config, apiResources)
+	assert.Equal(t, types.ClusterTypeEKS, result)
+}
+
 func TestDetectClusterType_InfraOpenShift4(t *testing.T) {
 	config := KubeConfig{
 		CurrentContext: "admin",
@@ -325,6 +357,16 @@ func TestClusterTypeString(t *testing.T) {
 			name:        "LocalKind",
 			clusterType: types.ClusterTypeKind,
 			want:        "Kind",
+		},
+		{
+			name:        "AKS",
+			clusterType: types.ClusterTypeAKS,
+			want:        "AKS",
+		},
+		{
+			name:        "EKS",
+			clusterType: types.ClusterTypeEKS,
+			want:        "EKS",
 		},
 		{
 			name:        "ClusterTypeUnknown",

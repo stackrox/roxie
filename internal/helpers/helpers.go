@@ -6,9 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
-	"strings"
 
-	"github.com/stackrox/roxie/internal/logger"
 	"gopkg.in/yaml.v3"
 )
 
@@ -139,19 +137,6 @@ func MapToStruct(m map[string]interface{}, out interface{}) error {
 		return err
 	}
 	return yaml.Unmarshal(bytes, out)
-}
-
-func LogMultilineYaml(log *logger.Logger, v any) error {
-	log.Dim("-------------------------")
-	bytes, err := yaml.Marshal(v)
-	if err != nil {
-		return err
-	}
-	for line := range strings.SplitSeq(string(bytes), "\n") {
-		log.Dim(line)
-	}
-	log.Dim("-------------------------")
-	return nil
 }
 
 // IsNil uses reflection to reliably check if the provided argument is a Nil pointer.

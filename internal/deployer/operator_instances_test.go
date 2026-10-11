@@ -3,6 +3,7 @@ package deployer
 import (
 	"testing"
 
+	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -222,7 +223,7 @@ func TestNewestOperatorVersion(t *testing.T) {
 
 func TestImagesForConfig_MixedVersions(t *testing.T) {
 	cfg := Config{
-		Roxie:          RoxieConfig{Version: "4.9.0"},
+		Roxie:          RoxieConfig{Version: "4.9.0", ImageRegistry: constants.DefaultRegistry},
 		Central:        CentralConfig{Operator: OperatorInstanceConfig{Version: "4.8.0"}},
 		SecuredCluster: SecuredClusterConfig{Operator: OperatorInstanceConfig{Version: "4.9.0"}},
 	}
@@ -238,7 +239,7 @@ func TestImagesForConfig_MixedVersions(t *testing.T) {
 
 func TestImagesForConfig_SingleVersionUnchanged(t *testing.T) {
 	cfg := Config{
-		Roxie: RoxieConfig{Version: "4.9.0"},
+		Roxie: RoxieConfig{Version: "4.9.0", ImageRegistry: constants.DefaultRegistry},
 		Operator: OperatorConfig{
 			OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.9.0"},
 		},

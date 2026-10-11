@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/stackrox/roxie/internal/containerrt"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 )
 
@@ -40,11 +41,11 @@ func (d *Deployer) GetPreLoaderForCluster() (ImagePreLoader, error) {
 func (d *Deployer) TryTransferLocalImages(ctx context.Context, preLoader ImagePreLoader) error {
 	localImages, err := d.collectLocalImages(ctx)
 	if err != nil {
-		d.logger.Dimf("Collecting local images failed: %v", err)
+		log.Dimf("Collecting local images failed: %v", err)
 		return err
 	}
 	if len(localImages) == 0 {
-		d.logger.Dim("No local images found")
+		log.Dim("No local images found")
 		return nil
 	}
 
@@ -57,12 +58,12 @@ func (d *Deployer) TryTransferLocalImages(ctx context.Context, preLoader ImagePr
 	for _, image := range localImages {
 		if slices.Contains(availableImagesInCluster, image) {
 			// Exists already in local cluster registry.
-			d.logger.Dimf("Image %s already available in local cluster, skipping.", image)
+			log.Dimf("Image %s already available in local cluster, skipping.", image)
 			continue
 		}
-		d.logger.Dimf("Transferring local image %s to local cluster...", image)
+		log.Dimf("Transferring local image %s to local cluster...", image)
 		if err := preLoader.SendImage(ctx, image); err != nil {
-			d.logger.Warningf("Transferring local image %s to %s cluster failed: %s",
+			log.Warningf("Transferring local image %s to %s cluster failed: %s",
 				image, d.config.Roxie.ClusterType, err)
 		}
 	}
@@ -78,12 +79,10 @@ func (d *Deployer) collectLocalImages(ctx context.Context) ([]string, error) {
 		return nil, nil
 	}
 
-	if d.verbose {
-		d.logger.Dimf("Using container runtime socket %s", socket)
-	}
+	log.Debugf("Using container runtime socket %s", socket)
 	available, err := containerrt.ListLocalImages(ctx, socket)
 	if err != nil {
-		d.logger.Dimf("Could not query container runtime at %s: %v", socket, err)
+		log.Dimf("Could not query container runtime at %s: %v", socket, err)
 		return nil, err
 	}
 
@@ -96,10 +95,10 @@ func (d *Deployer) collectLocalImages(ctx context.Context) ([]string, error) {
 	localImages := make([]string, 0, len(wanted))
 	for _, img := range wanted {
 		if _, ok := availableSet[img]; ok {
-			d.logger.Dimf("Image %s exists locally", img)
+			log.Dimf("Image %s exists locally", img)
 			localImages = append(localImages, img)
 		} else {
-			d.logger.Dimf("Image %s needs to be pulled from registry", img)
+			log.Dimf("Image %s needs to be pulled from registry", img)
 		}
 	}
 	return localImages, nil

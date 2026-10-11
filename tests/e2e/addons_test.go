@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stackrox/roxie/internal/helm"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,18 +42,12 @@ central:
 	}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
-	helmCtx := helm.HelmCtx{
-		Ctx:     t.Context(),
-		Log:     logger.New(),
-		Verbose: true,
-	}
-
 	verifyCentralInstalled(t, centralNamespace)
-	verifyHelmReleaseExists(t, helmCtx, "roxie-addon-test-chart", centralNamespace)
+	verifyHelmReleaseExists(t, t.Context(), "roxie-addon-test-chart", centralNamespace)
 
 	t.Log("=== Tearing down Central ===")
 	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
 	runCommand(t, teardownTimeout, nil, teardownArgs...)
 
-	verifyHelmReleaseNotExists(t, helmCtx, "roxie-addon-test-chart", centralNamespace)
+	verifyHelmReleaseNotExists(t, t.Context(), "roxie-addon-test-chart", centralNamespace)
 }

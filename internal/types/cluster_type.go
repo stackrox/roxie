@@ -24,6 +24,10 @@ const (
 	ClusterTypeK3s ClusterType = "K3s"
 	// ClusterTypeCRC represents a CRC (CodeReady Containers) cluster
 	ClusterTypeCRC ClusterType = "CRC"
+	// ClusterTypeAKS represents a generic AKS (Azure Kubernetes Service) cluster.
+	ClusterTypeAKS ClusterType = "AKS"
+	// ClusterTypeEKS represents a generic EKS (Amazon Elastic Kubernetes Service) cluster.
+	ClusterTypeEKS ClusterType = "EKS"
 )
 
 func (ct ClusterType) IsGKE() bool {
@@ -32,6 +36,14 @@ func (ct ClusterType) IsGKE() bool {
 
 func (ct ClusterType) IsOpenShift() bool {
 	return ct == ClusterTypeInfraOpenShift4 || ct == ClusterTypeOpenShift4
+}
+
+func (ct ClusterType) IsAKS() bool {
+	return ct == ClusterTypeAKS
+}
+
+func (ct ClusterType) IsEKS() bool {
+	return ct == ClusterTypeEKS
 }
 
 // String returns the string representation of a ClusterType
@@ -57,6 +69,8 @@ func AllClusterTypes() []ClusterType {
 		ClusterTypeCRC,
 		ClusterTypeInfraOpenShift4,
 		ClusterTypeOpenShift4,
+		ClusterTypeAKS,
+		ClusterTypeEKS,
 	}
 }
 
@@ -77,7 +91,9 @@ func (ct *ClusterType) UnmarshalYAML(unmarshal func(any) error) error {
 	return fmt.Errorf("unknown cluster type identifier: %q", s)
 }
 
-func (ct ClusterType) NeedsPullSecrets() bool {
+// NeedsDefaultRegistryPullSecrets reports whether this cluster type lacks
+// auto-configured credentials for the default image registry (quay.io/rhacs-eng).
+func (ct ClusterType) NeedsDefaultRegistryPullSecrets() bool {
 	return ct != ClusterTypeInfraOpenShift4
 }
 
@@ -87,4 +103,8 @@ func (ct ClusterType) IsLocal() bool {
 		return true
 	}
 	return false
+}
+
+func (ct ClusterType) SupportsLoadBalancer() bool {
+	return ct.IsGKE() || ct.IsOpenShift() || ct.IsAKS() || ct.IsEKS()
 }

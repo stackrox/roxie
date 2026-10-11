@@ -8,7 +8,7 @@ import (
 
 	"context"
 
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 const (
@@ -16,13 +16,11 @@ const (
 )
 
 type genericImageSender struct {
-	log  *logger.Logger
 	args []string
 }
 
-func newGenericImageSender(log *logger.Logger, args ...string) genericImageSender {
+func newGenericImageSender(args ...string) genericImageSender {
 	return genericImageSender{
-		log:  log,
 		args: args,
 	}
 }
@@ -45,9 +43,9 @@ func (g *genericImageSender) SendImage(ctx context.Context, imageTag string) err
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		argsJoined := strings.Join(args, " ")
-		g.log.Errorf("Executing %s failed:", argsJoined)
+		log.Errorf("Executing %s failed:", argsJoined)
 		for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
-			g.log.Errorf("| %s", line)
+			log.Errorf("| %s", line)
 		}
 		return fmt.Errorf("executing '%s': %w", argsJoined, err)
 	}

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/ocihelper"
 	"github.com/stackrox/roxie/internal/paths"
 )
@@ -18,7 +18,6 @@ type ImageCache struct {
 	cacheFile  string
 	maxEntries int
 	cache      []string
-	logger     *logger.Logger
 	mu         sync.Mutex
 }
 
@@ -28,7 +27,7 @@ type CacheData struct {
 }
 
 // New creates a new ImageCache instance
-func New(log *logger.Logger, cacheFile string, maxEntries int) (*ImageCache, error) {
+func New(cacheFile string, maxEntries int) (*ImageCache, error) {
 	if cacheFile == "" {
 		cacheDir, err := paths.CacheDir()
 		if err != nil {
@@ -44,7 +43,6 @@ func New(log *logger.Logger, cacheFile string, maxEntries int) (*ImageCache, err
 	ic := &ImageCache{
 		cacheFile:  cacheFile,
 		maxEntries: maxEntries,
-		logger:     log,
 	}
 
 	ic.cache = ic.loadCache()
@@ -135,7 +133,7 @@ func (ic *ImageCache) VerifyImagePullable(ctx context.Context, imageRef string) 
 	}
 
 	// Use OCI registry client to verify image accessibility.
-	err := ocihelper.VerifyImageExistence(ctx, ic.logger, imageRef)
+	err := ocihelper.VerifyImageExistence(ctx, imageRef)
 	if err == nil {
 		ic.AddToCache(imageRef)
 		return true
@@ -153,7 +151,7 @@ func (ic *ImageCache) VerifyImagesPullable(ctx context.Context, images ...string
 
 	// Skip verification if environment variable is set
 	if skip := os.Getenv("SKIP_IMAGE_VERIFICATION"); skip == "true" || skip == "1" || skip == "yes" {
-		ic.logger.Infof("Skipping image verification for %d images (SKIP_IMAGE_VERIFICATION=true)", len(images))
+		log.Infof("Skipping image verification for %d images (SKIP_IMAGE_VERIFICATION=true)", len(images))
 		return true
 	}
 
@@ -169,9 +167,9 @@ func (ic *ImageCache) VerifyImagesPullable(ctx context.Context, images ...string
 
 	// Report cached results immediately
 	if len(cachedImages) > 0 {
-		ic.logger.Successf("✓ %d images verified from cache", len(cachedImages))
+		log.Successf("✓ %d images verified from cache", len(cachedImages))
 		for _, img := range cachedImages {
-			ic.logger.Dim(fmt.Sprintf("✓ Image %s (cached)", img))
+			log.Dim(fmt.Sprintf("✓ Image %s (cached)", img))
 		}
 	}
 
@@ -220,25 +218,25 @@ func (ic *ImageCache) VerifyImagesPullable(ctx context.Context, images ...string
 		// Collect results
 		for res := range results {
 			if res.success {
-				ic.logger.Dim(fmt.Sprintf("✓ Image %s verified", res.img))
+				log.Dim(fmt.Sprintf("✓ Image %s verified", res.img))
 			} else {
-				ic.logger.Errorf("✗ Image %s failed: %s", res.img, res.errMsg)
+				log.Errorf("✗ Image %s failed: %s", res.img, res.errMsg)
 				failedImages = append(failedImages, res.img)
 			}
 		}
 	}
 
 	if len(failedImages) > 0 {
-		ic.logger.Errorf("Failed to verify %d images:", len(failedImages))
+		log.Errorf("Failed to verify %d images:", len(failedImages))
 		for _, img := range failedImages {
-			ic.logger.Errorf("  - %s", img)
+			log.Errorf("  - %s", img)
 		}
 		return false
 	}
 
 	cachedCount := len(cachedImages)
 	verifiedCount := len(uncachedImages) - len(failedImages)
-	ic.logger.Successf("✓ All %d images verified successfully (%d cached, %d verified)",
+	log.Successf("✓ All %d images verified successfully (%d cached, %d verified)",
 		len(images), cachedCount, verifiedCount)
 
 	return true

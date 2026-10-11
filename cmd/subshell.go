@@ -11,20 +11,20 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/haproxy"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/roxieenv"
 	"github.com/stackrox/roxie/internal/types"
 )
 
 // spawnSubshellForDeployerEnv assembles the roxie environment from a Deployer and invokes an interactive subshell.
-func spawnSubshellForDeployerEnv(roxieConfig deployer.RoxieConfig, d *deployer.Deployer, log *logger.Logger) error {
-	return runCommandOrSubshell(roxieConfig, d.GetCentralDeploymentInfo(), log, nil)
+func spawnSubshellForDeployerEnv(roxieConfig deployer.RoxieConfig, d *deployer.Deployer) error {
+	return runCommandOrSubshell(roxieConfig, d.GetCentralDeploymentInfo(), nil)
 }
 
 // runCommandOrSubshell spawns an interactive subshell or runs the provided command using the given
 // central deployment info.
 // It handles HAProxy setup, prints the connection banner, and manages shell lifecycle.
-func runCommandOrSubshell(roxieConfig deployer.RoxieConfig, centralDeploymentInfo types.CentralDeploymentInfo, log *logger.Logger, args []string) error {
+func runCommandOrSubshell(roxieConfig deployer.RoxieConfig, centralDeploymentInfo types.CentralDeploymentInfo, args []string) error {
 	cmdEnv := os.Environ()
 	for name, val := range roxieenv.AssembleRoxieEnvironment(centralDeploymentInfo).Export() {
 		cmdEnv = append(cmdEnv, fmt.Sprintf("%s=%s", name, val))
@@ -33,7 +33,7 @@ func runCommandOrSubshell(roxieConfig deployer.RoxieConfig, centralDeploymentInf
 	cmdEnv = append(cmdEnv, fmt.Sprintf("name=acs@%s", centralDeploymentInfo.KubeContext))
 
 	if roxieConfig.HAProxy.Enabled() {
-		cleanupFunc, err := tryStartHAProxy(log, roxieConfig, &centralDeploymentInfo)
+		cleanupFunc, err := tryStartHAProxy(roxieConfig, &centralDeploymentInfo)
 		if err != nil {
 			log.Warningf("Failed to start HAProxy: %v", err)
 		}
@@ -89,7 +89,6 @@ func runCommandOrSubshell(roxieConfig deployer.RoxieConfig, centralDeploymentInf
 }
 
 func tryStartHAProxy(
-	log *logger.Logger,
 	roxieConfig deployer.RoxieConfig,
 	centralDeploymentInfo *types.CentralDeploymentInfo) (func(), error) {
 

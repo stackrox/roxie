@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/env"
-	"github.com/stackrox/roxie/internal/logger"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
 )
 
@@ -52,8 +52,7 @@ Examples:
 }
 
 func runShell(args []string) error {
-	log := logger.New()
-	if err := env.Initialize(log); err != nil {
+	if err := env.Initialize(); err != nil {
 		return err
 	}
 
@@ -66,7 +65,7 @@ func runShell(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	m, err := manifest.LoadManifestSecret(ctx, log)
+	m, err := manifest.LoadManifestSecret(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load roxie manifest: %w", err)
 	}
@@ -85,10 +84,10 @@ func runShell(args []string) error {
 	}
 	defer os.RemoveAll(tempDir)
 
-	centralDeploymentInfo, err := manifest.ManifestToCentralDeploymentInfo(ctx, log, tempDir, m)
+	centralDeploymentInfo, err := manifest.ManifestToCentralDeploymentInfo(ctx, tempDir, m)
 	if err != nil {
 		return fmt.Errorf("extracting central deployment info from manifest: %w", err)
 	}
 
-	return runCommandOrSubshell(config.Roxie, centralDeploymentInfo, log, args)
+	return runCommandOrSubshell(config.Roxie, centralDeploymentInfo, args)
 }

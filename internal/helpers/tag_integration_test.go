@@ -14,18 +14,16 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/stackrox/roxie/internal/constants"
-	"github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/ocihelper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLookupLatestTag_Integration(t *testing.T) {
-	log := logger.New()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
-	tag, err := LookupLatestTag(ctx, log)
+	tag, err := LookupLatestTag(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, tag)
 
@@ -40,12 +38,11 @@ func TestLookupLatestTag_Integration(t *testing.T) {
 }
 
 func TestVerifyImageExistence_NotFound_Integration(t *testing.T) {
-	log := logger.New()
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	madeUpImage := fmt.Sprintf("%s/main:99.99.99", constants.DefaultRegistry)
-	err := ocihelper.VerifyImageExistence(ctx, log, madeUpImage)
+	err := ocihelper.VerifyImageExistence(ctx, madeUpImage)
 	require.Error(t, err)
 
 	var te *transport.Error
