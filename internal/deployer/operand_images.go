@@ -22,10 +22,11 @@ var relatedImages = map[string]string{
 	"RELATED_IMAGE_SCANNER_DB_SLIM": "scanner-db-slim",
 }
 
-// TODO: Update comment.
-// populateKonfluxEnvVars adds RELATED_IMAGE_* entries to the instance's EnvVars
-// for its version. Explicitly-provided env vars (e.g. from --operator-env) take
-// precedence and are not overwritten.
+// populateOperatorEnvVars adds RELATED_IMAGE_* env vars to the instance
+// when the effective operand image differs from what the operator would
+// use by default (i.e. when OperandTag or OperandTagOverrides are set).
+// In Konflux mode, all entries are added unconditionally.
+// Explicitly-provided env vars (e.g. from --operator-env) take precedence.
 func populateOperatorEnvVars(instance *OperatorInstanceConfig) {
 	if instance == nil {
 		// Nothing to do.
