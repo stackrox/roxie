@@ -4,11 +4,10 @@ func imagesForConfig(config Config) []string {
 	var images []string
 
 	for _, instance := range config.OperatorInstances() {
+		for _, imageName := range relatedImages {
+			images = append(images, constructOperandImageFromInstance(instance, imageName))
+		}
 		images = append(images,
-			constructOperandImageFromInstance(instance, "main"),
-			constructOperandImageFromInstance(instance, "central-db"),
-			constructOperandImageFromInstance(instance, "scanner-v4-db"),
-			constructOperandImageFromInstance(instance, "scanner-v4"),
 			instance.OperatorImage(),
 			instance.BundleImage(),
 		)
