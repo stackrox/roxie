@@ -61,12 +61,12 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 	registry := c.Roxie.ImageRegistry
 	if !c.HasMixedVersions() {
 		return []OperatorInstanceConfig{{
-			Version:              c.CentralVersion(), // Per-component overrides may both equal each other but differ from Operator.Version.
-			Namespace:            operatorNamespaceSystem,
-			EnvVars:              maps.Clone(c.Operator.EnvVars),
-			KonfluxImages:        c.resolveKonfluxImages(&c.Operator.OperatorInstanceConfig),
-			ImageRegistry:        registry,
-			OperandTag:           c.Operator.OperandTag,
+			Version:             c.CentralVersion(), // Per-component overrides may both equal each other but differ from Operator.Version.
+			Namespace:           operatorNamespaceSystem,
+			EnvVars:             maps.Clone(c.Operator.EnvVars),
+			KonfluxImages:       c.resolveKonfluxImages(&c.Operator.OperatorInstanceConfig),
+			ImageRegistry:       registry,
+			OperandTag:          c.Operator.OperandTag,
 			OperandTagOverrides: maps.Clone(c.Operator.OperandTagOverrides),
 		}}
 	}
@@ -81,23 +81,23 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 
 	return []OperatorInstanceConfig{
 		{
-			Version:              c.CentralVersion(),
-			Namespace:            operatorNamespaceCentral,
-			EnvVars:              centralOperatorEnvVars,
-			RoleNameSuffix:       roleNameSuffixCentral,
-			KonfluxImages:        c.resolveKonfluxImages(&c.Central.Operator),
-			ImageRegistry:        registry,
-			OperandTag:           c.Central.Operator.OperandTag,
+			Version:             c.CentralVersion(),
+			Namespace:           operatorNamespaceCentral,
+			EnvVars:             centralOperatorEnvVars,
+			RoleNameSuffix:      roleNameSuffixCentral,
+			KonfluxImages:       c.resolveKonfluxImages(&c.Central.Operator),
+			ImageRegistry:       registry,
+			OperandTag:          c.Central.Operator.OperandTag,
 			OperandTagOverrides: maps.Clone(c.Central.Operator.OperandTagOverrides),
 		},
 		{
-			Version:              c.SecuredClusterVersion(),
-			Namespace:            operatorNamespaceSensor,
-			EnvVars:              sensorOperatorEnvVars,
-			RoleNameSuffix:       roleNameSuffixSensor,
-			KonfluxImages:        c.resolveKonfluxImages(&c.SecuredCluster.Operator),
-			ImageRegistry:        registry,
-			OperandTag:           c.SecuredCluster.Operator.OperandTag,
+			Version:             c.SecuredClusterVersion(),
+			Namespace:           operatorNamespaceSensor,
+			EnvVars:             sensorOperatorEnvVars,
+			RoleNameSuffix:      roleNameSuffixSensor,
+			KonfluxImages:       c.resolveKonfluxImages(&c.SecuredCluster.Operator),
+			ImageRegistry:       registry,
+			OperandTag:          c.SecuredCluster.Operator.OperandTag,
 			OperandTagOverrides: maps.Clone(c.SecuredCluster.Operator.OperandTagOverrides),
 		},
 	}
