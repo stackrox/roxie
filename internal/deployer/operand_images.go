@@ -38,9 +38,9 @@ func populateOperatorEnvVars(instance *OperatorInstanceConfig) {
 		envVars[envName] = constructOperandImageFromInstance(*instance, imageName)
 	}
 
-	instanceWithoutOverwrites := *instance
-	instanceWithoutOverwrites.OperandTag = imagetag.MainTag("")
-	instanceWithoutOverwrites.OperandTagOverwrites = nil
+	instanceWithoutOverrides := *instance
+	instanceWithoutOverrides.OperandTag = imagetag.MainTag("")
+	instanceWithoutOverrides.OperandTagOverrides = nil
 
 	if instance.EnvVars == nil {
 		instance.EnvVars = make(map[string]string)
@@ -54,7 +54,7 @@ func populateOperatorEnvVars(instance *OperatorInstanceConfig) {
 			// Only add env var if it differs from what the operator would use anyway.
 			// For Konflux mode we need to add the overwrites unconditionally, because the operator
 			// happily references non-existing downstream operand images.
-			defaultImageRef := constructOperandImageFromInstance(instanceWithoutOverwrites, relatedImages[envName])
+			defaultImageRef := constructOperandImageFromInstance(instanceWithoutOverrides, relatedImages[envName])
 			if imageRef == defaultImageRef {
 				continue
 			}
@@ -80,7 +80,7 @@ func constructOperandImageFromInstance(instance OperatorInstanceConfig, imageNam
 	if instance.OperandTag.IsSet() {
 		effectiveOperandImageVersion = instance.OperandTag
 	}
-	if perImageVersion := instance.OperandTagOverwrites[imageName]; perImageVersion.IsSet() {
+	if perImageVersion := instance.OperandTagOverrides[imageName]; perImageVersion.IsSet() {
 		// A custom version for this particular image is requested.
 		effectiveOperandImageVersion = perImageVersion
 	}

@@ -67,7 +67,7 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 			KonfluxImages:        c.resolveKonfluxImages(&c.Operator.OperatorInstanceConfig),
 			ImageRegistry:        registry,
 			OperandTag:           c.Operator.OperandTag,
-			OperandTagOverwrites: maps.Clone(c.Operator.OperandTagOverwrites),
+			OperandTagOverrides: maps.Clone(c.Operator.OperandTagOverrides),
 		}}
 	}
 
@@ -88,7 +88,7 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 			KonfluxImages:        c.resolveKonfluxImages(&c.Central.Operator),
 			ImageRegistry:        registry,
 			OperandTag:           c.Central.Operator.OperandTag,
-			OperandTagOverwrites: maps.Clone(c.Central.Operator.OperandTagOverwrites),
+			OperandTagOverrides: maps.Clone(c.Central.Operator.OperandTagOverrides),
 		},
 		{
 			Version:              c.SecuredClusterVersion(),
@@ -98,7 +98,7 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 			KonfluxImages:        c.resolveKonfluxImages(&c.SecuredCluster.Operator),
 			ImageRegistry:        registry,
 			OperandTag:           c.SecuredCluster.Operator.OperandTag,
-			OperandTagOverwrites: maps.Clone(c.SecuredCluster.Operator.OperandTagOverwrites),
+			OperandTagOverrides: maps.Clone(c.SecuredCluster.Operator.OperandTagOverrides),
 		},
 	}
 }

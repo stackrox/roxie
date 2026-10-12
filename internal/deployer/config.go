@@ -90,7 +90,7 @@ func NewRoxieConfig() RoxieConfig {
 type OperatorInstanceConfig struct {
 	Version              imagetag.MainTag            `yaml:"version,omitempty"`
 	OperandTag           imagetag.MainTag            `yaml:"operandTag,omitempty"`
-	OperandTagOverwrites map[string]imagetag.MainTag `yaml:"operandTagOverwrites,omitempty"`
+	OperandTagOverrides map[string]imagetag.MainTag `yaml:"operandTagOverrides,omitempty"`
 	EnvVars              map[string]string           `yaml:"envVars,omitempty"`
 	KonfluxImages        *bool                       `yaml:"konfluxImages,omitempty"`
 

@@ -149,7 +149,7 @@ func TestConstructOperandImageFromInstance(t *testing.T) {
 			instance: OperatorInstanceConfig{
 				Version:       "4.9.2",
 				ImageRegistry: constants.DefaultRegistry,
-				OperandTagOverwrites: map[string]imagetag.MainTag{
+				OperandTagOverrides: map[string]imagetag.MainTag{
 					img: "4.10.0",
 				},
 			},
@@ -160,7 +160,7 @@ func TestConstructOperandImageFromInstance(t *testing.T) {
 			instance: OperatorInstanceConfig{
 				Version:       "4.9.2",
 				ImageRegistry: constants.DefaultRegistry,
-				OperandTagOverwrites: map[string]imagetag.MainTag{
+				OperandTagOverrides: map[string]imagetag.MainTag{
 					"other-image": "4.10.0",
 				},
 			},
@@ -172,7 +172,7 @@ func TestConstructOperandImageFromInstance(t *testing.T) {
 				Version:       "4.9.2",
 				KonfluxImages: new(true),
 				ImageRegistry: constants.DefaultRegistry,
-				OperandTagOverwrites: map[string]imagetag.MainTag{
+				OperandTagOverrides: map[string]imagetag.MainTag{
 					img: "4.10.x-dirty",
 				},
 			},
@@ -184,7 +184,7 @@ func TestConstructOperandImageFromInstance(t *testing.T) {
 				Version:       "4.9.2",
 				KonfluxImages: new(true),
 				ImageRegistry: constants.DefaultRegistry,
-				OperandTagOverwrites: map[string]imagetag.MainTag{
+				OperandTagOverrides: map[string]imagetag.MainTag{
 					"other-image": "4.10.x-dirty",
 				},
 			},
@@ -196,7 +196,7 @@ func TestConstructOperandImageFromInstance(t *testing.T) {
 				Version:       "4.9.2",
 				OperandTag:    "4.10.0",
 				ImageRegistry: constants.DefaultRegistry,
-				OperandTagOverwrites: map[string]imagetag.MainTag{
+				OperandTagOverrides: map[string]imagetag.MainTag{
 					img: "4.11.0",
 				},
 			},
@@ -208,7 +208,7 @@ func TestConstructOperandImageFromInstance(t *testing.T) {
 				Version:       "4.9.2",
 				OperandTag:    "4.10.0",
 				ImageRegistry: constants.DefaultRegistry,
-				OperandTagOverwrites: map[string]imagetag.MainTag{
+				OperandTagOverrides: map[string]imagetag.MainTag{
 					"other-image": "4.11.0",
 				},
 			},
@@ -221,7 +221,7 @@ func TestConstructOperandImageFromInstance(t *testing.T) {
 				OperandTag:    "4.10.x-dirty",
 				KonfluxImages: new(true),
 				ImageRegistry: constants.DefaultRegistry,
-				OperandTagOverwrites: map[string]imagetag.MainTag{
+				OperandTagOverrides: map[string]imagetag.MainTag{
 					img: "4.11.x-dirty",
 				},
 			},
@@ -234,7 +234,7 @@ func TestConstructOperandImageFromInstance(t *testing.T) {
 				OperandTag:    "4.10.x-dirty",
 				KonfluxImages: new(true),
 				ImageRegistry: constants.DefaultRegistry,
-				OperandTagOverwrites: map[string]imagetag.MainTag{
+				OperandTagOverrides: map[string]imagetag.MainTag{
 					"other-image": "4.11.x-dirty",
 				},
 			},
@@ -257,7 +257,7 @@ func TestPopulateOperatorEnvVars_OverwriteResetsToVersion(t *testing.T) {
 		Version:       "4.9.2",
 		OperandTag:    "4.10.0",
 		ImageRegistry: constants.DefaultRegistry,
-		OperandTagOverwrites: map[string]imagetag.MainTag{
+		OperandTagOverrides: map[string]imagetag.MainTag{
 			pinnedImage: "4.9.2", // Pin this image back to the operator version.
 		},
 	}
