@@ -2,6 +2,7 @@ package deployer
 
 import (
 	"cmp"
+	"errors"
 	"maps"
 	"slices"
 	"strings"
@@ -57,7 +58,8 @@ func (c *Config) HasMixedVersions() bool {
 // OperatorInstances builds the operator deployment plan for this config.
 // When versions match, a single operator is deployed to rhacs-operator-system.
 // When they differ, two operators are deployed with reconciler toggles.
-func (c *Config) OperatorInstances() []OperatorInstanceConfig {
+// Returns a boolean indicating if OLM-mode is requested.
+func (c *Config) OperatorInstances() ([]OperatorInstanceConfig, bool, error) {
 	registry := c.Roxie.ImageRegistry
 	if !c.HasMixedVersions() {
 		return []OperatorInstanceConfig{{
@@ -68,7 +70,15 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 			ImageRegistry:       registry,
 			OperandTag:          c.Operator.OperandTag,
 			OperandTagOverrides: maps.Clone(c.Operator.OperandTagOverrides),
-		}}
+		}}, c.Operator.DeployViaOlmEnabled(), nil
+	}
+
+	var err error
+	if c.Operator.DeployViaOlmEnabled() {
+		// We return this error, but keep going so that callers of this function
+		// can always expect to receive at least one operator instance and then
+		// decide how the handling of the error should proceed.
+		err = errors.New("OLM mode is incompatible with mixed operator versions")
 	}
 
 	centralOperatorEnvVars := make(map[string]string, len(c.Central.Operator.EnvVars)+1)
@@ -100,7 +110,7 @@ func (c *Config) OperatorInstances() []OperatorInstanceConfig {
 			OperandTag:          c.SecuredCluster.Operator.OperandTag,
 			OperandTagOverrides: maps.Clone(c.SecuredCluster.Operator.OperandTagOverrides),
 		},
-	}
+	}, false, err
 }
 
 // resolveKonfluxImages returns the effective KonfluxImages setting for a per-component
@@ -116,7 +126,7 @@ func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) *bool
 // This is used to determine which bundle to use for CRD installation, since CRDs
 // are cluster-scoped and must be at the newest version.
 func (c *Config) NewestOperatorInstance() OperatorInstanceConfig {
-	instances := c.OperatorInstances()
+	instances, _, _ := c.OperatorInstances()
 	return slices.MaxFunc(instances, func(a, b OperatorInstanceConfig) int {
 		av, aerr := parseSemver(a.Version)
 		bv, berr := parseSemver(b.Version)

@@ -32,12 +32,12 @@ const (
 )
 
 // deployOperatorViaOLM deploys the RHACS operator using OLM.
-func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
+func (d *Deployer) deployOperatorViaOLM(ctx context.Context, instance OperatorInstanceConfig) error {
 	log.Info("🚀 Deploying operator via OLM...")
-	log.Infof("Operator tag: %s", d.config.Operator.Version)
-	if len(d.config.Operator.EnvVars) > 0 {
-		log.Infof("Custom operator env vars: %d", len(d.config.Operator.EnvVars))
-		for _, envVar := range envVarsToSortedList(d.config.Operator.EnvVars) {
+	log.Infof("Operator tag: %s", instance.Version)
+	if len(instance.EnvVars) > 0 {
+		log.Infof("Custom operator env vars: %d", len(instance.EnvVars))
+		for _, envVar := range envVarsToSortedList(instance.EnvVars) {
 			ev := envVar.(map[string]interface{})
 			log.Dimf("  %s=%s", ev["name"], ev["value"])
 		}
@@ -47,7 +47,7 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 		return err
 	}
 
-	indexImage := d.getOperatorIndexImage()
+	indexImage := d.getOperatorIndexImage(instance)
 	log.Infof("Index image: %s", indexImage)
 
 	if err := d.prepareNamespace(ctx, operatorNamespace, false); err != nil {
@@ -62,15 +62,15 @@ func (d *Deployer) deployOperatorViaOLM(ctx context.Context) error {
 		return fmt.Errorf("failed to create OperatorGroup: %w", err)
 	}
 
-	if err := d.createSubscription(ctx); err != nil {
+	if err := d.createSubscription(ctx, instance); err != nil {
 		return fmt.Errorf("failed to create Subscription: %w", err)
 	}
 
-	if err := d.waitForAndApproveInstallPlan(ctx); err != nil {
+	if err := d.waitForAndApproveInstallPlan(ctx, instance); err != nil {
 		return fmt.Errorf("failed to approve InstallPlan: %w", err)
 	}
 
-	if err := d.waitForCSVSuccess(ctx); err != nil {
+	if err := d.waitForCSVSuccess(ctx, instance); err != nil {
 		return fmt.Errorf("failed waiting for CSV: %w", err)
 	}
 
@@ -129,8 +129,8 @@ func (d *Deployer) checkOLMInstalled(ctx context.Context) error {
 }
 
 // getOperatorIndexImage returns the operator index image reference.
-func (d *Deployer) getOperatorIndexImage() string {
-	return fmt.Sprintf(operatorIndexImage+":v%s", d.config.Operator.Version)
+func (d *Deployer) getOperatorIndexImage(instance OperatorInstanceConfig) string {
+	return fmt.Sprintf(operatorIndexImage+":v%s", instance.Version)
 }
 
 // createCatalogSource creates the CatalogSource for the operator.
@@ -204,10 +204,10 @@ func (d *Deployer) createOperatorGroup(ctx context.Context) error {
 }
 
 // createSubscription creates the Subscription for the operator.
-func (d *Deployer) createSubscription(ctx context.Context) error {
+func (d *Deployer) createSubscription(ctx context.Context, instance OperatorInstanceConfig) error {
 	log.Info("Creating Subscription...")
 
-	startingCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
+	startingCSV := fmt.Sprintf("rhacs-operator.v%s", instance.Version)
 
 	subscriptionSpec := map[string]interface{}{
 		"channel":             operatorChannel,
@@ -218,9 +218,9 @@ func (d *Deployer) createSubscription(ctx context.Context) error {
 		"startingCSV":         startingCSV,
 	}
 
-	if len(d.config.Operator.EnvVars) > 0 {
+	if len(instance.EnvVars) > 0 {
 		subscriptionSpec["config"] = map[string]interface{}{
-			"env": envVarsToSortedList(d.config.Operator.EnvVars),
+			"env": envVarsToSortedList(instance.EnvVars),
 		}
 	}
 
@@ -252,7 +252,7 @@ func (d *Deployer) createSubscription(ctx context.Context) error {
 }
 
 // waitForAndApproveInstallPlan waits for the InstallPlan to be created and approves it.
-func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
+func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context, instance OperatorInstanceConfig) error {
 	log.Info("⏳ Waiting for InstallPlan to be created...")
 
 	// Wait for subscription to have InstallPlanPending condition.
@@ -275,7 +275,7 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 	}
 
 	// Sanity check:Verify currentCSV matches expected version.
-	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
+	expectedCSV := fmt.Sprintf("rhacs-operator.v%s", instance.Version)
 	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{"get", "subscription", subscriptionName, "-n", operatorNamespace, "-o", "jsonpath={.status.currentCSV}"},
 	})
@@ -316,8 +316,8 @@ func (d *Deployer) waitForAndApproveInstallPlan(ctx context.Context) error {
 }
 
 // waitForCSVSuccess waits for the CSV to reach Succeeded phase.
-func (d *Deployer) waitForCSVSuccess(ctx context.Context) error {
-	csvName := fmt.Sprintf("rhacs-operator.v%s", d.config.Operator.Version)
+func (d *Deployer) waitForCSVSuccess(ctx context.Context, instance OperatorInstanceConfig) error {
+	csvName := fmt.Sprintf("rhacs-operator.v%s", instance.Version)
 	log.Infof("⏳ Waiting for CSV %s to succeed...", csvName)
 
 	start := time.Now()

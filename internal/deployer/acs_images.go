@@ -4,7 +4,8 @@ package deployer
 func imagesForConfig(config Config) []string {
 	var images []string
 
-	for _, instance := range config.OperatorInstances() {
+	instances, _, _ := config.OperatorInstances()
+	for _, instance := range instances {
 		for _, imageName := range relatedImages {
 			images = append(images, constructOperandImageFromInstance(instance, imageName))
 		}

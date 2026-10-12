@@ -59,8 +59,21 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 		return fmt.Errorf("failed to ensure CRDs installed: %w", err)
 	}
 
-	if d.config.Operator.DeployViaOlmEnabled() {
-		return d.ensureOperatorDeployedOLM(ctx)
+	instances, olmMode, err := d.config.OperatorInstances()
+	if err != nil {
+		return err
+	}
+
+	if err := d.teardownStaleOperatorNamespaces(ctx, instances); err != nil {
+		return err
+	}
+
+	for i := range instances {
+		populateOperatorEnvVars(&instances[i])
+	}
+
+	if olmMode {
+		return d.ensureOperatorDeployedOLM(ctx, instances[0])
 	}
 
 	// Non-OLM case.
@@ -76,13 +89,7 @@ func (d *Deployer) ensureOperatorDeployed(ctx context.Context) error {
 		}
 	}
 
-	instances := d.config.OperatorInstances()
-	if err := d.teardownStaleOperatorNamespaces(ctx, instances); err != nil {
-		return err
-	}
-
 	for _, instance := range instances {
-		populateOperatorEnvVars(&instance)
 		if err := d.ensureOperatorInstanceNonOLM(ctx, instance); err != nil {
 			return fmt.Errorf("failed to deploy operator in namespace %s: %w", instance.Namespace, err)
 		}
@@ -153,13 +160,7 @@ func (d *Deployer) ensureOperatorInstanceNonOLM(ctx context.Context, instance Op
 }
 
 // ensureOperatorDeployedOLM is the single-operator OLM path (mixed versions are rejected in validation).
-func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
-	// Remove any leftover dual-operator namespaces before installing via OLM.
-	desired := []OperatorInstanceConfig{{Namespace: operatorNamespaceSystem}}
-	if err := d.teardownStaleOperatorNamespaces(ctx, desired); err != nil {
-		return err
-	}
-
+func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context, instance OperatorInstanceConfig) error {
 	operatorExists, currentMode, err := d.detectOperatorDeploymentMode(ctx)
 	if err != nil {
 		return fmt.Errorf("detecting operator deployment mode: %w", err)
@@ -174,13 +175,10 @@ func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 		needsTeardown = true
 		needsDeployment = true
 	} else {
-		instance := OperatorInstanceConfig{
-			Version:   d.config.Operator.Version,
-			Namespace: operatorNamespaceSystem,
-			EnvVars:   d.config.Operator.EnvVars,
-		}
 		if d.isOperatorImageCorrect(ctx, instance) {
 			log.Info("✓ Operator already deployed with correct image")
+			// TODO(#304): Changes in the operator environment configuration do not
+			// trigger a redeployment of the operator.
 		} else {
 			log.Info("🔄 Operator image mismatch, redeploying...")
 			needsTeardown = true
@@ -201,7 +199,7 @@ func (d *Deployer) ensureOperatorDeployedOLM(ctx context.Context) error {
 	}
 
 	if needsDeployment {
-		if err := d.deployOperatorViaOLM(ctx); err != nil {
+		if err := d.deployOperatorViaOLM(ctx, instance); err != nil {
 			return fmt.Errorf("failed to deploy operator via OLM: %w", err)
 		}
 	}

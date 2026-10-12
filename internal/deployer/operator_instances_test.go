@@ -63,8 +63,10 @@ func TestVersions_BothOverridesSame_NoMixed(t *testing.T) {
 	assert.Equal(t, imagetag.MainTag("4.8.0"), cfg.SecuredClusterVersion())
 	assert.False(t, cfg.HasMixedVersions())
 
-	instances := cfg.OperatorInstances()
+	instances, olmMode, err := cfg.OperatorInstances()
 	require.Len(t, instances, 1)
+	assert.False(t, olmMode, "unexpected OLM mode")
+	assert.NoError(t, err, "unexpected error from OperatorInstances")
 	assert.Equal(t, imagetag.MainTag("4.8.0"), instances[0].Version, "operator should use the override version, not Roxie.Version")
 }
 
@@ -79,8 +81,10 @@ func TestOperatorInstances_SingleVersion(t *testing.T) {
 		},
 	}
 
-	instances := cfg.OperatorInstances()
+	instances, olmMode, err := cfg.OperatorInstances()
 	require.Len(t, instances, 1)
+	assert.False(t, olmMode, "unexpected OLM mode")
+	assert.NoError(t, err, "unexpected error from OperatorInstances")
 	assert.Equal(t, imagetag.MainTag("4.9.0-dirty"), instances[0].Version)
 	assert.Equal(t, operatorNamespaceSystem, instances[0].Namespace)
 	assert.Equal(t, "", instances[0].RoleNameSuffix)
@@ -108,8 +112,10 @@ func TestOperatorInstances_MixedVersions(t *testing.T) {
 		},
 	}
 
-	instances := cfg.OperatorInstances()
+	instances, olmMode, err := cfg.OperatorInstances()
 	require.Len(t, instances, 2)
+	assert.False(t, olmMode, "unexpected OLM mode")
+	assert.NoError(t, err, "unexpected error from OperatorInstances")
 
 	central := instances[0]
 	assert.Equal(t, imagetag.MainTag("4.8.0"), central.Version)
@@ -158,8 +164,10 @@ func TestOperatorInstances_PerComponentEnvVars(t *testing.T) {
 		},
 	}
 
-	instances := cfg.OperatorInstances()
+	instances, olmMode, err := cfg.OperatorInstances()
 	require.Len(t, instances, 2)
+	assert.False(t, olmMode, "unexpected OLM mode")
+	assert.NoError(t, err, "unexpected error from OperatorInstances")
 
 	// Top-level Operator.EnvVars are NOT inherited in dual-operator mode.
 	assert.NotContains(t, instances[0].EnvVars, "SHARED")
