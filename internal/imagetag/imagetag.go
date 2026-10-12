@@ -20,3 +20,6 @@ func (t MainTag) ToOperatorTag() OperatorTag {
 
 func (t MainTag) String() string     { return string(t) }
 func (t OperatorTag) String() string { return string(t) }
+
+func (t MainTag) IsSet() bool     { return string(t) != "" }
+func (t OperatorTag) IsSet() bool { return string(t) != "" }
