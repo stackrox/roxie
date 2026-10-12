@@ -472,3 +472,19 @@ func verifyOperatorVersion(t *testing.T, namespace, expectedTag string) {
 	assert.Equalf(t, expectedTag, actualTag, "Operator image tag mismatch in namespace %s", namespace)
 	t.Logf("✓ Operator image in namespace %s: %s", namespace, image)
 }
+
+func verifyOperatorDeploymentEnvVar(t *testing.T, namespace, envName, expectedValue string) {
+	t.Helper()
+
+	jsonpath := fmt.Sprintf(
+		`{.spec.template.spec.containers[?(@.name=="manager")].env[?(@.name=="%s")].value}`, envName)
+	cmd := exec.Command("kubectl", "get", "deployment", operatorDeploymentName,
+		"-n", namespace, "-o", "jsonpath="+jsonpath)
+	output, err := cmd.Output()
+	require.NoErrorf(t, err, "Failed to get env var %s from operator deployment in %s", envName, namespace)
+
+	actualValue := strings.TrimSpace(string(output))
+	assert.Equalf(t, expectedValue, actualValue,
+		"Operator deployment env var %s mismatch in %s", envName, namespace)
+	t.Logf("✓ Operator deployment in %s has %s=%q", namespace, envName, actualValue)
+}

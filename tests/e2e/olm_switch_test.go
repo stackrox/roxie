@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -135,7 +136,8 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 	verifyCentralNotInstalled(t, centralNamespace)
 }
 
-// TestOLMOperatorVersionUpgrade tests that OLM operator version mismatches trigger teardown and redeploy
+// TestOLMOperatorVersionUpgrade tests that OLM operator version mismatches trigger teardown and redeploy,
+// and that operand tag overrides propagate RELATED_IMAGE_* env vars to the OLM Subscription.
 func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	dumpClusterStateOnFailure(t)
 
@@ -143,9 +145,15 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 		t.Skip("SKIP_OLM_TESTS is set")
 	}
 
-	// This test requires two different operator versions
-	// We can simulate this by deploying twice with the same version,
-	// but the logic should handle version changes by tearing down and redeploying
+	// Look up two release tags different from the main tag. We use one as a blanket
+	// operand tag override and the other as a per-image override for central-db.
+	tag1, tag2 := lookupTwoReleasedTags(t)
+	mainTag := os.Getenv("MAIN_IMAGE_TAG")
+	operandTag, perImageTag := tag1, tag2
+	if operandTag == mainTag {
+		operandTag, perImageTag = tag2, tag1
+	}
+	t.Logf("Main tag: %s, operandTag: %s, per-image override (central-db): %s", mainTag, operandTag, perImageTag)
 
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
@@ -155,9 +163,12 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	envrcPath := envrcFile.Name()
 	envrcFile.Close()
 
-	// Step 1: Deploy central with OLM operator
-	t.Log("=== Step 1: Deploy central with OLM operator ===")
-	args := append([]string{roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath}, commonDeployArgs...)
+	t.Log("=== Step 1: Deploy central with OLM operator and operand tag overrides ===")
+	args := append([]string{
+		roxieBinary, "deploy", "central", "--olm", "--envrc", envrcPath,
+		"--set", "operator.operandTag=" + operandTag,
+		"--set", "operator.operandTagOverrides.central-db=" + perImageTag,
+	}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator is in OLM mode
@@ -165,10 +176,19 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	verifyOperatorMode(t, true)
 	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
 
+	// Verify that operandTag caused RELATED_IMAGE_MAIN to use the blanket override.
+	verifyOperatorDeploymentEnvVar(t,
+		operatorSystemNamespace, "RELATED_IMAGE_MAIN", fmt.Sprintf("quay.io/rhacs-eng/main:%s", operandTag))
+
+	// Verify that operandTagOverrides caused RELATED_IMAGE_CENTRAL_DB to use
+	// the per-image tag instead of the blanket operandTag.
+	if perImageTag != mainTag {
+		verifyOperatorDeploymentEnvVar(t, operatorSystemNamespace,
+			"RELATED_IMAGE_CENTRAL_DB", fmt.Sprintf("quay.io/rhacs-eng/central-db:%s", perImageTag))
+	}
+
 	// Get the current operator version
-	operatorNamespace := operatorSystemNamespace
-	deploymentName := operatorDeploymentName
-	cmd := exec.Command("kubectl", "get", "deployment", deploymentName, "-n", operatorNamespace,
+	cmd := exec.Command("kubectl", "get", "deployment", operatorDeploymentName, "-n", operatorSystemNamespace,
 		"-o", "jsonpath={.spec.template.spec.containers[0].image}")
 	output, err := cmd.Output()
 	if err != nil {
