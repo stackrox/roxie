@@ -235,14 +235,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Cluster-config retrieval happens before the full config (and thus the configured deploy
-	// wait timeouts) is assembled, so give it its own short bounded context.
-	setupCtx, setupCancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer setupCancel()
+	clusterConfig := deployer.DefaultConfig()
 
-	clusterConfig := retrieveClusterConfigForComponents(setupCtx, components)
-
-	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
+	deploySettings, err := assembleConfigForCommand(&clusterConfig, deploySettingsFromArgs, skipUserConfig)
 	if err != nil {
 		return err
 	}
@@ -345,13 +340,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	if !dryRun {
-		roxieEnv := roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo())
-		m := manifest.RoxieManifest{
-			RoxieEnvironment: roxieEnv,
-			Config:           deploySettings,
-		}
-		if err := manifest.CreateManifestSecretOnCluster(ctx, m); err != nil {
-			log.Warningf("Failed to save roxie manifest: %v", err)
+		if err := updateManifest(ctx, d, components, deploySettings); err != nil {
+			log.Warningf("Updating roxie manifest failed: %v", err)
+			// Keep going.
 		}
 	}
 
@@ -400,30 +391,6 @@ func validateContainerizedCredentials(registry string, clusterType types.Cluster
 		return fmt.Errorf("containerized mode requires /kubeconfig file: %w", err)
 	}
 	return nil
-}
-
-func retrieveClusterConfigForComponents(
-	ctx context.Context,
-	components component.Component,
-) *deployer.Config {
-	clusterManifest, err := manifest.LoadManifestSecret(ctx)
-	if err != nil {
-		if errors.Is(err, k8s.ErrResourceNotFound) {
-			log.Dim("No existing manifest found on cluster, starting from defaults")
-		} else {
-			log.Warningf("Failed to load manifest from cluster: %v", err)
-		}
-		return nil // Let's try to continue without manifest
-	}
-
-	if components == component.SecuredCluster && clusterManifest.Config.SecuredCluster.Spec != nil {
-		// Reusing these fields from the config stored on the cluster would cause problems
-		// during repeating sensor deploy & teardown cycles.
-		delete(clusterManifest.Config.SecuredCluster.Spec, "clusterName")
-		delete(clusterManifest.Config.SecuredCluster.Spec, "centralEndpoint")
-	}
-
-	return &clusterManifest.Config
 }
 
 func configureConfig(components component.Component, deploySettings *deployer.Config) error {
@@ -606,4 +573,59 @@ func generateClusterName() string {
 	}
 
 	return fmt.Sprintf("sensor-%d", randInt)
+}
+
+func updateManifest(ctx context.Context, d *deployer.Deployer, components component.Component, deploySettings deployer.Config) error {
+	newManifest := manifest.RoxieManifest{}
+
+	currentManifest, err := manifest.LoadManifestSecret(ctx)
+	if err != nil {
+		if errors.Is(err, k8s.ErrResourceNotFound) {
+			// No manifest on the cluster, probably due to an isolated SecuredCluster deployment with roxie
+			// on a cluster without a (roxie-deployed) central.
+			// In this case we don't need to merge anything, we will just create a new manifest with
+			// current deploySettings.
+			log.Dim("No existing roxie manifest found on cluster, starting from defaults")
+		} else {
+			log.Warningf("Failed to load roxie manifest from cluster: %v", err)
+			log.Warning("Skipping updating roxie manifest")
+			return err
+		}
+	}
+
+	// Manifest updating logic heavily depends on the components.
+	switch components {
+	case component.Both, component.All, component.Central:
+		// Includes central, create roxie manifest from scratch.
+		roxieEnv := roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo())
+		newManifest.RoxieEnvironment = roxieEnv
+		newManifest.Config = deploySettings
+	case component.SecuredCluster:
+		// If a previous manifest exists on cluster, update it to include the SecuredCluster settings.
+		if currentManifest == nil {
+			newManifest.Config = deploySettings
+		} else {
+			log.Dim("Found existing roxie manifest on cluster, updating only SecuredCluster deployment settings")
+			newManifest = *currentManifest
+			newManifest.Config.SecuredCluster = deploySettings.SecuredCluster
+		}
+	case component.Operator:
+		// If a previous manifest exists on cluster, update it to include the Operator settings.
+		if currentManifest == nil {
+			newManifest.Config = deploySettings
+		} else {
+			log.Dim("Found existing roxie manifest on cluster, updating only Operator deployment settings")
+			newManifest = *currentManifest
+			newManifest.Config.Operator = deploySettings.Operator
+		}
+	case component.AddOns:
+		// Nothing to write in this case.
+		return nil
+	}
+
+	if err := manifest.CreateManifestSecretOnCluster(ctx, newManifest); err != nil {
+		log.Warningf("Failed to save roxie manifest: %v", err)
+	}
+
+	return nil
 }
