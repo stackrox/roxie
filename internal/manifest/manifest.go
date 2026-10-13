@@ -31,6 +31,20 @@ type RoxieManifest struct {
 	Config           RoxieManifestConfig    `yaml:"config"`
 }
 
+// RoxieManifestConfig stores the subset of deployer.Config that is persisted
+// in the cluster manifest secret. Namespaces are NOT consumed from here —
+// teardown discovers them directly from CRs on the cluster. The fields that
+// are actively used:
+//
+//   - Central.AddOns / Central.AvailableAddOns — teardown needs these to know
+//     which add-ons were deployed so it can tear them down (add-ons are
+//     lifecycle-aligned with Central and not discoverable from the cluster).
+//   - Central.Namespace — used by 'roxie shell' to fetch the CA cert from the
+//     central-tls secret, and to resolve the Central endpoint.
+//   - Central.Exposure — used by 'roxie shell' to determine the base URL shown
+//     in the subshell banner.
+//   - Roxie.HAProxy — used by 'roxie shell' to re-spawn the HAProxy sidecar
+//     for local HTTP access to Central.
 type RoxieManifestConfig struct {
 	Roxie   deployer.RoxieConfig   `yaml:"roxie"`
 	Central deployer.CentralConfig `yaml:"central"`

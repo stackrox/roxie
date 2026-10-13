@@ -136,7 +136,7 @@ func init() {
 	)
 
 	rootCmd.AddCommand(newDeployCmd(&deploySettingsFromArgs))
-	rootCmd.AddCommand(newTeardownCmd(&deploySettingsFromArgs))
+	rootCmd.AddCommand(newTeardownCmd())
 	rootCmd.AddCommand(newShellCmd())
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newEnvCmd())
