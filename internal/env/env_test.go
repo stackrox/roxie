@@ -118,6 +118,53 @@ func TestDetectClusterType_OpenShift4(t *testing.T) {
 	assert.Equal(t, types.ClusterTypeOpenShift4, result)
 }
 
+func TestDetectClusterType_CRC_OpenShiftPreset(t *testing.T) {
+	// The CRC OpenShift preset is full OpenShift 4 running locally: it serves the
+	// config.openshift.io API group AND is reachable at api.crc.testing. It must be
+	// detected as CRC (not OpenShift4), keyed off the server host. A non-CRC server
+	// host with the same API resources is plain OpenShift4.
+	openShift4Resources := []string{
+		"pods",
+		"services",
+		"clusterversions.config.openshift.io",
+		"clusteroperators.config.openshift.io",
+	}
+
+	tests := []struct {
+		name        string
+		kubeContext string
+		server      string
+		want        types.ClusterType
+	}{
+		{name: "crc server host", kubeContext: "crc-admin", server: "https://api.crc.testing:6443", want: types.ClusterTypeCRC},
+		{name: "crc server host, arbitrary context", kubeContext: "whatever", server: "https://api.crc.testing:6443", want: types.ClusterTypeCRC},
+		// Hostnames are case-insensitive, so an uppercase CRC server host must
+		// still be detected as CRC.
+		{name: "crc server host, uppercase", kubeContext: "crc-admin", server: "https://API.CRC.TESTING:6443", want: types.ClusterTypeCRC},
+		// A non-CRC server host must be detected as plain OpenShift4, even if the
+		// context name happens to contain "crc".
+		{name: "non-crc server, crc-like context", kubeContext: "acrc-cluster", server: "https://api.my-cluster.example.com:6443", want: types.ClusterTypeOpenShift4},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := KubeConfig{
+				CurrentContext: tt.kubeContext,
+				Clusters: []KubeCluster{
+					{
+						Name:   tt.kubeContext,
+						Server: tt.server,
+					},
+				},
+			}
+
+			result := DetectClusterType(config, openShift4Resources)
+			assert.Equal(t, tt.want, result,
+				"context %q / server %q with OpenShift4 API resources", tt.kubeContext, tt.server)
+		})
+	}
+}
+
 func TestDetectClusterType_OpenShift4_NoAPIResources(t *testing.T) {
 	config := KubeConfig{
 		CurrentContext: "admin",
@@ -434,33 +481,8 @@ func TestDefaultDetector_Detect(t *testing.T) {
 			want:        types.ClusterTypeKind,
 		},
 		{
-			name:        "crc cluster with admin context",
+			name:        "crc-like context without server host or api resources is unknown",
 			kubeContext: "crc-admin",
-			want:        types.ClusterTypeCRC,
-		},
-		{
-			name:        "crc cluster with api prefix",
-			kubeContext: "api-crc-testing:6443",
-			want:        types.ClusterTypeCRC,
-		},
-		{
-			name:        "crc cluster with uppercase",
-			kubeContext: "CRC-admin",
-			want:        types.ClusterTypeCRC,
-		},
-		{
-			name:        "crc cluster bare name",
-			kubeContext: "crc",
-			want:        types.ClusterTypeCRC,
-		},
-		{
-			name:        "not crc - incidental substring",
-			kubeContext: "acrc-cluster",
-			want:        types.ClusterTypeUnknown,
-		},
-		{
-			name:        "not crc - encrypted in name",
-			kubeContext: "my-encrypted-cluster",
 			want:        types.ClusterTypeUnknown,
 		},
 	}

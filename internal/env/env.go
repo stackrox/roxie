@@ -171,6 +171,9 @@ func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterTy
 
 	// Check for OpenShift 4 clusters.
 	if isOpenShift4(apiResources) {
+		if isCRC(parsedURL) {
+			return types.ClusterTypeCRC
+		}
 		if isInfraOpenShift4(config) {
 			return types.ClusterTypeInfraOpenShift4
 		}
@@ -188,11 +191,6 @@ func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterTy
 		return types.ClusterTypeKind
 	}
 
-	// CRC (CodeReady Containers) contexts start with "crc" or contain "-crc-"/"_crc_" as a segment
-	if strings.HasPrefix(contextLower, "crc") || strings.Contains(contextLower, "-crc-") || strings.Contains(contextLower, "-crc:") {
-		return types.ClusterTypeCRC
-	}
-
 	return types.ClusterTypeUnknown
 }
 
@@ -207,6 +205,10 @@ func isInfraOpenShift4(config KubeConfig) bool {
 	}
 	hostname := parsedURL.Hostname()
 	return strings.HasSuffix(hostname, ".ocp.infra.rox.systems")
+}
+
+func isCRC(parsedURL *url.URL) bool {
+	return parsedURL != nil && strings.EqualFold(parsedURL.Hostname(), "api.crc.testing")
 }
 
 // getServerURL retrieves the server URL from the KubeConfig
