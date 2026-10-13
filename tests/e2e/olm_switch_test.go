@@ -260,7 +260,9 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Step 3: Switch to non-OLM by redeploying secured-cluster without --olm
 	t.Log("=== Step 3: Redeploy secured-cluster without OLM (triggering mode switch) ===")
-	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster"}, commonDeployArgs...)
+	// Note: we need to *explicitly* disable OLM because of an pre-existing issue where the on-cluster manifest influences
+	// the effective deployment configuration on a re-deployment.
+	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster", "--olm=false"}, commonDeployArgs...)
 	runCommand(t, deployTimeout, envrcEnv, args...)
 
 	// Verify operator switched to non-OLM mode
