@@ -338,20 +338,23 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		d.WaitForCentral(5 * time.Minute)
 	}
 
-	if !dryRun {
+	if components.IncludesCentral() {
 		roxieEnv := roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo())
-		m := manifest.RoxieManifest{
+		newManifest := manifest.RoxieManifest{
 			RoxieEnvironment: roxieEnv,
-			Config:           deploySettings,
+			Config: manifest.RoxieManifestConfig{
+				Roxie:   deploySettings.Roxie,
+				Central: deploySettings.Central,
+			},
 		}
-		if err := manifest.CreateManifestSecretOnCluster(ctx, m); err != nil {
+		if err := manifest.CreateManifestSecretOnCluster(ctx, newManifest); err != nil {
 			log.Warningf("Failed to save roxie manifest: %v", err)
 		}
-	}
 
-	if components.IncludesCentral() && envrc == "" {
-		if err := spawnSubshellForDeployerEnv(deploySettings.Roxie, d); err != nil {
-			return fmt.Errorf("failed to spawn subshell: %w", err)
+		if envrc == "" {
+			if err := spawnSubshellForDeployerEnv(deploySettings.Roxie, d); err != nil {
+				return fmt.Errorf("failed to spawn subshell: %w", err)
+			}
 		}
 	}
 

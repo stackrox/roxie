@@ -28,7 +28,22 @@ const (
 // We include the whole deployer Config for reproducibility purposes.
 type RoxieManifest struct {
 	RoxieEnvironment types.RoxieEnvironment `yaml:"roxieEnvironment"`
-	Config           deployer.Config        `yaml:"config"`
+	Config           RoxieManifestConfig    `yaml:"config"`
+}
+
+type RoxieManifestConfig struct {
+	Roxie   deployer.RoxieConfig   `yaml:"roxie"`
+	Central deployer.CentralConfig `yaml:"central"`
+}
+
+func (c *RoxieManifestConfig) AsConfig() *deployer.Config {
+	if c == nil {
+		return nil
+	}
+	return &deployer.Config{
+		Roxie:   c.Roxie,
+		Central: c.Central,
+	}
 }
 
 func manifestToSecret(m RoxieManifest) (*unstructured.Unstructured, error) {

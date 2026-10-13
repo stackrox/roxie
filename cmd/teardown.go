@@ -60,17 +60,17 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	var clusterConfig *deployer.Config
+	var clusterConfig manifest.RoxieManifestConfig
 	clusterManifest, err := manifest.LoadManifestSecret(ctx)
 	if errors.Is(err, k8s.ErrResourceNotFound) {
 		log.Infof("No roxie manifest found in cluster, proceeding without it")
 	} else if err != nil {
 		log.Warningf("Failed to load manifest from cluster: %v", err)
 	} else {
-		clusterConfig = &clusterManifest.Config
+		clusterConfig = clusterManifest.Config
 	}
 
-	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
+	deploySettings, err := assembleConfigForCommand(clusterConfig.AsConfig(), deploySettingsFromArgs, skipUserConfig)
 	if err != nil {
 		return err
 	}
