@@ -14,6 +14,10 @@ import (
 	"github.com/stackrox/roxie/internal/stackroxversions"
 )
 
+const (
+	nonExistentTag = "0.0.1-override-test"
+)
+
 // lookupTwoReleasedTags returns two different pullable release tags.
 func lookupTwoReleasedTags(t *testing.T) (string, string) {
 	t.Helper()
@@ -64,14 +68,29 @@ func TestMixedVersionOperatorDeploy(t *testing.T) {
 	verifyOperatorVersion(t, operatorCentralNamespace, centralTag)
 	verifyOperatorVersion(t, operatorSensorNamespace, mainTag)
 
-	// Step 2: Switch back to single-version operator
-	t.Log("=== Step 2: Deploy operator with single version (switch from mixed to single) ===")
-	singleArgs := append([]string{roxieBinary, "deploy", "operator", "--tag", mainTag, "--central-tag", mainTag, "--secured-cluster-tag", mainTag}, commonDeployArgs...)
+	t.Log("=== Step 2: Deploy single-version operator with operand tag overrides ===")
+	// Switch back to single-version operator, with operand tag overrides.
+	// This verifies that populateOperatorEnvVars injects RELATED_IMAGE_* env vars
+	// into the non-OLM operator Deployment when operandTag / operandTagOverrides
+	// differ from the operator version.
+	singleArgs := append([]string{
+		roxieBinary, "deploy", "operator",
+		"--tag", mainTag, "--central-tag", mainTag, "--secured-cluster-tag", mainTag,
+		"--set", "operator.operandTag=" + centralTag,
+		"--set", "operator.operandTagOverrides.central-db=" + nonExistentTag,
+	}, commonDeployArgs...)
 	runCommand(t, operatorDeployTimeout, nil, singleArgs...)
 
 	verifyOperatorDeploymentExists(t, operatorSystemNamespace)
 	verifyOperatorNotInNamespace(t, operatorCentralNamespace)
 	verifyOperatorNotInNamespace(t, operatorSensorNamespace)
+
+	// operandTag applies to all images by default.
+	verifyOperatorDeploymentEnvVar(t,
+		operatorSystemNamespace, "RELATED_IMAGE_MAIN", fmt.Sprintf("quay.io/rhacs-eng/main:%s", centralTag))
+	// operandTagOverrides takes precedence for the specific image.
+	verifyOperatorDeploymentEnvVar(t,
+		operatorSystemNamespace, "RELATED_IMAGE_CENTRAL_DB", fmt.Sprintf("quay.io/rhacs-eng/central-db:%s", nonExistentTag))
 
 	// Step 3: Switch from single back to mixed
 	t.Log("=== Step 3: Deploy operator with mixed versions again (switch from single to mixed) ===")

@@ -1,22 +1,15 @@
 package deployer
 
-import (
-	"fmt"
-)
-
+// TODO(#303): Also include explicit RELATED_IMAGE_* env var overrides in the preload list.
 func imagesForConfig(config Config) []string {
 	var images []string
 
-	for _, instance := range config.OperatorInstances() {
-		prefix := ""
-		if instance.KonfluxImagesEnabled() {
-			prefix = "release-"
+	instances, _, _ := config.OperatorInstances()
+	for _, instance := range instances {
+		for _, imageName := range relatedImages {
+			images = append(images, constructOperandImageFromInstance(instance, imageName))
 		}
 		images = append(images,
-			fmt.Sprintf("%s/%s%s:%s", instance.ImageRegistry, prefix, "main", instance.Version),
-			fmt.Sprintf("%s/%s%s:%s", instance.ImageRegistry, prefix, "central-db", instance.Version),
-			fmt.Sprintf("%s/%s%s:%s", instance.ImageRegistry, prefix, "scanner-v4-db", instance.Version),
-			fmt.Sprintf("%s/%s%s:%s", instance.ImageRegistry, prefix, "scanner-v4", instance.Version),
 			instance.OperatorImage(),
 			instance.BundleImage(),
 		)
