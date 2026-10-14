@@ -8,12 +8,17 @@ import (
 )
 
 func assembleConfigForCommand(configBase *deployer.Config, configFromArgs deployer.Config, skipUserConfig bool) (deployer.Config, error) {
-	var config deployer.Config
-	if configBase == nil {
-		// Start with default configuration.
-		config = deployer.DefaultConfig()
-	} else {
-		config = *configBase
+	// Always start from the built-in defaults so that defaults (e.g.
+	// roxie.imageRegistry) are applied even when reusing an existing cluster
+	// manifest as the base configuration. Otherwise a manifest written by an
+	// older roxie (which predates such defaults) would leave those fields empty.
+	config := deployer.DefaultConfig()
+	if configBase != nil {
+		// Merge the provided base (e.g. an existing cluster manifest) on top of
+		// the defaults; non-empty values in the base take precedence.
+		if err := mergo.Merge(&config, configBase, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+			return deployer.Config{}, fmt.Errorf("merging base config over defaults: %w", err)
+		}
 	}
 
 	// Apply user config on top (overriding defaults).

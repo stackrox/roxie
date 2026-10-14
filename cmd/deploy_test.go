@@ -364,6 +364,42 @@ func TestValidateImageRegistry(t *testing.T) {
 	}
 }
 
+func TestAssembleConfigForCommand(t *testing.T) {
+	// Isolate the user config lookup so it cannot pick up a real file on disk.
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("HOME", tmpDir) // For non-Unix systems.
+
+	t.Run("applies defaults when no base config is provided", func(t *testing.T) {
+		config, err := assembleConfigForCommand(nil, deployer.Config{}, true)
+		require.NoError(t, err)
+		assert.Equal(t, constants.DefaultRegistry, config.Roxie.ImageRegistry)
+	})
+
+	t.Run("applies defaults even when base config (e.g. cluster manifest) omits them", func(t *testing.T) {
+		// Simulate a manifest stored by an older roxie that predates the
+		// imageRegistry field: ImageRegistry is empty. Defaults must still apply
+		// so an empty registry is not treated as a custom registry.
+		base := &deployer.Config{
+			Roxie: deployer.RoxieConfig{Version: "4.5.0"},
+		}
+		config, err := assembleConfigForCommand(base, deployer.Config{}, true)
+		require.NoError(t, err)
+		assert.Equal(t, constants.DefaultRegistry, config.Roxie.ImageRegistry)
+		// Values present in the base config are preserved.
+		assert.Equal(t, imagetag.MainTag("4.5.0"), config.Roxie.Version)
+	})
+
+	t.Run("base config overrides defaults", func(t *testing.T) {
+		base := &deployer.Config{
+			Roxie: deployer.RoxieConfig{ImageRegistry: "example.com/custom"},
+		}
+		config, err := assembleConfigForCommand(base, deployer.Config{}, true)
+		require.NoError(t, err)
+		assert.Equal(t, "example.com/custom", config.Roxie.ImageRegistry)
+	})
+}
+
 func TestApplyUserDefaults(t *testing.T) {
 	tests := []struct {
 		name     string
