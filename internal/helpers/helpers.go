@@ -1,13 +1,17 @@
 package helpers
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"reflect"
+	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	log "github.com/stackrox/roxie/internal/logger"
 )
 
 // RunCommandWithOutput executes a command and captures stdout/stderr
@@ -149,4 +153,17 @@ func IsNil(i interface{}) bool {
 		return reflect.ValueOf(i).IsNil()
 	}
 	return false
+}
+
+// Wait for user confirmation
+func WaitForConfirmation(f string, a ...any) (bool, error) {
+	reader := bufio.NewReader(os.Stdin)
+	prompt := fmt.Sprintf(f, a...)
+	log.Warningf("%s [y/N]", prompt)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "y" || response == "yes", nil
 }
