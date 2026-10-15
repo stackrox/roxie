@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"reflect"
@@ -11,7 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	log "github.com/stackrox/roxie/internal/logger"
+	"github.com/fatih/color"
 )
 
 // RunCommandWithOutput executes a command and captures stdout/stderr
@@ -157,11 +158,14 @@ func IsNil(i interface{}) bool {
 
 // Wait for user confirmation
 func WaitForConfirmation(f string, a ...any) (bool, error) {
+	yellow := color.New(color.FgYellow, color.Bold)
 	reader := bufio.NewReader(os.Stdin)
 	prompt := fmt.Sprintf(f, a...)
-	log.Warningf("%s [y/N]", prompt)
+	yellow.Printf("%s [y/N]: ", prompt)
 	response, err := reader.ReadString('\n')
-	if err != nil {
+	if err == io.EOF {
+		return false, nil
+	} else if err != nil {
 		return false, err
 	}
 	response = strings.ToLower(strings.TrimSpace(response))
