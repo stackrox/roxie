@@ -9,17 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConfigure_DoesNotBakeVersion_ResolvesAtReadTime(t *testing.T) {
+// With nothing but roxie.version set, the operator versions resolve to it.
+func TestVersionResolvesFromRoxieVersion(t *testing.T) {
 	cfg := Config{
 		Roxie: RoxieConfig{Version: "4.11.1"},
 	}
-	err := cfg.Operator.Configure(&cfg.Roxie)
-	require.NoError(t, err)
-
-	// Configure must not bake roxie.version into operator.version.
-	assert.Empty(t, cfg.Operator.Version)
-
-	// The version still resolves lazily via the accessors.
 	assert.Equal(t, imagetag.MainTag("4.11.1"), cfg.CentralVersion())
 	assert.Equal(t, imagetag.MainTag("4.11.1"), cfg.SecuredClusterVersion())
 }
@@ -30,14 +24,27 @@ func TestExplicitOperatorVersionHonoredOverRoxieVersion(t *testing.T) {
 		Roxie:    RoxieConfig{Version: "5.1.0-rcd", ImageRegistry: constants.DefaultRegistry},
 		Operator: OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "5.1.0"}},
 	}
-	// configureConfig runs this before building operator instances.
-	require.NoError(t, cfg.Operator.Configure(&cfg.Roxie))
 
 	assert.Equal(t, imagetag.MainTag("5.1.0"), cfg.CentralVersion())
 	assert.Equal(t, imagetag.MainTag("5.1.0"), cfg.SecuredClusterVersion())
 
 	inst := cfg.NewestOperatorInstance()
 	assert.Equal(t, constants.DefaultRegistry+"/stackrox-operator-bundle:v5.1.0", inst.BundleImage())
+}
+
+// KonfluxImages must resolve from roxie.konfluxImages when not set at the
+// operator or per-component level.
+func TestKonfluxImagesResolveFromRoxie(t *testing.T) {
+	konflux := true
+	cfg := Config{
+		Roxie:    RoxieConfig{Version: "4.8.0", KonfluxImages: &konflux},
+		Operator: OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "4.8.0"}},
+	}
+
+	instances, _, err := cfg.OperatorInstances()
+	require.NoError(t, err)
+	require.Len(t, instances, 1)
+	assert.True(t, instances[0].KonfluxImagesEnabled())
 }
 
 func TestVersions_DefaultToRoxieVersion(t *testing.T) {

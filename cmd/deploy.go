@@ -462,13 +462,6 @@ func configureConfig(components component.Component, deploySettings *deployer.Co
 		log.Warning("You are deploying SecuredCluster to a local cluster, it is recommended to specify a resource profile (or --resources=auto)")
 	}
 
-	// We need to do this regardless of whether the operator is deployed or not, because
-	// this includes the transformation of StackRox main image tags to semver compatible versions,
-	// which we will make use of later for checking version constraints.
-	if err := deploySettings.Operator.Configure(&deploySettings.Roxie); err != nil {
-		return fmt.Errorf("configuring operator configuration: %w", err)
-	}
-
 	if components.IncludesCentral() {
 		if err := deploySettings.Central.ConfigureSpec(&deploySettings.Roxie); err != nil {
 			return fmt.Errorf("configuring Central spec: %w", err)

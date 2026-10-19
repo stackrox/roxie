@@ -167,14 +167,6 @@ func (c *OperatorConfig) DeployViaOlmEnabled() bool {
 	return c.DeployViaOlm != nil && *c.DeployViaOlm
 }
 
-// Configure applies roxie-level Konflux-image defaults to the operator configuration.
-func (c *OperatorConfig) Configure(roxieConfig *RoxieConfig) error {
-	if c.KonfluxImages == nil {
-		c.KonfluxImages = roxieConfig.KonfluxImages
-	}
-	return nil
-}
-
 // WaitConfig describes how to wait for a component to become ready.
 type WaitConfig struct {
 	Namespace      string

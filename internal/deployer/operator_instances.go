@@ -119,13 +119,17 @@ func (c *Config) OperatorInstances() ([]OperatorInstanceConfig, bool, error) {
 	}, false, err
 }
 
-// resolveKonfluxImages returns the effective KonfluxImages setting for a per-component
-// operator config, falling back to Operator.KonfluxImages if not set at the component level.
+// resolveKonfluxImages returns the effective KonfluxImages setting for an operator
+// instance. Resolution order: the per-component value, then operator.konfluxImages,
+// then roxie.konfluxImages.
 func (c *Config) resolveKonfluxImages(instanceCfg *OperatorInstanceConfig) *bool {
 	if instanceCfg.KonfluxImagesSet() {
 		return instanceCfg.KonfluxImages
 	}
-	return c.Operator.KonfluxImages
+	if c.Operator.KonfluxImagesSet() {
+		return c.Operator.KonfluxImages
+	}
+	return c.Roxie.KonfluxImages
 }
 
 // NewestOperatorInstance returns the operator instance with the highest version.
