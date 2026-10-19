@@ -9,16 +9,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConfigure_PropagatesRoxieVersion(t *testing.T) {
+func TestConfigure_DoesNotBakeVersion_ResolvesAtReadTime(t *testing.T) {
 	cfg := Config{
 		Roxie: RoxieConfig{Version: "4.11.1"},
 	}
 	err := cfg.Operator.Configure(&cfg.Roxie)
 	require.NoError(t, err)
 
-	assert.Equal(t, imagetag.MainTag("4.11.1"), cfg.Operator.Version)
+	// Configure must not bake roxie.version into operator.version.
+	assert.Empty(t, cfg.Operator.Version)
+
+	// The version still resolves lazily via the accessors.
 	assert.Equal(t, imagetag.MainTag("4.11.1"), cfg.CentralVersion())
 	assert.Equal(t, imagetag.MainTag("4.11.1"), cfg.SecuredClusterVersion())
+}
+
+// An explicit operator.version must take precedence over roxie.version.
+func TestExplicitOperatorVersionHonoredOverRoxieVersion(t *testing.T) {
+	cfg := Config{
+		Roxie:    RoxieConfig{Version: "5.1.0-rcd", ImageRegistry: constants.DefaultRegistry},
+		Operator: OperatorConfig{OperatorInstanceConfig: OperatorInstanceConfig{Version: "5.1.0"}},
+	}
+	// configureConfig runs this before building operator instances.
+	require.NoError(t, cfg.Operator.Configure(&cfg.Roxie))
+
+	assert.Equal(t, imagetag.MainTag("5.1.0"), cfg.CentralVersion())
+	assert.Equal(t, imagetag.MainTag("5.1.0"), cfg.SecuredClusterVersion())
+
+	inst := cfg.NewestOperatorInstance()
+	assert.Equal(t, constants.DefaultRegistry+"/stackrox-operator-bundle:v5.1.0", inst.BundleImage())
 }
 
 func TestVersions_DefaultToRoxieVersion(t *testing.T) {

@@ -167,9 +167,8 @@ func (c *OperatorConfig) DeployViaOlmEnabled() bool {
 	return c.DeployViaOlm != nil && *c.DeployViaOlm
 }
 
-// Configure derives the operator version from the roxie configuration.
+// Configure applies roxie-level Konflux-image defaults to the operator configuration.
 func (c *OperatorConfig) Configure(roxieConfig *RoxieConfig) error {
-	c.Version = roxieConfig.Version
 	if c.KonfluxImages == nil {
 		c.KonfluxImages = roxieConfig.KonfluxImages
 	}

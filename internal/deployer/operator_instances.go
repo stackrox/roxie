@@ -31,21 +31,27 @@ var AllOperatorNamespaces = []string{
 }
 
 // CentralVersion returns the main image tag for Central.
-// Uses central.operator.version if set, otherwise falls back to operator.version.
+// Resolution order: central.operator.version, then operator.version, then roxie.version.
 func (c *Config) CentralVersion() imagetag.MainTag {
 	if c.Central.Operator.Version != "" {
 		return c.Central.Operator.Version
 	}
-	return c.Operator.Version
+	if c.Operator.Version != "" {
+		return c.Operator.Version
+	}
+	return c.Roxie.Version
 }
 
 // SecuredClusterVersion returns the main image tag for SecuredCluster.
-// Uses securedCluster.operator.version if set, otherwise falls back to operator.version.
+// Resolution order: securedCluster.operator.version, then operator.version, then roxie.version.
 func (c *Config) SecuredClusterVersion() imagetag.MainTag {
 	if c.SecuredCluster.Operator.Version != "" {
 		return c.SecuredCluster.Operator.Version
 	}
-	return c.Operator.Version
+	if c.Operator.Version != "" {
+		return c.Operator.Version
+	}
+	return c.Roxie.Version
 }
 
 // HasMixedVersions reports whether Central and SecuredCluster use different operator versions.
