@@ -53,6 +53,33 @@ func (c *Config) DeepCopy() (*Config, error) {
 	return &copy, nil
 }
 
+// DropBakedOperatorDefaults removes operator-level values that older roxie
+// versions baked into the persisted manifest by copying them verbatim from the
+// roxie section (a now-removed "Configure" step set operator.version =
+// roxie.version unconditionally, and operator.konfluxImages likewise). Such a
+// baked value is indistinguishable from the roxie value, so when the two are
+// equal we drop the operator-level one and let it re-resolve from the roxie
+// section (e.g. so a later --tag takes effect). A value that differs was set
+// deliberately and is preserved.
+//
+// This should be called on a Config loaded from the cluster manifest, before
+// command-line overrides are merged on top.
+func (c *Config) DropBakedOperatorDefaults() {
+	if c.Operator.Version == c.Roxie.Version {
+		c.Operator.Version = ""
+	}
+	if boolPtrEqual(c.Operator.KonfluxImages, c.Roxie.KonfluxImages) {
+		c.Operator.KonfluxImages = nil
+	}
+}
+
+func boolPtrEqual(a, b *bool) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
 // RoxieConfig holds roxie-level settings such as version and feature flags.
 type RoxieConfig struct {
 	Version       imagetag.MainTag  `yaml:"version,omitempty"`
@@ -165,15 +192,6 @@ func (c *OperatorConfig) DeployViaOlmSet() bool {
 
 func (c *OperatorConfig) DeployViaOlmEnabled() bool {
 	return c.DeployViaOlm != nil && *c.DeployViaOlm
-}
-
-// Configure derives the operator version from the roxie configuration.
-func (c *OperatorConfig) Configure(roxieConfig *RoxieConfig) error {
-	c.Version = roxieConfig.Version
-	if c.KonfluxImages == nil {
-		c.KonfluxImages = roxieConfig.KonfluxImages
-	}
-	return nil
 }
 
 // WaitConfig describes how to wait for a component to become ready.

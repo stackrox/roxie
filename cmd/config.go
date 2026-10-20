@@ -14,6 +14,11 @@ func assembleConfigForCommand(configBase *deployer.Config, configFromArgs deploy
 		config = deployer.DefaultConfig()
 	} else {
 		config = *configBase
+		// Neutralize operator-level values that older roxie baked into the
+		// persisted manifest, so they re-resolve from the roxie section (and
+		// later overrides take effect). Only meaningful for a loaded manifest,
+		// and must happen before user config and args are merged on top.
+		config.DropBakedOperatorDefaults()
 	}
 
 	// Apply user config on top (overriding defaults).
