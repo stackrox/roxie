@@ -15,7 +15,7 @@ import (
 	"github.com/stackrox/roxie/internal/manifest"
 )
 
-func newTeardownCmd(settings *deployer.Config) *cobra.Command {
+func newTeardownCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:       "teardown [component]",
 		Short:     "Teardown ACS components",
@@ -25,17 +25,9 @@ func newTeardownCmd(settings *deployer.Config) *cobra.Command {
 		RunE:      runTeardown,
 	}
 
-	registerFlag(cmd, settings, "single-namespace", "Deploy all components in a single namespace ('stackrox')",
-		withNoOptDefVal("true"),
-		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			// We do not support --single-namespace=false as of now.
-			if val {
-				config.Central.Namespace = sharedNamespace
-				config.SecuredCluster.Namespace = sharedNamespace
-			}
-			return nil
-		}),
-	)
+	// Accepted for backwards compatibility but ignored — teardown now discovers namespaces from the cluster.
+	cmd.Flags().Bool("single-namespace", false, "Deprecated: teardown discovers namespaces automatically")
+	_ = cmd.Flags().MarkDeprecated("single-namespace", "teardown now discovers namespaces automatically")
 
 	return cmd
 }
@@ -60,19 +52,18 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	var clusterConfig *deployer.Config
-	clusterManifest, err := manifest.LoadManifestSecret(ctx)
+	// Load manifest from cluster for add-on config. Namespaces are discovered
+	// directly from the cluster, but add-on definitions live in the Central
+	// config and are not discoverable — we need the manifest to know which
+	// add-ons were deployed so we can tear them down.
+	var config deployer.Config
+	m, err := manifest.LoadManifestSecret(ctx)
 	if errors.Is(err, k8s.ErrResourceNotFound) {
 		log.Infof("No roxie manifest found in cluster, proceeding without it")
 	} else if err != nil {
 		log.Warningf("Failed to load manifest from cluster: %v", err)
 	} else {
-		clusterConfig = &clusterManifest.Config
-	}
-
-	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
-	if err != nil {
-		return err
+		config = *m.Config.AsConfig()
 	}
 
 	d, err := deployer.New()
@@ -81,7 +72,7 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Cleanup()
 
-	d.SetConfig(deploySettings)
+	d.SetConfig(config)
 
 	if err := d.Teardown(ctx, components); err != nil {
 		return fmt.Errorf("teardown failed: %w", err)
