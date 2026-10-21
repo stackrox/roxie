@@ -20,7 +20,6 @@ import (
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagetag"
-	"github.com/stackrox/roxie/internal/k8s"
 	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
 	"github.com/stackrox/roxie/internal/roxieenv"
@@ -235,12 +234,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Cluster-config retrieval happens before the full config (and thus the configured deploy
-	// wait timeouts) is assembled, so give it its own short bounded context.
-	setupCtx, setupCancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer setupCancel()
-
-	clusterConfig := retrieveClusterConfigForComponents(setupCtx, components)
+	clusterConfig := new(deployer.DefaultConfig())
 
 	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
 	if err != nil {
@@ -344,20 +338,21 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		d.WaitForCentral(5 * time.Minute)
 	}
 
-	if !dryRun {
+	// The on-cluster manifest is lifecylce-aligned with Central.
+	if components.IncludesCentral() {
 		roxieEnv := roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo())
 		m := manifest.RoxieManifest{
 			RoxieEnvironment: roxieEnv,
-			Config:           deploySettings,
+			Config:           manifest.FromConfig(deploySettings),
 		}
 		if err := manifest.CreateManifestSecretOnCluster(ctx, m); err != nil {
 			log.Warningf("Failed to save roxie manifest: %v", err)
 		}
-	}
 
-	if components.IncludesCentral() && envrc == "" {
-		if err := spawnSubshellForDeployerEnv(deploySettings.Roxie, d); err != nil {
-			return fmt.Errorf("failed to spawn subshell: %w", err)
+		if envrc == "" {
+			if err := spawnSubshellForDeployerEnv(deploySettings.Roxie, d); err != nil {
+				return fmt.Errorf("failed to spawn subshell: %w", err)
+			}
 		}
 	}
 
@@ -400,30 +395,6 @@ func validateContainerizedCredentials(registry string, clusterType types.Cluster
 		return fmt.Errorf("containerized mode requires /kubeconfig file: %w", err)
 	}
 	return nil
-}
-
-func retrieveClusterConfigForComponents(
-	ctx context.Context,
-	components component.Component,
-) *deployer.Config {
-	clusterManifest, err := manifest.LoadManifestSecret(ctx)
-	if err != nil {
-		if errors.Is(err, k8s.ErrResourceNotFound) {
-			log.Dim("No existing manifest found on cluster, starting from defaults")
-		} else {
-			log.Warningf("Failed to load manifest from cluster: %v", err)
-		}
-		return nil // Let's try to continue without manifest
-	}
-
-	if components == component.SecuredCluster && clusterManifest.Config.SecuredCluster.Spec != nil {
-		// Reusing these fields from the config stored on the cluster would cause problems
-		// during repeating sensor deploy & teardown cycles.
-		delete(clusterManifest.Config.SecuredCluster.Spec, "clusterName")
-		delete(clusterManifest.Config.SecuredCluster.Spec, "centralEndpoint")
-	}
-
-	return &clusterManifest.Config
 }
 
 func configureConfig(components component.Component, deploySettings *deployer.Config) error {
