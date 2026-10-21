@@ -37,7 +37,7 @@ func TestCreateAndLoadManifest_Integration(t *testing.T) {
 			RoxEndpoint:      "localhost:8443",
 			RoxUsername:      "admin",
 		},
-		Config: deployer.Config{
+		Config: RoxieManifestConfig{
 			Central: deployer.CentralConfig{
 				Namespace: "acs-central",
 			},
