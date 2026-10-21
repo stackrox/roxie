@@ -79,7 +79,7 @@ func runShell(args []string) error {
 	log.Dim("roxie manifest loaded")
 	configBase := m.Config
 
-	config, err := assembleConfigForCommand(&configBase, deploySettingsFromArgs, skipUserConfig)
+	config, err := assembleConfigForCommand(configBase.AsConfig(), deploySettingsFromArgs, skipUserConfig)
 	if err != nil {
 		return err
 	}
