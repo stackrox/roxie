@@ -674,8 +674,9 @@ func (d *Deployer) SetEnvrcFile(path string) {
 }
 
 func (d *Deployer) discoverCRNamespaces(ctx context.Context, crType, crName string) ([]string, error) {
+	jsonpathExpr := fmt.Sprintf(`{.items[?(@.metadata.name=="%s")].metadata.namespace}`, crName)
 	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
-		Args:        []string{"get", crType, crName, "-A", "-o", "jsonpath={.items[*].metadata.namespace}"},
+		Args:        []string{"get", crType, "-A", "-o", "jsonpath=" + jsonpathExpr},
 		MaxAttempts: 1,
 	})
 	if err != nil {
