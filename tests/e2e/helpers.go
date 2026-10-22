@@ -76,7 +76,9 @@ func teardownAllDeployments() error {
 	defer cancel()
 
 	// Teardown standard deployments
-	cmd := exec.CommandContext(ctx, roxieBinary, "teardown", "--skip-user-config")
+	// Teardown "both" components to keep operator running.
+	// This will be improved once the automatic discovery for teardown lands.
+	cmd := exec.CommandContext(ctx, roxieBinary, "teardown", "--skip-user-config", "both")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
