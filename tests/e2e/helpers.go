@@ -186,6 +186,8 @@ func verifyNamespaceExists(t *testing.T, namespace string) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Namespace %s does not exist", namespace)
 	}
+
+	t.Logf("✓ Namespace %s exists", namespace)
 }
 
 func verifyNamespaceHasLabel(t *testing.T, namespace, key, value string) {
