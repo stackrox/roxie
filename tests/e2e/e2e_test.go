@@ -58,6 +58,7 @@ func lookupLatestTag() (string, error) {
 }
 
 func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
+	ensureCleanCluster(t)
 	dumpClusterStateOnFailure(t)
 
 	// Create temporary envrc file.
@@ -74,11 +75,4 @@ func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
 
 	verifyCentralInstalled(t, sharedNamespace)
 	verifySecuredClusterInstalled(t, sharedNamespace)
-
-	t.Log("=== Tearing down both components in single namespace ===")
-	args = []string{roxieBinary, "teardown", "--skip-user-config", "--single-namespace"}
-	runCommand(t, teardownTimeout, nil, args...)
-
-	verifyCentralNotInstalled(t, sharedNamespace)
-	verifySecuredClusterNotInstalled(t, sharedNamespace)
 }

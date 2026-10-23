@@ -13,6 +13,9 @@ on:
         required: false
         type: string
         default: ''
+      lifespan:
+        type: string
+        default: '3h'
     outputs:
       cluster-name:
         description: "Name of the created cluster"
@@ -29,6 +32,6 @@ jobs:
           flavor: ${{ inputs.flavor }}
           name: ${{ inputs.cluster-name }}
           args: ${{ inputs.args }}
-          lifespan: "2h"
+          lifespan: ${{ inputs.lifespan }}
           wait: true
           token: ${{ secrets.INFRA_CI_TOKEN }}

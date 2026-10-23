@@ -34,6 +34,7 @@ jobs:
     with:
       cluster-name: infra-roxie-pr-${{ github.event.pull_request.number }}-gke
       flavor: gke-default
+      lifespan: 2h
       args: machine-type=e2-standard-4,nodes=3,gcp-image-type=ubuntu_containerd
     secrets: inherit
 
@@ -44,6 +45,7 @@ jobs:
     with:
       cluster-name: infra-roxie-pr-${{ github.event.pull_request.number }}-openshift
       flavor: ocp-4
+      lifespan: 3h
       args: master-node-type=e2-standard-4,worker-node-type=e2-standard-8,master-node-count=3,worker-node-count=3
     secrets: inherit
 
