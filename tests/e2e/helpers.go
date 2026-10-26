@@ -54,22 +54,22 @@ func ensureCleanCluster(t *testing.T) {
 	t.Cleanup(func() {
 		assert.NoError(t, teardownAllDeployments(), "Failed to tear down deployments")
 
-		assert.False(t, doesDeploymentExist(t, centralNamespace, "central"),
-			"Central should not exist in %s after teardown", centralNamespace)
-		assert.False(t, doesDeploymentExist(t, sharedNamespace, "central"),
-			"Central should not exist in %s after teardown", sharedNamespace)
-
-		assert.False(t, doesDeploymentExist(t, sensorNamespace, "sensor"),
-			"SecuredCluster should not exist in %s after teardown", sensorNamespace)
-		assert.False(t, doesDeploymentExist(t, sharedNamespace, "sensor"),
-			"SecuredCluster should not exist in %s after teardown", sharedNamespace)
-
-		assert.False(t, doesDeploymentExist(t, operatorSystemNamespace, operatorDeploymentName),
-			"Operator should not exist in %s after teardown", operatorSystemNamespace)
-		assert.False(t, doesDeploymentExist(t, operatorCentralNamespace, operatorDeploymentName),
-			"Operator should not exist in %s after teardown", operatorCentralNamespace)
-		assert.False(t, doesDeploymentExist(t, operatorSensorNamespace, operatorDeploymentName),
-			"Operator should not exist in %s after teardown", operatorSensorNamespace)
+		for _, tc := range []struct {
+			component  string
+			namespace  string
+			deployment string
+		}{
+			{"Central", centralNamespace, "central"},
+			{"Central", sharedNamespace, "central"},
+			{"SecuredCluster", sensorNamespace, "sensor"},
+			{"SecuredCluster", sharedNamespace, "sensor"},
+			{"Operator", operatorSystemNamespace, operatorDeploymentName},
+			{"Operator", operatorCentralNamespace, operatorDeploymentName},
+			{"Operator", operatorSensorNamespace, operatorDeploymentName},
+		} {
+			assert.False(t, doesDeploymentExist(t, tc.namespace, tc.deployment),
+				"%s should not exist in %s after teardown", tc.component, tc.namespace)
+		}
 	})
 }
 
