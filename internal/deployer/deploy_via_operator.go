@@ -22,6 +22,10 @@ import (
 	"github.com/stackrox/roxie/internal/types"
 )
 
+const (
+	loadBalancerWaitTime = 10 * time.Minute
+)
+
 var (
 	smallScale = map[string]interface{}{
 		"autoScaling": "Enabled",
@@ -614,11 +618,11 @@ func (d *Deployer) waitForComponentReady(ctx context.Context, comp component.Com
 
 // waitForLoadBalancer waits for a LoadBalancer service to get an external IP.
 // Returns the endpoint as "host:port", with no https:// prefix.
-func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceName string, timeout int) (string, error) {
-	log.Infof("⏳ Waiting for LoadBalancer %s to get external IP...", serviceName)
+func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceName string, waitTime time.Duration) (string, error) {
+	log.Infof("⏳ Waiting %s for LoadBalancer %s to get external IP...", waitTime, serviceName)
 
 	start := time.Now()
-	for time.Since(start) < time.Duration(timeout)*time.Second {
+	for time.Since(start) < waitTime {
 		result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 			Args: []string{"get", "svc", serviceName, "-n", namespace, "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}"},
 		})
@@ -768,7 +772,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 		// Start port-forward for CLI tool access via localhost:8443
 		serviceName := "central"
 		if exposure == types.ExposureLoadBalancer {
-			_, err := d.waitForLoadBalancer(ctx, d.config.Central.Namespace, "central-loadbalancer", 300)
+			_, err := d.waitForLoadBalancer(ctx, d.config.Central.Namespace, "central-loadbalancer", loadBalancerWaitTime)
 			if err != nil {
 				log.Warningf("LoadBalancer not ready: %v", err)
 			} else {
@@ -791,7 +795,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 			d.centralEndpoint = endpoint
 		}
 	} else if exposure == types.ExposureLoadBalancer {
-		endpoint, err := d.waitForLoadBalancer(ctx, d.config.Central.Namespace, "central-loadbalancer", 300)
+		endpoint, err := d.waitForLoadBalancer(ctx, d.config.Central.Namespace, "central-loadbalancer", loadBalancerWaitTime)
 		if err != nil {
 			return fmt.Errorf("failed to get LoadBalancer endpoint: %w", err)
 		}

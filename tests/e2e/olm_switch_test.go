@@ -38,11 +38,8 @@ func verifyOperatorMode(t *testing.T, expectOLM bool) {
 
 // TestOLMToNonOLMSwitch tests switching from OLM operator to non-OLM operator
 func TestOLMToNonOLMSwitch(t *testing.T) {
-	dumpClusterStateOnFailure(t)
-
-	if os.Getenv("SKIP_OLM_TESTS") != "" {
-		t.Skip("SKIP_OLM_TESTS is set")
-	}
+	skipUnlessOLM(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
@@ -67,7 +64,9 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 
 	// Step 2: Deploy central again without OLM (should switch modes)
 	t.Log("=== Step 2: Redeploy central without OLM (triggering mode switch) ===")
-	args = append([]string{roxieBinary, "deploy", "central", "--envrc", envrcPath}, commonDeployArgs...)
+	// Note: we need to *explicitly* set OLM because of an pre-existing issue where the on-cluster manifest influences
+	// the effective deployment configuration on a re-deployment.
+	args = append([]string{roxieBinary, "deploy", "central", "--olm=false", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator switched to non-OLM mode
@@ -77,22 +76,12 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 
 	// Verify central namespace still exists
 	verifyNamespaceExists(t, centralNamespace)
-
-	// Cleanup
-	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
-	runCommand(t, teardownTimeout, nil, teardownArgs...)
-
-	verifyCentralNotInstalled(t, centralNamespace)
 }
 
 // TestNonOLMToOLMSwitch tests switching from non-OLM operator to OLM operator
 func TestNonOLMToOLMSwitch(t *testing.T) {
-	dumpClusterStateOnFailure(t)
-
-	if os.Getenv("SKIP_OLM_TESTS") != "" {
-		t.Skip("SKIP_OLM_TESTS is set")
-	}
+	skipUnlessOLM(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
@@ -104,7 +93,9 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 
 	// Step 1: Deploy central without OLM (non-OLM operator)
 	t.Log("=== Step 1: Deploy central with non-OLM operator ===")
-	args := append([]string{roxieBinary, "deploy", "central", "--envrc", envrcPath}, commonDeployArgs...)
+	// Note: we need to *explicitly* set OLM because of an pre-existing issue where the on-cluster manifest influences
+	// the effective deployment configuration on a re-deployment.
+	args := append([]string{roxieBinary, "deploy", "central", "--olm=false", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator is in non-OLM mode
@@ -127,23 +118,13 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 
 	// Verify central namespace still exists
 	verifyNamespaceExists(t, centralNamespace)
-
-	// Cleanup
-	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
-	runCommand(t, teardownTimeout, nil, teardownArgs...)
-
-	verifyCentralNotInstalled(t, centralNamespace)
 }
 
 // TestOLMOperatorVersionUpgrade tests that OLM operator version mismatches trigger teardown and redeploy,
 // and that operand tag overrides propagate RELATED_IMAGE_* env vars to the OLM Subscription.
 func TestOLMOperatorVersionUpgrade(t *testing.T) {
-	dumpClusterStateOnFailure(t)
-
-	if os.Getenv("SKIP_OLM_TESTS") != "" {
-		t.Skip("SKIP_OLM_TESTS is set")
-	}
+	skipUnlessOLM(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Look up two release tags different from the main tag. We use one as a blanket
 	// operand tag override and the other as a per-image override for central-db.
@@ -210,22 +191,12 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	// Note: In a real version upgrade test, we would set a different MAIN_IMAGE_TAG
 	// and verify that the operator was torn down and redeployed with the new version.
 	// For now, this test validates the basic flow.
-
-	// Cleanup
-	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
-	runCommand(t, teardownTimeout, nil, teardownArgs...)
-
-	verifyCentralNotInstalled(t, centralNamespace)
 }
 
 // TestSecuredClusterWithOLMSwitch tests that secured-cluster deployment also respects OLM mode switches
 func TestSecuredClusterWithOLMSwitch(t *testing.T) {
-	dumpClusterStateOnFailure(t)
-
-	if os.Getenv("SKIP_OLM_TESTS") != "" {
-		t.Skip("SKIP_OLM_TESTS is set")
-	}
+	skipUnlessOLM(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
@@ -260,20 +231,12 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Step 3: Switch to non-OLM by redeploying secured-cluster without --olm
 	t.Log("=== Step 3: Redeploy secured-cluster without OLM (triggering mode switch) ===")
-	// Note: we need to *explicitly* disable OLM because of an pre-existing issue where the on-cluster manifest influences
+	// Note: we need to *explicitly* set OLM because of an pre-existing issue where the on-cluster manifest influences
 	// the effective deployment configuration on a re-deployment.
-	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster", "--olm=false"}, commonDeployArgs...)
+	args = append([]string{roxieBinary, "deploy", "--early-readiness", "--olm=false", "secured-cluster"}, commonDeployArgs...)
 	runCommand(t, deployTimeout, envrcEnv, args...)
 
 	// Verify operator switched to non-OLM mode
 	verifyOperatorMode(t, false)
 	verifyNamespaceExists(t, sensorNamespace)
-
-	// Cleanup
-	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "both"}
-	runCommand(t, teardownTimeout, nil, teardownArgs...)
-
-	verifyCentralNotInstalled(t, centralNamespace)
-	verifySecuredClusterNotInstalled(t, sensorNamespace)
 }

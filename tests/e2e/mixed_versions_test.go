@@ -50,7 +50,7 @@ func lookupTwoReleasedTags(t *testing.T) (string, string) {
 // TestMixedVersionOperatorDeploy tests deploying two operators with different versions
 // (mixed-version mode) and then switching back to a single operator.
 func TestMixedVersionOperatorDeploy(t *testing.T) {
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	mainTag, centralTag := lookupTwoReleasedTags(t)
 
@@ -98,14 +98,5 @@ func TestMixedVersionOperatorDeploy(t *testing.T) {
 
 	verifyOperatorDeploymentExists(t, operatorCentralNamespace)
 	verifyOperatorDeploymentExists(t, operatorSensorNamespace)
-	verifyOperatorNotInNamespace(t, operatorSystemNamespace)
-
-	// Cleanup
-	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config"}
-	runCommand(t, teardownTimeout, nil, teardownArgs...)
-
-	verifyOperatorNotInNamespace(t, operatorCentralNamespace)
-	verifyOperatorNotInNamespace(t, operatorSensorNamespace)
 	verifyOperatorNotInNamespace(t, operatorSystemNamespace)
 }

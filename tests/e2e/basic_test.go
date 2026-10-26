@@ -18,7 +18,7 @@ import (
 
 // TestDeployBothSimple tests deploying both components together (simplest scenario)
 func TestDeployBothSimple(t *testing.T) {
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
@@ -41,22 +41,11 @@ func TestDeployBothSimple(t *testing.T) {
 	verifyNamespaceExists(t, sensorNamespace)
 	verifyNamespaceHasLabel(t, sensorNamespace, "app.kubernetes.io/managed-by", "roxie")
 
-	// Brief pause before cleanup
-	time.Sleep(5 * time.Second)
-
-	// Cleanup
-	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "both"}
-	runCommand(t, teardownTimeout, nil, teardownArgs...)
-
-	t.Log("Verifying components are removed")
-	verifyCentralNotInstalled(t, centralNamespace)
-	verifySecuredClusterNotInstalled(t, sensorNamespace)
 }
 
 // TestDetachedPortForwarding tests the detached port-forwarding mode for central.
 func TestDetachedPortForwarding(t *testing.T) {
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {
@@ -89,12 +78,14 @@ func TestDetachedPortForwarding(t *testing.T) {
 
 	testCentralAPI(t, endpoint, caCertFile)
 
+	// Verify port-forward cleanup by checking the port is free after teardown.
+	// This assertion depends on teardown having run, so we keep it explicit
+	// rather than relying on t.Cleanup ordering.
 	t.Log("=== Cleaning up ===")
 	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
 	runCommand(t, teardownTimeout, env, teardownArgs...)
 
-	// Verify port-forward cleanup by checking the port is free. We can't use
-	// kill(pid, 0) because CI containers often lack a proper init to reap
+	// We can't use kill(pid, 0) because CI containers often lack a proper init to reap
 	// zombies, causing the check to pass for dead processes. Binding to the
 	// port works because even zombies release their file descriptors.
 	assert.Eventually(t, func() bool {

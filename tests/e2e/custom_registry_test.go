@@ -14,7 +14,7 @@ import (
 // TestCentralDeployWithStackroxIORegistry verifies that roxie can deploy Central using
 // the public quay.io/stackrox-io registry instead of the default quay.io/rhacs-eng.
 func TestCentralDeployWithStackroxIORegistry(t *testing.T) {
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	const stackroxIORegistry = "quay.io/stackrox-io"
 
@@ -30,12 +30,6 @@ func TestCentralDeployWithStackroxIORegistry(t *testing.T) {
 	verifyCentralInstalled(t, centralNamespace)
 	verifyContainerImageRegistry(t, operatorSystemNamespace, operatorDeploymentName, "manager", stackroxIORegistry)
 	verifyContainerImageRegistry(t, centralNamespace, "central", "central", stackroxIORegistry)
-
-	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "all"}
-	runCommand(t, teardownTimeout, nil, teardownArgs...)
-
-	verifyCentralNotInstalled(t, centralNamespace)
 }
 
 // verifyContainerImageRegistry asserts that the given container's image in the

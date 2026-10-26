@@ -22,7 +22,7 @@ import (
 )
 
 func TestDeployWithCustomTLSCert(t *testing.T) {
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	const secretName = "custom-central-tls"
 
@@ -54,12 +54,6 @@ func TestDeployWithCustomTLSCert(t *testing.T) {
 
 	verifyCACertFileContainsCustomCA(t, env["ROX_CA_CERT_FILE"], caCertPEM)
 
-	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--single-namespace", "--skip-user-config", "both"}
-	runCommand(t, teardownTimeout, env, teardownArgs...)
-
-	verifyCentralNotInstalled(t, sharedNamespace)
-	verifySecuredClusterNotInstalled(t, sharedNamespace)
 }
 
 // generateCentralTLSCert creates a self-signed CA and a leaf certificate for

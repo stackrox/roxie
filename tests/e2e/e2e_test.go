@@ -58,7 +58,7 @@ func lookupLatestTag() (string, error) {
 }
 
 func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Create temporary envrc file.
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
@@ -74,11 +74,4 @@ func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
 
 	verifyCentralInstalled(t, sharedNamespace)
 	verifySecuredClusterInstalled(t, sharedNamespace)
-
-	t.Log("=== Tearing down both components in single namespace ===")
-	args = []string{roxieBinary, "teardown", "--skip-user-config", "--single-namespace"}
-	runCommand(t, teardownTimeout, nil, args...)
-
-	verifyCentralNotInstalled(t, sharedNamespace)
-	verifySecuredClusterNotInstalled(t, sharedNamespace)
 }

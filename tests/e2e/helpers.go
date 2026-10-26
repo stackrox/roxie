@@ -43,14 +43,46 @@ var (
 	roxieBinary = "roxie"
 )
 
+func registerClusterDumpAndCleanup(t *testing.T) {
+	t.Helper()
+	ensureCleanCluster(t)
+	dumpClusterStateOnFailure(t)
+}
+
+func ensureCleanCluster(t *testing.T) {
+	t.Helper()
+	t.Cleanup(func() {
+		assert.NoError(t, teardownAllDeployments(), "Failed to tear down deployments")
+
+		for _, tc := range []struct {
+			component  string
+			namespace  string
+			deployment string
+		}{
+			{"Central", centralNamespace, "central"},
+			{"Central", sharedNamespace, "central"},
+			{"SecuredCluster", sensorNamespace, "sensor"},
+			{"SecuredCluster", sharedNamespace, "sensor"},
+			{"Operator", operatorSystemNamespace, operatorDeploymentName},
+			{"Operator", operatorCentralNamespace, operatorDeploymentName},
+			{"Operator", operatorSensorNamespace, operatorDeploymentName},
+		} {
+			assert.False(t, doesDeploymentExist(t, tc.namespace, tc.deployment),
+				"%s should not exist in %s after teardown", tc.component, tc.namespace)
+		}
+	})
+}
+
 func teardownAllDeployments() error {
-	fmt.Println("=== Tearing down all deployments before running tests ===")
+	fmt.Println("=== Tearing down all deployments ===")
 
 	ctx, cancel := context.WithTimeout(context.Background(), teardownTimeout)
 	defer cancel()
 
 	// Teardown standard deployments
-	cmd := exec.CommandContext(ctx, roxieBinary, "teardown", "--skip-user-config")
+	// Teardown "both" components to keep operator running.
+	// This will be improved once the automatic discovery for teardown lands.
+	cmd := exec.CommandContext(ctx, roxieBinary, "teardown", "--skip-user-config", "both")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -69,6 +101,13 @@ func teardownAllDeployments() error {
 
 	fmt.Println("=== All deployments have been torn down ===")
 	return nil
+}
+
+func skipUnlessOLM(t *testing.T) {
+	t.Helper()
+	if os.Getenv("SKIP_OLM_TESTS") != "" {
+		t.Skip("SKIP_OLM_TESTS is set")
+	}
 }
 
 func requireBinary(name string) error {
@@ -153,6 +192,8 @@ func verifyNamespaceExists(t *testing.T, namespace string) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Namespace %s does not exist", namespace)
 	}
+
+	t.Logf("✓ Namespace %s exists", namespace)
 }
 
 func verifyNamespaceHasLabel(t *testing.T, namespace, key, value string) {
@@ -230,22 +271,6 @@ func verifySecuredClusterInstalled(t *testing.T, namespace string) {
 
 	if !doesDeploymentExist(t, namespace, "sensor") {
 		t.Fatalf("Secured cluster is not installed in namespace %s", namespace)
-	}
-}
-
-func verifyCentralNotInstalled(t *testing.T, namespace string) {
-	t.Helper()
-
-	if doesDeploymentExist(t, namespace, "central") {
-		t.Fatalf("Central is installed in namespace %s", namespace)
-	}
-}
-
-func verifySecuredClusterNotInstalled(t *testing.T, namespace string) {
-	t.Helper()
-
-	if doesDeploymentExist(t, namespace, "sensor") {
-		t.Fatalf("Secured cluster is installed in namespace %s", namespace)
 	}
 }
 
