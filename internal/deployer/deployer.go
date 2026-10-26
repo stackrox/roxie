@@ -3,11 +3,9 @@ package deployer
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -446,12 +444,7 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 	log.Infof("Starting teardown of %s", components)
 
 	if components.IncludesAddOns() {
-		enabledAddOns, err := d.ResolveEnabledAddOns()
-		if err != nil {
-			return fmt.Errorf("resolving enabled add-ons: %w", err)
-		}
-		slices.Reverse(enabledAddOns) // Tearing down in opposite order as deploying.
-		d.teardownAddOns(ctx, enabledAddOns)
+		d.teardownDiscoveredAddOns(ctx)
 	}
 
 	switch components {
@@ -498,19 +491,14 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 }
 
 func (d *Deployer) teardownCentral(ctx context.Context) error {
-	namespaces, err := d.discoverCRNamespaces(ctx, "central", centralCrName)
+	namespace, err := k8s.DiscoverCRNamespace(ctx, "central", centralCrName)
 	if err != nil {
 		return fmt.Errorf("discovering Central namespace: %w", err)
 	}
-	if len(namespaces) > 1 {
-		log.Errorf("Unexpected situation: Central seems to be installed in multiple namespaces: %s", strings.Join(namespaces, ", "))
-		return errors.New("cannot teardown multiple centrals")
-	}
-	if len(namespaces) == 0 {
+	if namespace == "" {
 		log.Infof("No Central CR found on cluster, skipping Central teardown")
 		return nil
 	}
-	namespace := namespaces[0]
 
 	log.Infof("🗑️  Tearing down central in namespace %s", namespace)
 
@@ -534,7 +522,7 @@ func (d *Deployer) teardownCentral(ctx context.Context) error {
 }
 
 func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
-	namespaces, err := d.discoverCRNamespaces(ctx, "securedcluster", securedClusterCrName)
+	namespaces, err := k8s.DiscoverCRNamespaces(ctx, "securedcluster", securedClusterCrName)
 	if err != nil {
 		return fmt.Errorf("discovering SecuredCluster namespaces: %w", err)
 	}
@@ -671,29 +659,6 @@ func generatePassword() string {
 
 func (d *Deployer) SetEnvrcFile(path string) {
 	d.envrcFile = path
-}
-
-func (d *Deployer) discoverCRNamespaces(ctx context.Context, crType, crName string) ([]string, error) {
-	jsonpathExpr := fmt.Sprintf(`{.items[?(@.metadata.name=="%s")].metadata.namespace}`, crName)
-	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
-		Args:        []string{"get", crType, "-A", "-o", "jsonpath=" + jsonpathExpr},
-		MaxAttempts: 1,
-	})
-	if err != nil {
-		stderr := strings.ToLower(result.Stderr)
-		if strings.Contains(stderr, "the server doesn't have a resource type") ||
-			strings.Contains(stderr, "not found") {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("discovering %s/%s: %w", crType, crName, err)
-	}
-	output := strings.TrimSpace(result.Stdout)
-	if output == "" {
-		return nil, nil
-	}
-	namespaces := strings.Fields(output)
-	log.Infof("Discovered %s/%s in namespace(s): %s", crType, crName, strings.Join(namespaces, ", "))
-	return namespaces, nil
 }
 
 func (d *Deployer) doesResourceExist(ctx context.Context, resourceType, resourceName, namespace string) bool {
