@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/stackrox/roxie/internal/helm"
+	"github.com/stackrox/roxie/internal/k8s"
 	log "github.com/stackrox/roxie/internal/logger"
 )
 
@@ -52,22 +54,36 @@ func (d *Deployer) deployAddOns(ctx context.Context, addOns []AddOn) error {
 	return nil
 }
 
-func (d *Deployer) teardownAddOns(ctx context.Context, addOns []AddOn) {
-	if len(addOns) == 0 {
+// teardownDiscoveredAddOns discovers add-on Helm releases deployed alongside
+// Central directly from the cluster and uninstalls them. Add-ons are
+// lifecycle-aligned with Central, so we locate the Central namespace and
+// uninstall every Helm release matching the roxie add-on prefix.
+func (d *Deployer) teardownDiscoveredAddOns(ctx context.Context) {
+	namespace, err := k8s.DiscoverCRNamespace(ctx, "central", centralCrName)
+	if err != nil {
+		log.Warningf("Could not discover Central namespace for add-on teardown: %v", err)
+		return
+	}
+	if namespace == "" {
+		log.Infof("No Central CR found on cluster, skipping add-on teardown")
 		return
 	}
 
-	log.Infof("Tearing down %d add-on(s)...", len(addOns))
+	releases, err := helm.ListByPrefix(ctx, addOnReleasePrefix, namespace)
+	if err != nil {
+		log.Warningf("Could not list add-on Helm releases in namespace %s: %v", namespace, err)
+		return
+	}
+	if len(releases) == 0 {
+		return
+	}
 
-	for _, addon := range addOns {
-		if err := addon.Teardown(ctx); err != nil {
-			if !addon.IsOptional() {
-				log.Errorf("Failed to tear down non-optional add-on %q: %v", addon.Name(), err)
-			} else {
-				log.Warningf("Failed to tear down optional add-on %q: %v", addon.Name(), err)
-			}
+	log.Infof("Tearing down %d add-on(s)...", len(releases))
+	for _, release := range releases {
+		if err := helm.Uninstall(ctx, release, namespace); err != nil {
+			log.Warningf("Failed to tear down add-on release %q: %v", release, err)
 		} else {
-			log.Successf("Add-on %q torn down", addon.Name())
+			log.Successf("Add-on release %q torn down", release)
 		}
 	}
 }
