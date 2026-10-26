@@ -58,24 +58,11 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	clusterConfig := new(deployer.DefaultConfig())
-	// A configured namespace restricts teardown to that namespace. Drop the built-in
-	// default namespaces, so that only explicit user configuration (user config, --set, ...)
-	// restricts teardown and roxie deployments are otherwise discovered cluster-wide.
-	clusterConfig.Central.Namespace = ""
-	clusterConfig.SecuredCluster.Namespace = ""
-	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
-	if err != nil {
-		return err
-	}
-
 	d, err := deployer.New()
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
 	}
 	defer d.Cleanup()
-
-	d.SetConfig(deploySettings)
 
 	if err := d.Teardown(ctx, components); err != nil {
 		return fmt.Errorf("teardown failed: %w", err)
