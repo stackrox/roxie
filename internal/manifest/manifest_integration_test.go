@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/k8s"
 	"github.com/stackrox/roxie/internal/types"
 	"github.com/stretchr/testify/assert"
@@ -29,6 +28,7 @@ func TestCreateAndLoadManifest_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
+	exposure := types.ExposureLoadBalancer
 	original := RoxieManifest{
 		RoxieEnvironment: types.RoxieEnvironment{
 			APIEndpoint:      "localhost:8443",
@@ -37,11 +37,7 @@ func TestCreateAndLoadManifest_Integration(t *testing.T) {
 			RoxEndpoint:      "localhost:8443",
 			RoxUsername:      "admin",
 		},
-		Config: RoxieManifestConfig{
-			Central: deployer.CentralConfig{
-				Namespace: "acs-central",
-			},
-		},
+		Exposure: &exposure,
 	}
 
 	err := CreateManifestSecretOnCluster(ctx, original)
