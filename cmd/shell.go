@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
@@ -70,9 +71,14 @@ func runShell(args []string) error {
 		return fmt.Errorf("failed to load roxie manifest: %w", err)
 	}
 	log.Dim("roxie manifest loaded")
-	configBase := m.Config
 
-	config, err := assembleConfigForCommand(configBase.AsConfig(), deploySettingsFromArgs, skipUserConfig)
+	// Seed the merge pipeline with the fields the manifest persists (HAProxy and
+	// Exposure), so they are overridable by user config and CLI args while still
+	// defaulting to what was deployed.
+	var base deployer.Config
+	base.Roxie.HAProxy = m.HAProxy
+	base.Central.Exposure = m.Exposure
+	config, err := assembleConfigForCommand(&base, deploySettingsFromArgs, skipUserConfig)
 	if err != nil {
 		return err
 	}
