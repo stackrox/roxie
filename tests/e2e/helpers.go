@@ -74,7 +74,7 @@ func ensureCleanCluster(t *testing.T) {
 }
 
 func teardownAllDeployments() error {
-	fmt.Println("=== Tearing down all deployments before running tests ===")
+	fmt.Println("=== Tearing down all deployments ===")
 
 	ctx, cancel := context.WithTimeout(context.Background(), teardownTimeout)
 	defer cancel()
