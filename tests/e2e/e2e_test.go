@@ -58,8 +58,7 @@ func lookupLatestTag() (string, error) {
 }
 
 func TestDeployBothComponentsTogetherInSingleNamespace(t *testing.T) {
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Create temporary envrc file.
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")

@@ -22,8 +22,7 @@ import (
 )
 
 func TestDeployWithCustomTLSCert(t *testing.T) {
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	const secretName = "custom-central-tls"
 

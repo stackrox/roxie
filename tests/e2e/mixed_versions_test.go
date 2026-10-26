@@ -50,8 +50,7 @@ func lookupTwoReleasedTags(t *testing.T) (string, string) {
 // TestMixedVersionOperatorDeploy tests deploying two operators with different versions
 // (mixed-version mode) and then switching back to a single operator.
 func TestMixedVersionOperatorDeploy(t *testing.T) {
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	mainTag, centralTag := lookupTwoReleasedTags(t)
 

@@ -14,8 +14,7 @@ import (
 // TestCentralDeployWithStackroxIORegistry verifies that roxie can deploy Central using
 // the public quay.io/stackrox-io registry instead of the default quay.io/rhacs-eng.
 func TestCentralDeployWithStackroxIORegistry(t *testing.T) {
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	const stackroxIORegistry = "quay.io/stackrox-io"
 

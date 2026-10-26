@@ -43,8 +43,12 @@ var (
 	roxieBinary = "roxie"
 )
 
-// Callers must register dumpClusterStateOnFailure after this function so that it runs before
-// teardown (LIFO) and can capture cluster state while resources still exist.
+func registerClusterDumpAndCleanup(t *testing.T) {
+	t.Helper()
+	ensureCleanCluster(t)
+	dumpClusterStateOnFailure(t)
+}
+
 func ensureCleanCluster(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {

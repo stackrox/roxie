@@ -39,8 +39,7 @@ func verifyOperatorMode(t *testing.T, expectOLM bool) {
 // TestOLMToNonOLMSwitch tests switching from OLM operator to non-OLM operator
 func TestOLMToNonOLMSwitch(t *testing.T) {
 	skipUnlessOLM(t)
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
@@ -82,8 +81,7 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 // TestNonOLMToOLMSwitch tests switching from non-OLM operator to OLM operator
 func TestNonOLMToOLMSwitch(t *testing.T) {
 	skipUnlessOLM(t)
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
@@ -126,8 +124,7 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 // and that operand tag overrides propagate RELATED_IMAGE_* env vars to the OLM Subscription.
 func TestOLMOperatorVersionUpgrade(t *testing.T) {
 	skipUnlessOLM(t)
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Look up two release tags different from the main tag. We use one as a blanket
 	// operand tag override and the other as a per-image override for central-db.
@@ -199,8 +196,7 @@ func TestOLMOperatorVersionUpgrade(t *testing.T) {
 // TestSecuredClusterWithOLMSwitch tests that secured-cluster deployment also respects OLM mode switches
 func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 	skipUnlessOLM(t)
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")

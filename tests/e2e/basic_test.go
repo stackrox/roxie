@@ -18,8 +18,7 @@ import (
 
 // TestDeployBothSimple tests deploying both components together (simplest scenario)
 func TestDeployBothSimple(t *testing.T) {
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	// Create temporary envrc file
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
@@ -46,8 +45,7 @@ func TestDeployBothSimple(t *testing.T) {
 
 // TestDetachedPortForwarding tests the detached port-forwarding mode for central.
 func TestDetachedPortForwarding(t *testing.T) {
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	envrcFile, err := os.CreateTemp(t.TempDir(), ".envrc.roxie-test-*")
 	if err != nil {

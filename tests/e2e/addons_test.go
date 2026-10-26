@@ -11,8 +11,7 @@ import (
 )
 
 func TestHelmChartAddOns(t *testing.T) {
-	ensureCleanCluster(t)
-	dumpClusterStateOnFailure(t)
+	registerClusterDumpAndCleanup(t)
 
 	configDir := t.TempDir()
 
