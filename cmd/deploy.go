@@ -357,15 +357,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	// The on-cluster manifest is lifecylce-aligned with Central.
 	if components.IncludesCentral() {
 		roxieEnv := roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo())
-		// The envrc shall not be persisted as part of the on-cluster manifest.
-		// Hence we zero it out here prior to applying the manifest to the cluster.
-		// This code can go once the on-cluster manifest has been reworked completely.
-		manifestConfig := deploySettings
-		manifestConfig.Roxie.Envrc = nil
-		m := manifest.RoxieManifest{
-			RoxieEnvironment: roxieEnv,
-			Config:           manifest.FromConfig(deploySettings),
-		}
+		m := manifest.NewManifest(roxieEnv, deploySettings)
 		if err := manifest.CreateManifestSecretOnCluster(ctx, m); err != nil {
 			log.Warningf("Failed to save roxie manifest: %v", err)
 		}
