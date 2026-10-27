@@ -52,7 +52,13 @@ Examples:
 
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to spawn after Central deployment")
 
-	cmd.Flags().StringVar(&envrc, "envrc", "", "Write environment to file instead of spawning sub-shell")
+	registerFlag(cmd, settings, "envrc", "Write environment to file instead of spawning sub-shell",
+		withApplyFn("file", func(config *deployer.Config, filename string) error {
+			config.Roxie.Envrc = new(filename)
+			return nil
+		}),
+	)
+
 	cmd.Flags().StringVar(&imagePreLoadCommand, "image-preload-command", "",
 		`Use custom command for pre-loading images to local cluster. Image can be referenced as $IMAGE.
 Pre-loading support for Kind and Minikube clusters is built-in. In case this is not sufficient
@@ -280,9 +286,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Cleanup()
 
-	if envrc != "" {
-		d.SetEnvrcFile(envrc)
-	}
 	d.SetConfig(deploySettings)
 
 	if dryRun {
@@ -346,16 +349,21 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if !dryRun {
 		roxieEnv := roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo())
+		// The envrc shall not be persisted as part of the on-cluster manifest.
+		// Hence we zero it out here prior to applying the manifest to the cluster.
+		// This code can go once the on-cluster manifest has been reworked completely.
+		manifestConfig := deploySettings
+		manifestConfig.Roxie.Envrc = nil
 		m := manifest.RoxieManifest{
 			RoxieEnvironment: roxieEnv,
-			Config:           deploySettings,
+			Config:           manifestConfig,
 		}
 		if err := manifest.CreateManifestSecretOnCluster(ctx, m); err != nil {
 			log.Warningf("Failed to save roxie manifest: %v", err)
 		}
 	}
 
-	if components.IncludesCentral() && envrc == "" {
+	if components.IncludesCentral() && !deploySettings.Roxie.EnvrcSet() {
 		if err := spawnSubshellForDeployerEnv(deploySettings.Roxie, d); err != nil {
 			return fmt.Errorf("failed to spawn subshell: %w", err)
 		}
@@ -488,7 +496,7 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 		return errors.New("already in a roxie sub-shell (ROXIE_SHELL environment variable is set), please exit the shell and try again")
 	}
 
-	if components.IncludesCentral() && !env.RunningInteractively && envrc == "" {
+	if components.IncludesCentral() && !env.RunningInteractively && !deploySettings.Roxie.EnvrcSet() {
 		return errors.New("running without a controlling terminal requires --envrc to be set")
 	}
 

@@ -22,7 +22,6 @@ var (
 	// Global flags
 	verbose bool
 	shell   string
-	envrc   string
 	dryRun  bool
 
 	skipUserConfig bool

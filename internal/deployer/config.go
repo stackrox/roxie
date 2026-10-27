@@ -88,6 +88,7 @@ type RoxieConfig struct {
 	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
 	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
 	HAProxy       HAProxyConfig     `yaml:"haProxy,omitempty"`
+	Envrc         *string           `yaml:"envrc,omitempty"`
 }
 
 // UsesCustomRegistry returns whether a custom image registry was configured.
@@ -101,6 +102,10 @@ func (c *RoxieConfig) KonfluxImagesSet() bool {
 
 func (c *RoxieConfig) KonfluxImagesEnabled() bool {
 	return c.KonfluxImages != nil && *c.KonfluxImages
+}
+
+func (c *RoxieConfig) EnvrcSet() bool {
+	return c.Envrc != nil && *c.Envrc != ""
 }
 
 // NewRoxieConfig returns a RoxieConfig with initialized defaults.
