@@ -139,6 +139,7 @@ func init() {
 	rootCmd.AddCommand(newTeardownCmd(&deploySettingsFromArgs))
 	rootCmd.AddCommand(newShellCmd())
 	rootCmd.AddCommand(newVersionCmd())
+	rootCmd.AddCommand(newUpdateCmd())
 	rootCmd.AddCommand(newEnvCmd())
 	rootCmd.AddCommand(newLogsCmd())
 }
