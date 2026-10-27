@@ -19,8 +19,8 @@ func newTeardownCmd(settings *deployer.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:       "teardown [component]",
 		Short:     "Teardown ACS components",
-		Long:      `Teardown ACS components (central, secured-cluster, or both).`,
-		ValidArgs: []string{"central", "secured-cluster", "both"},
+		Long:      `Teardown ACS components (central, secured-cluster, both, all or operator).`,
+		ValidArgs: []string{"central", "secured-cluster", "both", "all", "operator"},
 		Args:      cobra.MaximumNArgs(1),
 		RunE:      runTeardown,
 	}

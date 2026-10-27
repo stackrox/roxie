@@ -458,6 +458,8 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 		return d.teardownCentral(ctx)
 	case component.SecuredCluster:
 		return d.teardownSecuredCluster(ctx)
+	case component.Operator:
+		return d.teardownOperator(ctx)
 	case component.Both, component.All:
 		// Tear down components in parallel for better performance
 		var wg sync.WaitGroup
