@@ -62,6 +62,49 @@ func IsResourceNotFound(err error) bool {
 	return errors.Is(err, ErrResourceNotFound)
 }
 
+// DiscoverCRNamespaces returns the namespaces that contain a custom resource of
+// the given type and name. It returns (nil, nil) when the CR type is not
+// registered on the cluster or no matching instances are found.
+func DiscoverCRNamespaces(ctx context.Context, crType, crName string) ([]string, error) {
+	jsonpathExpr := fmt.Sprintf(`{.items[?(@.metadata.name=="%s")].metadata.namespace}`, crName)
+	result, err := RunKubectl(ctx, KubectlOptions{
+		Args:        []string{"get", crType, "-A", "-o", "jsonpath=" + jsonpathExpr},
+		MaxAttempts: 1,
+	})
+	if err != nil {
+		stderr := strings.ToLower(result.Stderr)
+		if strings.Contains(stderr, "the server doesn't have a resource type") ||
+			strings.Contains(stderr, "not found") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("discovering %s/%s: %w", crType, crName, err)
+	}
+	output := strings.TrimSpace(result.Stdout)
+	if output == "" {
+		return nil, nil
+	}
+	namespaces := strings.Fields(output)
+	log.Infof("Discovered %s/%s in namespace(s): %s", crType, crName, strings.Join(namespaces, ", "))
+	return namespaces, nil
+}
+
+// DiscoverCRNamespace discovers the single namespace containing the named custom
+// resource. It returns ("", nil) when no instance is found, and an error when
+// the CR exists in more than one namespace.
+func DiscoverCRNamespace(ctx context.Context, crType, crName string) (string, error) {
+	namespaces, err := DiscoverCRNamespaces(ctx, crType, crName)
+	if err != nil {
+		return "", err
+	}
+	if len(namespaces) > 1 {
+		return "", fmt.Errorf("found %s/%s in multiple namespaces: %s", crType, crName, strings.Join(namespaces, ", "))
+	}
+	if len(namespaces) == 0 {
+		return "", nil
+	}
+	return namespaces[0], nil
+}
+
 // ResourceNotOwnedByName checks if the given unstructured object does not have an owner reference with the specified owner name.
 // The negative version of this function is better suited for our needs, because there can be multiple owner references and
 // we are only interested in checking if a given resource is NOT owned by a specific owner.

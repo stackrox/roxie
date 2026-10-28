@@ -64,9 +64,7 @@ func TestOLMToNonOLMSwitch(t *testing.T) {
 
 	// Step 2: Deploy central again without OLM (should switch modes)
 	t.Log("=== Step 2: Redeploy central without OLM (triggering mode switch) ===")
-	// Note: we need to *explicitly* set OLM because of an pre-existing issue where the on-cluster manifest influences
-	// the effective deployment configuration on a re-deployment.
-	args = append([]string{roxieBinary, "deploy", "central", "--olm=false", "--envrc", envrcPath}, commonDeployArgs...)
+	args = append([]string{roxieBinary, "deploy", "central", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator switched to non-OLM mode
@@ -93,9 +91,7 @@ func TestNonOLMToOLMSwitch(t *testing.T) {
 
 	// Step 1: Deploy central without OLM (non-OLM operator)
 	t.Log("=== Step 1: Deploy central with non-OLM operator ===")
-	// Note: we need to *explicitly* set OLM because of an pre-existing issue where the on-cluster manifest influences
-	// the effective deployment configuration on a re-deployment.
-	args := append([]string{roxieBinary, "deploy", "central", "--olm=false", "--envrc", envrcPath}, commonDeployArgs...)
+	args := append([]string{roxieBinary, "deploy", "central", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
 	// Verify operator is in non-OLM mode
@@ -231,9 +227,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 
 	// Step 3: Switch to non-OLM by redeploying secured-cluster without --olm
 	t.Log("=== Step 3: Redeploy secured-cluster without OLM (triggering mode switch) ===")
-	// Note: we need to *explicitly* set OLM because of an pre-existing issue where the on-cluster manifest influences
-	// the effective deployment configuration on a re-deployment.
-	args = append([]string{roxieBinary, "deploy", "--early-readiness", "--olm=false", "secured-cluster"}, commonDeployArgs...)
+	args = append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster"}, commonDeployArgs...)
 	runCommand(t, deployTimeout, envrcEnv, args...)
 
 	// Verify operator switched to non-OLM mode

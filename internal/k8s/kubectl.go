@@ -67,6 +67,7 @@ func RunKubectl(ctx context.Context, opts KubectlOptions) (KubectlResult, error)
 			time.Sleep(waitTime)
 		}
 
+		log.Debugf("Executing: %s %s", kubectl, strings.Join(opts.Args, " "))
 		cmd := exec.CommandContext(ctx, kubectl, opts.Args...)
 
 		if opts.Stdin != nil {
@@ -90,6 +91,11 @@ func RunKubectl(ctx context.Context, opts KubectlOptions) (KubectlResult, error)
 				Stdout: stdout.String(),
 				Stderr: lastStderr,
 			}, nil
+		}
+
+		log.Debugf("exit code: %v", err)
+		for line := range strings.SplitSeq(strings.TrimSpace(lastStderr), "\n") {
+			log.Debug("stderr output: " + line)
 		}
 
 		if opts.IgnoreErrors {

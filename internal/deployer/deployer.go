@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -88,11 +87,11 @@ func (d *Deployer) deleteResources(ctx context.Context, namespace string, resour
 }
 
 // Expects that reconciliation for the RHACS operator is paused.
-func (d *Deployer) deleteCentralResources(ctx context.Context) error {
+func (d *Deployer) deleteCentralResources(ctx context.Context, namespace string) error {
 	log.Info("Deleting Central resources")
 	crExists := true
 
-	if _, err := k8s.RetrieveResourceFromCluster(ctx, d.config.Central.Namespace, "central", "stackrox-central-services"); err != nil {
+	if _, err := k8s.RetrieveResourceFromCluster(ctx, namespace, "central", "stackrox-central-services"); err != nil {
 		if !k8s.IsResourceNotFound(err) {
 			return fmt.Errorf("retrieving Central CR: %w", err)
 		}
@@ -101,12 +100,12 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 
 	if crExists {
 		log.Info("Removing any pause-reconcile annotation from Central")
-		if err := d.removePauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.config.Central.Namespace); err != nil {
+		if err := d.removePauseReconcileAnnotation(ctx, "central", "stackrox-central-services", namespace); err != nil {
 			return err
 		}
 		log.Debug("Removed any pause-reconcile annotation from Central")
 
-		err := d.deleteResource(ctx, d.config.Central.Namespace, "central", "stackrox-central-services", "--wait")
+		err := d.deleteResource(ctx, namespace, "central", "stackrox-central-services", "--wait")
 		if err != nil {
 			return err
 		}
@@ -126,7 +125,7 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 		if resource.OwnerName != "" {
 			// Avoid deletion if the resource does not have the expected owner.
 			// (e.g. in case central and secured cluster are deployed into the same namespace).
-			obj, err := k8s.RetrieveResourceFromCluster(ctx, d.config.Central.Namespace, resource.Kind, resource.Name)
+			obj, err := k8s.RetrieveResourceFromCluster(ctx, namespace, resource.Kind, resource.Name)
 			if err != nil {
 				if !k8s.IsResourceNotFound(err) {
 					log.Warningf("Failed to retrieve %s/%s for owner checking: %v. Skipping deletion. Deployment might be affected.", resource.Kind, resource.Name, err)
@@ -139,7 +138,7 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 			}
 		}
 
-		if err := d.deleteResource(ctx, d.config.Central.Namespace, resource.Kind, resource.Name); err != nil {
+		if err := d.deleteResource(ctx, namespace, resource.Kind, resource.Name); err != nil {
 			return fmt.Errorf("failed to delete %s/%s: %w", resource.Kind, resource.Name, err)
 		}
 	}
@@ -147,11 +146,11 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 	return nil
 }
 
-func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
+func (d *Deployer) deleteSecuredClusterResources(ctx context.Context, namespace string) error {
 	log.Info("Deleting SecuredCluster resources")
 	crExists := true
 
-	if _, err := k8s.RetrieveResourceFromCluster(ctx, d.config.SecuredCluster.Namespace, "securedcluster", "stackrox-secured-cluster-services"); err != nil {
+	if _, err := k8s.RetrieveResourceFromCluster(ctx, namespace, "securedcluster", securedClusterCrName); err != nil {
 		if !k8s.IsResourceNotFound(err) {
 			return fmt.Errorf("retrieving SecuredCluster CR: %w", err)
 		}
@@ -160,12 +159,12 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 
 	if crExists {
 		log.Info("Removing any pause-reconcile annotation from SecuredCluster")
-		if err := d.removePauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.config.SecuredCluster.Namespace); err != nil {
+		if err := d.removePauseReconcileAnnotation(ctx, "securedcluster", securedClusterCrName, namespace); err != nil {
 			return err
 		}
 		log.Debug("Removed any pause-reconcile annotation from SecuredCluster")
 
-		err := d.deleteResource(ctx, d.config.SecuredCluster.Namespace, "securedcluster", "stackrox-secured-cluster-services", "--wait")
+		err := d.deleteResource(ctx, namespace, "securedcluster", securedClusterCrName, "--wait")
 		if err != nil {
 			return err
 		}
@@ -185,7 +184,7 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 		if resource.OwnerName != "" {
 			// Avoid deletion if the resource does not have the expected owner.
 			// (e.g. in case central and secured cluster are deployed into the same namespace).
-			obj, err := k8s.RetrieveResourceFromCluster(ctx, d.config.SecuredCluster.Namespace, resource.Kind, resource.Name)
+			obj, err := k8s.RetrieveResourceFromCluster(ctx, namespace, resource.Kind, resource.Name)
 			if err != nil {
 				if !k8s.IsResourceNotFound(err) {
 					log.Warningf("Failed to retrieve %s/%s for owner checking: %v. Skipping deletion. Deployment might be affected.", resource.Kind, resource.Name, err)
@@ -197,7 +196,7 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 				continue
 			}
 		}
-		if err := d.deleteResource(ctx, d.config.SecuredCluster.Namespace, resource.Kind, resource.Name); err != nil {
+		if err := d.deleteResource(ctx, namespace, resource.Kind, resource.Name); err != nil {
 			return fmt.Errorf("failed to delete %s/%s: %w", resource.Kind, resource.Name, err)
 		}
 	}
@@ -445,12 +444,7 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 	log.Infof("Starting teardown of %s", components)
 
 	if components.IncludesAddOns() {
-		enabledAddOns, err := d.ResolveEnabledAddOns()
-		if err != nil {
-			return fmt.Errorf("resolving enabled add-ons: %w", err)
-		}
-		slices.Reverse(enabledAddOns) // Tearing down in opposite order as deploying.
-		d.teardownAddOns(ctx, enabledAddOns)
+		d.teardownDiscoveredAddOns(ctx)
 	}
 
 	switch components {
@@ -499,54 +493,75 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 }
 
 func (d *Deployer) teardownCentral(ctx context.Context) error {
-	log.Infof("🗑️  Tearing down central in namespace %s", d.config.Central.Namespace)
-
-	if !d.namespaceExists(d.config.Central.Namespace) {
-		log.Infof("Namespace %s doesn't exist, skipping", d.config.Central.Namespace)
+	namespace, err := k8s.DiscoverCRNamespace(ctx, "central", centralCrName)
+	if err != nil {
+		return fmt.Errorf("discovering Central namespace: %w", err)
+	}
+	if namespace == "" {
+		log.Infof("No Central CR found on cluster, skipping Central teardown")
 		return nil
 	}
+
+	log.Infof("🗑️  Tearing down central in namespace %s", namespace)
 
 	d.portForward.Stop()
 	d.stopDetachedPortForward()
 
 	// Add pause-reconcile annotation to not have the operator interfere during resource deletion.
-	if d.doesResourceExist(ctx, "central", "stackrox-central-services", d.config.Central.Namespace) {
-		if err := d.addPauseReconcileAnnotation(ctx, "central", "stackrox-central-services", d.config.Central.Namespace); err != nil {
+	if d.doesResourceExist(ctx, "central", centralCrName, namespace) {
+		if err := d.addPauseReconcileAnnotation(ctx, "central", centralCrName, namespace); err != nil {
 			log.Warningf("Error adding pause-reconcile annotation: %v", err)
 		}
 	}
 
 	log.Info("⏳ Waiting for Central resources to be fully deleted...")
-	if err := d.deleteCentralResources(ctx); err != nil {
+	if err := d.deleteCentralResources(ctx, namespace); err != nil {
 		return fmt.Errorf("failed to delete Central resources: %w", err)
 	}
 
-	log.Successf("✓ Central resources in namespace %s have been deleted", d.config.Central.Namespace)
+	log.Successf("✓ Central resources in namespace %s have been deleted", namespace)
 	return nil
 }
 
 func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
-	log.Infof("🗑️  Tearing down secured cluster in namespace %s", d.config.SecuredCluster.Namespace)
-
-	if !d.namespaceExists(d.config.SecuredCluster.Namespace) {
-		log.Infof("Namespace %s doesn't exist, skipping", d.config.SecuredCluster.Namespace)
+	namespaces, err := k8s.DiscoverCRNamespaces(ctx, "securedcluster", securedClusterCrName)
+	if err != nil {
+		return fmt.Errorf("discovering SecuredCluster namespaces: %w", err)
+	}
+	if len(namespaces) == 0 {
+		log.Infof("No SecuredCluster CRs found on cluster, skipping SecuredCluster teardown")
 		return nil
 	}
 
-	if d.doesResourceExist(ctx, "securedcluster", "stackrox-secured-cluster-services", d.config.SecuredCluster.Namespace) {
-		// Add pause-reconcile annotation to not have the operator interfere during resource deletion.
-		if err := d.addPauseReconcileAnnotation(ctx, "securedcluster", "stackrox-secured-cluster-services", d.config.SecuredCluster.Namespace); err != nil {
+	var wg sync.WaitGroup
+	wg.Add(len(namespaces))
+	for _, ns := range namespaces {
+		go func() {
+			defer wg.Done()
+			if err := d.teardownSecuredClusterInNamespace(ctx, ns); err != nil {
+				log.Warningf("Error tearing down SecuredCluster in namespace %s: %v", ns, err)
+			}
+		}()
+	}
+	wg.Wait()
+	return nil
+}
+
+func (d *Deployer) teardownSecuredClusterInNamespace(ctx context.Context, namespace string) error {
+	log.Infof("🗑️  Tearing down secured cluster in namespace %s", namespace)
+
+	if d.doesResourceExist(ctx, "securedcluster", securedClusterCrName, namespace) {
+		if err := d.addPauseReconcileAnnotation(ctx, "securedcluster", securedClusterCrName, namespace); err != nil {
 			log.Warningf("Error adding pause-reconcile annotation: %v", err)
 		}
 	}
 
 	log.Info("⏳ Waiting for SecuredCluster resources to be fully deleted...")
-	err := d.deleteSecuredClusterResources(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to delete SecuredCluster resources: %w", err)
+	if err := d.deleteSecuredClusterResources(ctx, namespace); err != nil {
+		return fmt.Errorf("failed to delete SecuredCluster resources in namespace %s: %w", namespace, err)
 	}
 
-	log.Successf("✓ SecuredCluster resources in namespace %s have been deleted", d.config.SecuredCluster.Namespace)
+	log.Successf("✓ SecuredCluster resources in namespace %s have been deleted", namespace)
 	return nil
 }
 
