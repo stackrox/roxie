@@ -117,6 +117,10 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 	for _, resource := range []ResourceToDelete{
 		{Name: "central-db", Kind: "pvc"},
 		{Name: "central-db-backup", Kind: "pvc"},
+		// scanner-v4-db is not managed by the operator's ReconcilePVCExtension, so its ownerReference
+		// is only cleaned up by K8s GC. On redeploy, GC may not finish before the new CR is created,
+		// leaving a stale ownerReference that causes the operator to error-loop. See #291.
+		{Name: "scanner-v4-db", Kind: "pvc", OwnerName: centralCrName},
 		{Name: "admin-password", Kind: "secret"},
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: centralCrName},
 		{Name: "stackrox-central-helm", Kind: "configmap"},
@@ -176,6 +180,10 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 	// Delete resources, which are treated special.
 	for _, resource := range []ResourceToDelete{
 		{Name: "cluster-registration-secret", Kind: "secret"},
+		// scanner-v4-db is not managed by the operator's ReconcilePVCExtension, so its ownerReference
+		// is only cleaned up by K8s GC. On redeploy, GC may not finish before the new CR is created,
+		// leaving a stale ownerReference that causes the operator to error-loop. See #291.
+		{Name: "scanner-v4-db", Kind: "pvc", OwnerName: securedClusterCrName},
 		// We need to make sure that don't accidentally delete a scanner-db-password belonging to the central CR,
 		// when both are deployed into the same namespace.
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: securedClusterCrName},
