@@ -44,7 +44,6 @@ type Deployer struct {
 	dockerAuth  *dockerauth.DockerAuth
 	imageCache  *imagecache.ImageCache
 	dockerCreds *dockerauth.Credentials
-	envrcFile   string
 
 	kubeContext            string
 	containerRuntimeSocket string
@@ -273,7 +272,7 @@ func New() (*Deployer, error) {
 
 // Cleanup cleans up any temporary resources created by the deployer, such as temporary files.
 func (d *Deployer) Cleanup() {
-	if d.tempDir != "" && d.envrcFile == "" {
+	if d.tempDir != "" && !d.config.Roxie.EnvrcSet() {
 		// In the case of envrc file usage, we need to keep temporary files around after deployment.
 		// (It contains CA certificates, for example.)
 		if err := os.RemoveAll(d.tempDir); err != nil {
@@ -427,9 +426,9 @@ func (d *Deployer) deployCentral(ctx context.Context) error {
 		return err
 	}
 
-	if d.envrcFile != "" {
-		log.Dimf("Writing environment variables to %s", d.envrcFile)
-		if err := d.writeEnvrcFile(ctx); err != nil {
+	if d.config.Roxie.EnvrcSet() {
+		log.Dimf("Writing environment variables to %s", *d.config.Roxie.Envrc)
+		if err := d.writeEnvrcFile(ctx, *d.config.Roxie.Envrc); err != nil {
 			log.Warningf("Failed to write envrc file: %v", err)
 		}
 	}
@@ -652,10 +651,6 @@ func generatePassword() string {
 	return string(password)
 }
 
-func (d *Deployer) SetEnvrcFile(path string) {
-	d.envrcFile = path
-}
-
 func (d *Deployer) doesResourceExist(ctx context.Context, resourceType, resourceName, namespace string) bool {
 	_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
@@ -777,7 +772,7 @@ func (d *Deployer) cleanupTempDir(path string, description string) {
 	}
 }
 
-func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
+func (d *Deployer) writeEnvrcFile(ctx context.Context, filename string) error {
 	var content strings.Builder
 	for name, val := range roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo()).Export() {
 		fmt.Fprintf(&content, "export %s=%q\n", name, val)
@@ -787,11 +782,11 @@ func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
 		fmt.Fprintf(&content, "export ROXIE_PORT_FORWARD_PID=%d\n", d.portForwardPID)
 	}
 
-	if err := os.WriteFile(d.envrcFile, []byte(content.String()), 0600); err != nil {
+	if err := os.WriteFile(filename, []byte(content.String()), 0600); err != nil {
 		return fmt.Errorf("failed to write envrc file: %w", err)
 	}
 
-	log.Successf("✓ Environment variables written to %s", d.envrcFile)
+	log.Successf("✓ Environment variables written to %s", filename)
 	return nil
 }
 

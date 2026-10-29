@@ -780,7 +780,7 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 			}
 		}
 
-		if d.envrcFile != "" {
+		if d.config.Roxie.EnvrcSet() {
 			endpoint, pid, err := d.portForward.StartDetached(d.config.Central.Namespace, serviceName, 443, 8443)
 			if err != nil {
 				return fmt.Errorf("failed to start detached port-forward: %w", err)
