@@ -1,13 +1,18 @@
 package helpers
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"reflect"
+	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/fatih/color"
 )
 
 // RunCommandWithOutput executes a command and captures stdout/stderr
@@ -149,4 +154,20 @@ func IsNil(i interface{}) bool {
 		return reflect.ValueOf(i).IsNil()
 	}
 	return false
+}
+
+// Wait for user confirmation
+func WaitForConfirmation(f string, a ...any) (bool, error) {
+	yellow := color.New(color.FgYellow, color.Bold)
+	reader := bufio.NewReader(os.Stdin)
+	prompt := fmt.Sprintf(f, a...)
+	yellow.Printf("%s [y/N]: ", prompt)
+	response, err := reader.ReadString('\n')
+	if err == io.EOF {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "y" || response == "yes", nil
 }

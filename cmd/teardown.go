@@ -10,9 +10,14 @@ import (
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/k8s"
 	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
+)
+
+var (
+	force bool
 )
 
 func newTeardownCmd(settings *deployer.Config) *cobra.Command {
@@ -37,6 +42,8 @@ func newTeardownCmd(settings *deployer.Config) *cobra.Command {
 		}),
 	)
 
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Skip confirmation prompt")
+
 	return cmd
 }
 
@@ -50,6 +57,16 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if !force && env.RunningInteractively {
+		confirmed, err := helpers.WaitForConfirmation("About to teardown %s on %s, continue?", components, env.GetCurrentContext())
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			log.Info("Aborting teardown")
+			return nil
+		}
+	}
 	log.Infof("Tearing down %s", components)
 
 	if dryRun {
