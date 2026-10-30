@@ -66,13 +66,19 @@ func (d *Deployer) teardownDiscoveredAddOns(ctx context.Context, namespace strin
 	}
 
 	log.Infof("Tearing down %d add-on(s)...", len(releases))
+	var errs []error
 	for _, release := range releases {
+		if err := ctx.Err(); err != nil {
+			errs = append(errs, err)
+			break
+		}
 		if err := helm.Uninstall(ctx, release, namespace); err != nil {
-			return fmt.Errorf("tearing down add-on release %q: %w", release, err)
+			errs = append(errs, fmt.Errorf("tearing down add-on release %q: %w", release, err))
+			continue
 		}
 		log.Successf("Add-on release %q torn down", release)
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // ResolveEnabledAddOns returns the enabled add-ons sorted by descending priority (name for ties at zero).
