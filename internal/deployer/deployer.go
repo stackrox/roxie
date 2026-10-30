@@ -147,7 +147,7 @@ func (d *Deployer) deleteCentralResources(ctx context.Context, namespace string)
 			}
 
 			if err := d.deleteResource(ctx, namespace, resource.Kind, resource.Name); err != nil {
-				return fmt.Errorf("failed to delete %s/%s in namepace %s: %w", resource.Kind, resource.Name, namespace, err)
+				return fmt.Errorf("failed to delete %s/%s in namespace %s: %w", resource.Kind, resource.Name, namespace, err)
 			}
 
 			log.Dimf("%s: Deleted %s/%s", namespace, resource.Kind, resource.Name)
