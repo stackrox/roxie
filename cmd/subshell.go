@@ -50,7 +50,7 @@ func runCommandOrSubshell(roxieConfig deployer.RoxieConfig, centralDeploymentInf
 		shellPath := resolveShellPath()
 		log.Infof("Spawning sub-shell: %s", shellPath)
 		printBanner(centralDeploymentInfo)
-		cmd = exec.Command(shellPath, "-i")
+		cmd = exec.Command(shellPath, "-l", "-i")
 	} else {
 		// args is non-empty.
 		cmd = exec.Command(args[0], args[1:]...)
