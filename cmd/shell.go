@@ -53,6 +53,10 @@ Examples:
 }
 
 func runShell(args []string) error {
+	if evalMode && len(args) > 0 {
+		return errors.New("--eval cannot be combined with command arguments")
+	}
+
 	if err := env.Initialize(); err != nil {
 		return err
 	}
