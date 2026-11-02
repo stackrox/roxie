@@ -98,14 +98,16 @@ func runShell(args []string) error {
 		return fmt.Errorf("extracting central deployment info from manifest: %w", err)
 	}
 
+	var portForwardPID int
 	if config.Central.PortForwardingEnabled() {
 		portForwarder := portforward.New(k8s.GetKubectl())
 		if evalMode {
-			endpoint, _, err := portForwarder.StartDetached(config.Central.Namespace, "central", 443, 8443)
+			endpoint, pid, err := portForwarder.StartDetached(config.Central.Namespace, "central", 443, 8443)
 			if err != nil {
 				return fmt.Errorf("failed to start port-forward: %w", err)
 			}
 			centralDeploymentInfo.Endpoint = endpoint
+			portForwardPID = pid
 		} else {
 			endpoint, err := portForwarder.Start(config.Central.Namespace, "central", 443, 8443)
 			if err != nil {
@@ -120,6 +122,9 @@ func runShell(args []string) error {
 	if evalMode {
 		printBanner(os.Stderr, centralDeploymentInfo)
 		printExports(centralDeploymentInfo)
+		if portForwardPID != 0 {
+			fmt.Fprintf(os.Stdout, "export ROXIE_PORT_FORWARD_PID=%d\n", portForwardPID)
+		}
 		return nil
 	}
 
