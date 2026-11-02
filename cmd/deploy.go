@@ -215,8 +215,10 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 	registerFlag(cmd, settings, "eval", "Print environment as eval-able export statements to stdout",
 		withNoOptDefVal("true"),
 		withApplyFnBool(func(config *deployer.Config, val bool) error {
-			evalMode = true
-			config.Roxie.Envrc = new("/dev/stdout")
+			if val {
+				evalMode = true
+				config.Roxie.Envrc = new("/dev/stdout")
+			}
 			return nil
 		}),
 	)
