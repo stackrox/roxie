@@ -62,6 +62,7 @@ jobs:
 
 
       - name: Authenticate to GCloud
+        id: gcp-auth
         if: inputs.cluster-type == 'gke'
         uses: google-github-actions/auth@v3
         with:
@@ -73,9 +74,20 @@ jobs:
         with:
           install_components: "gke-gcloud-auth-plugin"
 
-      - name: Configure GKE auth plugin
-        if: inputs.cluster-type == 'gke'
-        run: echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> "$GITHUB_ENV"
+      - name: Use stored gcloud credentials
+        if: steps.gcp-auth.outcome == 'success'
+        env:
+          GCP_CREDENTIALS_JSON: ${{ secrets.ROXIE_CI_AUTOMATION_GCP_SA }}
+        run: |
+          echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> "$GITHUB_ENV"
+          expected_account="$(jq -er '.client_email' <<< "$GCP_CREDENTIALS_JSON")"
+          if [[ "$(gcloud config get-value core/account)" != "$expected_account" ]]; then
+            echo "::error::gcloud's active account does not match the CI service account"
+            exit 1
+          fi
+          # setup-gcloud already stored these credentials. Avoid the file-override crash:
+          # https://github.com/google-github-actions/auth/issues/535
+          echo "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=" >> "$GITHUB_ENV"
 
       - name: Download production infractl
         uses: stackrox/actions/infra/install-infractl@v1.0.48
