@@ -660,6 +660,34 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 	return "", errors.New("timeout waiting for LoadBalancer to get external address")
 }
 
+// waitForRoute waits for an OpenShift Route to get its hostname.
+// Returns the endpoint as "host:port", with no https:// prefix.
+func (d *Deployer) waitForRoute(ctx context.Context, namespace, routeName string, waitTime time.Duration) (string, error) {
+	log.Infof("⏳ Waiting %s for Route %s to get its hostname...", waitTime, routeName)
+
+	start := time.Now()
+	for time.Since(start) < waitTime {
+		result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
+			Args: []string{"get", "route", routeName, "-n", namespace, "-o", "jsonpath={.spec.host}"},
+		})
+		if err == nil {
+			hostname := strings.TrimSpace(result.Stdout)
+			if hostname != "" {
+				if env.RunningInteractively {
+					log.Successf("✓ Route hostname: %s", hostname)
+				} else {
+					log.Success("✓ Route hostname")
+				}
+				return fmt.Sprintf("%s:443", hostname), nil
+			}
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+
+	return "", errors.New("timeout waiting for Route to get its hostname")
+}
+
 // fetchCentralCACerts fetches CA certificates needed to verify Central's TLS cert.
 // It always fetches the internal StackRox CA from the central-tls secret, and
 // additionally fetches CA certs from the defaultTLSSecret if one is configured
@@ -798,6 +826,12 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 		endpoint, err := d.waitForLoadBalancer(ctx, d.config.Central.Namespace, "central-loadbalancer", loadBalancerWaitTime)
 		if err != nil {
 			return fmt.Errorf("failed to get LoadBalancer endpoint: %w", err)
+		}
+		d.centralEndpoint = endpoint
+	} else if exposure == types.ExposureRoute {
+		endpoint, err := d.waitForRoute(ctx, d.config.Central.Namespace, "central", loadBalancerWaitTime)
+		if err != nil {
+			return fmt.Errorf("failed to get Route endpoint: %w", err)
 		}
 		d.centralEndpoint = endpoint
 	} else {
