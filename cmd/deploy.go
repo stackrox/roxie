@@ -212,6 +212,17 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 		}),
 	)
 
+	registerFlag(cmd, settings, "eval", "Print environment as eval-able export statements to stdout",
+		withNoOptDefVal("true"),
+		withApplyFnBool(func(config *deployer.Config, val bool) error {
+			evalMode = true
+			config.Roxie.Envrc = new("/dev/stdout")
+			return nil
+		}),
+	)
+
+	cmd.MarkFlagsMutuallyExclusive("eval", "envrc")
+
 	// Make --override an alias for --config, for backwards compatibility.
 	cmd.Flags().SetNormalizeFunc(func(f *pflag.FlagSet, name string) pflag.NormalizedName {
 		if name == "override" {
@@ -361,11 +372,28 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		if err := manifest.CreateManifestSecretOnCluster(ctx, m); err != nil {
 			log.Warningf("Failed to save roxie manifest: %v", err)
 		}
-	}
 
-	if components.IncludesCentral() && !deploySettings.Roxie.EnvrcSet() {
-		if err := spawnSubshellForDeployerEnv(deploySettings.Roxie, d); err != nil {
-			return fmt.Errorf("failed to spawn subshell: %w", err)
+		if components.IncludesCentral() {
+			if evalMode {
+				tempDir, err := os.MkdirTemp("", "roxie-shell-*")
+				if err != nil {
+					return fmt.Errorf("failed to create temp dir: %w", err)
+				}
+				centralDeploymentInfo, err := manifest.ManifestToCentralDeploymentInfo(ctx, tempDir, &m)
+				if err != nil {
+					return fmt.Errorf("extracting central deployment info from manifest: %w", err)
+				}
+
+				printBanner(os.Stderr, centralDeploymentInfo)
+				printExports(centralDeploymentInfo)
+				return nil
+			}
+
+			if !deploySettings.Roxie.EnvrcSet() {
+				if err := spawnSubshellForDeployerEnv(deploySettings.Roxie, d); err != nil {
+					return fmt.Errorf("failed to spawn subshell: %w", err)
+				}
+			}
 		}
 	}
 
@@ -497,7 +525,7 @@ func deployValidate(components component.Component, deploySettings *deployer.Con
 	}
 
 	if components.IncludesCentral() && !env.RunningInteractively && !deploySettings.Roxie.EnvrcSet() {
-		return errors.New("running without a controlling terminal requires --envrc to be set")
+		return errors.New("running without a controlling terminal requires --envrc or --eval to be set")
 	}
 
 	if deploySettings.Roxie.UsesCustomRegistry() {

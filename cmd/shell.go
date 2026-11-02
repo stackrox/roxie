@@ -47,6 +47,7 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to spawn")
+	cmd.Flags().BoolVar(&evalMode, "eval", false, "Print environment as eval-able export statements to stdout")
 
 	return cmd
 }
@@ -82,11 +83,19 @@ func runShell(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	if !evalMode {
+		defer os.RemoveAll(tempDir)
+	}
 
 	centralDeploymentInfo, err := manifest.ManifestToCentralDeploymentInfo(ctx, tempDir, m)
 	if err != nil {
 		return fmt.Errorf("extracting central deployment info from manifest: %w", err)
+	}
+
+	if evalMode {
+		printBanner(os.Stderr, centralDeploymentInfo)
+		printExports(centralDeploymentInfo)
+		return nil
 	}
 
 	return runCommandOrSubshell(config.Roxie, centralDeploymentInfo, args)

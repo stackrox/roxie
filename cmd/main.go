@@ -25,6 +25,8 @@ var (
 	shell   string
 	dryRun  bool
 
+	evalMode bool
+
 	skipUserConfig bool
 
 	// We need this set up before command line flags are parsed.
