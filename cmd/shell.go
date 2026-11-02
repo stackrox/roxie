@@ -10,8 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/k8s"
 	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
+	"github.com/stackrox/roxie/internal/portforward"
 )
 
 func newShellCmd() *cobra.Command {
@@ -94,6 +96,25 @@ func runShell(args []string) error {
 	centralDeploymentInfo, err := manifest.ManifestToCentralDeploymentInfo(ctx, tempDir, m)
 	if err != nil {
 		return fmt.Errorf("extracting central deployment info from manifest: %w", err)
+	}
+
+	if config.Central.PortForwardingEnabled() {
+		portForwarder := portforward.New(k8s.GetKubectl())
+		if evalMode {
+			endpoint, _, err := portForwarder.StartDetached(config.Central.Namespace, "central", 443, 8443)
+			if err != nil {
+				return fmt.Errorf("failed to start port-forward: %w", err)
+			}
+			centralDeploymentInfo.Endpoint = endpoint
+		} else {
+			endpoint, err := portForwarder.Start(config.Central.Namespace, "central", 443, 8443)
+			if err != nil {
+				return fmt.Errorf("failed to start port-forward: %w", err)
+			}
+			defer portForwarder.Stop()
+			centralDeploymentInfo.Endpoint = endpoint
+		}
+		log.Infof("Port-forwarding Central at %s", centralDeploymentInfo.Endpoint)
 	}
 
 	if evalMode {

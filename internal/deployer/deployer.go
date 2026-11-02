@@ -16,10 +16,10 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/stackrox/roxie/internal/component"
-	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/containerrt"
 	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagecache"
 	"github.com/stackrox/roxie/internal/k8s"
 	log "github.com/stackrox/roxie/internal/logger"
