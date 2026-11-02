@@ -249,8 +249,9 @@ func loadEnvrcFile(path string) (map[string]string, error) {
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
-		// Remove quotes
-		value = strings.Trim(value, "\"")
+		// Remove quotes added by roxie.
+		value = strings.TrimPrefix(value, "'")
+		value = strings.TrimSuffix(value, "'")
 
 		env[key] = value
 	}
