@@ -16,6 +16,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/stackrox/roxie/internal/component"
+	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/containerrt"
 	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
@@ -775,7 +776,7 @@ func (d *Deployer) cleanupTempDir(path string, description string) {
 func (d *Deployer) writeEnvrcFile(ctx context.Context, filename string) error {
 	var content strings.Builder
 	for name, val := range roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo()).Export() {
-		fmt.Fprintf(&content, "export %s=%q\n", name, val)
+		fmt.Fprintf(&content, "export %s=%s\n", name, helpers.ShellQuote(val))
 	}
 
 	if d.portForwardPID != 0 {

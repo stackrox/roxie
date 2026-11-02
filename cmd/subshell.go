@@ -12,6 +12,7 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/haproxy"
+	"github.com/stackrox/roxie/internal/helpers"
 	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/roxieenv"
 	"github.com/stackrox/roxie/internal/types"
@@ -195,7 +196,7 @@ func isHAProxyAvailable() bool {
 
 func printExports(centralDeploymentInfo types.CentralDeploymentInfo) {
 	for name, val := range roxieenv.AssembleRoxieEnvironment(centralDeploymentInfo).Export() {
-		fmt.Fprintf(os.Stdout, "export %s=%q\n", name, val)
+		fmt.Fprintf(os.Stdout, "export %s=%s\n", name, helpers.ShellQuote(val))
 	}
 }
 
