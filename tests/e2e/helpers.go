@@ -223,40 +223,25 @@ func doesDeploymentExist(t *testing.T, namespace string, name string) bool {
 	return strings.Contains(string(output), name)
 }
 
-func loadEnvrcFile(path string) (map[string]string, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+// loadEnvrcFile sources the envrc file in a real shell and returns the
+// exported variables.
+func loadEnvrcFile(t *testing.T, path string) map[string]string {
+	t.Helper()
 
+	// Extract shell's environment after loading roxie's envrc file.
+	cmd := exec.Command("sh", "-c", fmt.Sprintf(". %q >&2 && env", path))
+	out, err := cmd.Output()
+	require.NoError(t, err, "Failed to source envrc file %s", path)
+
+	// Collect the environment set by the shell.
 	env := make(map[string]string)
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || !strings.HasPrefix(line, "export ") {
-			continue
-		}
-
-		// Remove "export " prefix
-		line = strings.TrimPrefix(line, "export ")
-
-		// Split on first =
+	for _, line := range strings.Split(string(out), "\n") {
 		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
+		if len(parts) == 2 {
+			env[parts[0]] = parts[1]
 		}
-
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-
-		// Remove quotes added by roxie.
-		value = strings.TrimPrefix(value, "'")
-		value = strings.TrimSuffix(value, "'")
-
-		env[key] = value
 	}
-
-	return env, nil
+	return env
 }
 
 func verifyCentralInstalled(t *testing.T, namespace string) {
