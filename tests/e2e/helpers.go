@@ -229,7 +229,7 @@ func loadEnvrcFile(t *testing.T, path string) map[string]string {
 	t.Helper()
 
 	// Extract shell's environment after loading roxie's envrc file.
-	cmd := exec.Command("sh", "-c", fmt.Sprintf(". %q >&2 && env", path))
+	cmd := exec.Command("sh", "-c", `. "$1" >&2 && env`, "sh", path)
 	out, err := cmd.Output()
 	require.NoError(t, err, "Failed to source envrc file %s", path)
 
