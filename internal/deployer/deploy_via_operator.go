@@ -654,16 +654,20 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 			}
 		}
 
-		time.Sleep(5 * time.Second)
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			return "", fmt.Errorf("cancelled waiting for LoadBalancer to get external address: %w", ctx.Err())
+		}
 	}
 
 	return "", errors.New("timeout waiting for LoadBalancer to get external address")
 }
 
-// waitForRoute waits for an OpenShift Route to get its hostname.
+// waitForRoute waits for an OpenShift Route to be admitted by the router.
 // Returns the endpoint as "host:port", with no https:// prefix.
 func (d *Deployer) waitForRoute(ctx context.Context, namespace, routeName string, waitTime time.Duration) (string, error) {
-	log.Infof("⏳ Waiting %s for Route %s to get its hostname...", waitTime, routeName)
+	log.Infof("⏳ Waiting %s for Route %s to be admitted...", waitTime, routeName)
 
 	start := time.Now()
 	for time.Since(start) < waitTime {
@@ -672,20 +676,31 @@ func (d *Deployer) waitForRoute(ctx context.Context, namespace, routeName string
 		})
 		if err == nil {
 			hostname := strings.TrimSpace(result.Stdout)
+			// The host is assigned on admission, but a host conflict can leave
+			// the Route unadmitted with a host set; require Admitted=True.
 			if hostname != "" {
-				if env.RunningInteractively {
-					log.Successf("✓ Route hostname: %s", hostname)
-				} else {
-					log.Success("✓ Route hostname")
+				admitted, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
+					Args: []string{"get", "route", routeName, "-n", namespace, "-o", `jsonpath={.status.conditions[?(@.type=="Admitted")].status}`},
+				})
+				if err == nil && strings.TrimSpace(admitted.Stdout) == "True" {
+					if env.RunningInteractively {
+						log.Successf("✓ Route admitted with hostname: %s", hostname)
+					} else {
+						log.Success("✓ Route admitted")
+					}
+					return fmt.Sprintf("%s:443", hostname), nil
 				}
-				return fmt.Sprintf("%s:443", hostname), nil
 			}
 		}
 
-		time.Sleep(5 * time.Second)
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			return "", fmt.Errorf("cancelled waiting for Route to be admitted: %w", ctx.Err())
+		}
 	}
 
-	return "", errors.New("timeout waiting for Route to get its hostname")
+	return "", errors.New("timeout waiting for Route to be admitted")
 }
 
 // fetchCentralCACerts fetches CA certificates needed to verify Central's TLS cert.
