@@ -517,8 +517,13 @@ func (d *Deployer) teardownCentralWithAddOns(ctx context.Context) error {
 		return fmt.Errorf("discovering Central namespace: %w", err)
 	}
 	if namespace == "" {
-		log.Infof("No Central CR found on cluster, skipping Central teardown")
-		return d.teardownAddOns(ctx)
+		if d.config.Central.Namespace != "" && d.namespaceExists(d.config.Central.Namespace) {
+			namespace = d.config.Central.Namespace
+			log.Dimf("No Central CR found, falling back to configured namespace %s for resource cleanup", namespace)
+		} else {
+			log.Infof("No Central CR found on cluster, skipping Central teardown")
+			return d.teardownAddOns(ctx)
+		}
 	}
 
 	addOnsErr := d.teardownDiscoveredAddOns(ctx, namespace)
@@ -581,8 +586,13 @@ func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
 		return fmt.Errorf("discovering SecuredCluster namespaces: %w", err)
 	}
 	if len(namespaces) == 0 {
-		log.Infof("No SecuredCluster CRs found on cluster, skipping SecuredCluster teardown")
-		return nil
+		if d.config.SecuredCluster.Namespace != "" && d.namespaceExists(d.config.SecuredCluster.Namespace) {
+			namespaces = []string{d.config.SecuredCluster.Namespace}
+			log.Dimf("No SecuredCluster CRs found, falling back to configured namespace %s for resource cleanup", d.config.SecuredCluster.Namespace)
+		} else {
+			log.Infof("No SecuredCluster CRs found on cluster, skipping SecuredCluster teardown")
+			return nil
+		}
 	}
 
 	var group errgroup.Group
