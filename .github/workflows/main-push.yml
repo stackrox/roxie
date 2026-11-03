@@ -35,6 +35,13 @@ jobs:
       image: ${{ needs.build-roxie-image.outputs.image }}
     secrets: inherit
 
+  e2e-tests-kind:
+    needs: [ build-roxie-image ]
+    uses: ./.github/workflows/e2e-tests-kind.yml
+    with:
+      image: ${{ needs.build-roxie-image.outputs.image }}
+    secrets: inherit
+
   delete-dev-cluster:
     if: ${{ always() && needs.create-dev-cluster.result == 'success' }}
     needs: [ create-dev-cluster, e2e-tests ]
