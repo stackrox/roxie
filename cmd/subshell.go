@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"syscall"
@@ -11,6 +12,7 @@ import (
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
 	"github.com/stackrox/roxie/internal/haproxy"
+	"github.com/stackrox/roxie/internal/helpers"
 	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/roxieenv"
 	"github.com/stackrox/roxie/internal/types"
@@ -49,7 +51,7 @@ func runCommandOrSubshell(roxieConfig deployer.RoxieConfig, centralDeploymentInf
 	if subShellMode(args) {
 		shellPath := resolveShellPath()
 		log.Infof("Spawning sub-shell: %s", shellPath)
-		printBanner(centralDeploymentInfo)
+		printBanner(color.Output, centralDeploymentInfo)
 		cmd = exec.Command(shellPath, "-l", "-i")
 	} else {
 		// args is non-empty.
@@ -192,23 +194,27 @@ func isHAProxyAvailable() bool {
 	return err == nil
 }
 
-func printBanner(centralDeploymentInfo types.CentralDeploymentInfo) {
+func printExports(centralDeploymentInfo types.CentralDeploymentInfo) {
+	for name, val := range roxieenv.AssembleRoxieEnvironment(centralDeploymentInfo).Export() {
+		fmt.Fprintf(os.Stdout, "export %s=%s\n", name, helpers.ShellQuote(val))
+	}
+}
+
+func printBanner(w io.Writer, centralDeploymentInfo types.CentralDeploymentInfo) {
 	cyan := color.New(color.FgCyan, color.Bold)
-	cyan.Println("\n[roxie] Entering a subshell with ACS environment variables set.")
-	cyan.Println("[roxie]")
-	cyan.Println("[roxie] Environment is set up for talking to ACS Central. Examples:")
-	cyan.Println("[roxie]")
-	cyan.Println("[roxie]   * roxctl central whoami")
-	cyan.Println("[roxie]   * roxcurl /v1/clusters")
-	cyan.Println("[roxie]")
+	cyan.Fprintln(w, "\n[roxie] Environment is set up for talking to ACS Central. Examples:")
+	cyan.Fprintln(w, "[roxie]")
+	cyan.Fprintln(w, "[roxie]   * roxctl central whoami")
+	cyan.Fprintln(w, "[roxie]   * roxcurl /v1/clusters")
+	cyan.Fprintln(w, "[roxie]")
 
 	if port := centralDeploymentInfo.HAProxyPort; port > 0 {
-		cyan.Printf("[roxie] Central UI: http://localhost:%d (username: admin, password: see $ROX_ADMIN_PASSWORD)\n", port)
+		cyan.Fprintf(w, "[roxie] Central UI: http://localhost:%d (username: admin, password: see $ROX_ADMIN_PASSWORD)\n", port)
 	} else if centralDeploymentInfo.Exposure != types.ExposureNone {
-		cyan.Printf("[roxie] Central UI: https://%s", centralDeploymentInfo.Endpoint)
+		cyan.Fprintf(w, "[roxie] Central UI: https://%s\n", centralDeploymentInfo.Endpoint)
 	} else if !env.RunningInRoxieContainer {
-		cyan.Println("[roxie] Note: Installing haproxy enables automatic HTTP access to Central through a forwarded local port")
+		cyan.Fprintln(w, "[roxie] Note: Installing haproxy enables automatic HTTP access to Central through a forwarded local port")
 	}
 
-	cyan.Println("")
+	cyan.Fprintln(w, "")
 }

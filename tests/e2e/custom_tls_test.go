@@ -48,8 +48,7 @@ func TestDeployWithCustomTLSCert(t *testing.T) {
 	verifyCentralInstalled(t, sharedNamespace)
 	verifySecuredClusterInstalled(t, sharedNamespace)
 
-	env, err := loadEnvrcFile(envrcPath)
-	require.NoError(t, err, "Failed to load envrc file")
+	env := loadEnvrcFile(t, envrcPath)
 	require.NotEmpty(t, env["ROX_CA_CERT_FILE"], "ROX_CA_CERT_FILE should be set in envrc")
 
 	verifyCACertFileContainsCustomCA(t, env["ROX_CA_CERT_FILE"], caCertPEM)

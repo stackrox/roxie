@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -149,4 +150,9 @@ func IsNil(i interface{}) bool {
 		return reflect.ValueOf(i).IsNil()
 	}
 	return false
+}
+
+// ShellQuote wraps s in POSIX single quotes, safe for use in shell eval contexts.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
