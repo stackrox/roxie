@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -679,10 +680,14 @@ func (d *Deployer) waitForRoute(ctx context.Context, namespace, routeName string
 			// The host is assigned on admission, but a host conflict can leave
 			// the Route unadmitted with a host set; require Admitted=True.
 			if hostname != "" {
+				// Admission conditions live on the per-router status.ingress
+				// entries; a host conflict can leave the Route unadmitted with
+				// a host set, so require an admitted ingress for the host.
 				admitted, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
-					Args: []string{"get", "route", routeName, "-n", namespace, "-o", `jsonpath={.status.conditions[?(@.type=="Admitted")].status}`},
+					Args: []string{"get", "route", routeName, "-n", namespace, "-o", fmt.Sprintf(`jsonpath={.status.ingress[?(@.host=="%s")].conditions[?(@.type=="Admitted")].status}`, hostname)},
 				})
-				if err == nil && strings.TrimSpace(admitted.Stdout) == "True" {
+				admittedStatuses := strings.Fields(admitted.Stdout)
+				if err == nil && slices.Contains(admittedStatuses, "True") {
 					if env.RunningInteractively {
 						log.Successf("✓ Route admitted with hostname: %s", hostname)
 					} else {
