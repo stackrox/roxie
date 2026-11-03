@@ -259,7 +259,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
 	} else {
-		mainImageTag, err := helpers.LookupMainImageTag(ctx)
+		mainImageTag, err := helpers.LookupMainImageTag(ctx, deploySettings.Roxie.ImageRegistry)
 		if err != nil {
 			return fmt.Errorf("looking up main image tag: %w", err)
 		}
