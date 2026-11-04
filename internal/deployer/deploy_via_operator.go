@@ -919,14 +919,14 @@ func getSecuredClusterResourcesOperator(resourceProfile types.ResourceProfile) m
 				},
 				// The CRS init container's resource requests are not exposed in the CR spec,
 				// so we use the operator's overlay mechanism to lower them for tiny clusters.
-				"overlays": []map[string]interface{}{
-					{
+				"overlays": []any{
+					map[string]any{
 						"apiVersion": "apps/v1",
 						"kind":       "Deployment",
 						"name":       "sensor",
 						"optional":   true,
-						"patches": []map[string]interface{}{
-							{
+						"patches": []any{
+							map[string]any{
 								"path":  "spec.template.spec.initContainers[name:crs].resources.requests",
 								"value": `{"cpu":"80m", "memory": "150Mi"}`,
 							},
