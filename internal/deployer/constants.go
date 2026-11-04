@@ -6,14 +6,37 @@ var (
 	centralCrName        = "stackrox-central-services"
 	securedClusterCrName = "stackrox-secured-cluster-services"
 
+	centralDbPVCSizeTiny  = "10Gi"
 	centralDbPVCSizeSmall = "30Gi"
 
 	defaultHAProxyBindPort = 8080
+
+	centralResourcesTiny = map[string]interface{}{
+		"requests": map[string]string{
+			"memory": "300Mi",
+			"cpu":    "90m",
+		},
+		"limits": map[string]string{
+			"memory": "2Gi",
+			"cpu":    "1",
+		},
+	}
 
 	centralResourcesSmall = map[string]interface{}{
 		"requests": map[string]string{
 			"memory": "1Gi",
 			"cpu":    "500m",
+		},
+		"limits": map[string]string{
+			"memory": "2Gi",
+			"cpu":    "1",
+		},
+	}
+
+	centralDbResourcesTiny = map[string]interface{}{
+		"requests": map[string]string{
+			"memory": "400Mi",
+			"cpu":    "80m",
 		},
 		"limits": map[string]string{
 			"memory": "2Gi",
@@ -54,6 +77,17 @@ var (
 		},
 	}
 
+	centralScannerV4DbResourcesTiny = map[string]interface{}{
+		"requests": map[string]string{
+			"memory": "400Mi",
+			"cpu":    "80m",
+		},
+		"limits": map[string]string{
+			"memory": "2000Mi",
+			"cpu":    "1000m",
+		},
+	}
+
 	centralScannerV4DbResourcesSmall = map[string]interface{}{
 		"requests": map[string]string{
 			"memory": "512Mi",
@@ -65,6 +99,17 @@ var (
 		},
 	}
 
+	centralScannerV4IndexerResourcesTiny = map[string]interface{}{
+		"requests": map[string]string{
+			"memory": "300Mi",
+			"cpu":    "80m",
+		},
+		"limits": map[string]string{
+			"memory": "2Gi",
+			"cpu":    "2000m",
+		},
+	}
+
 	centralScannerV4IndexerResourcesSmall = map[string]interface{}{
 		"requests": map[string]string{
 			"memory": "512Mi",
@@ -73,6 +118,17 @@ var (
 		"limits": map[string]string{
 			"memory": "2Gi",
 			"cpu":    "2000m",
+		},
+	}
+
+	centralScannerV4MatcherResourcesTiny = map[string]interface{}{
+		"requests": map[string]string{
+			"memory": "300Mi",
+			"cpu":    "80m",
+		},
+		"limits": map[string]string{
+			"memory": "2Gi",
+			"cpu":    "1000m",
 		},
 	}
 
@@ -88,6 +144,17 @@ var (
 	}
 
 	// Secured Cluster
+
+	securedClusterSensorResourcesTiny = map[string]interface{}{
+		"requests": map[string]string{
+			"memory": "300Mi",
+			"cpu":    "80m",
+		},
+		"limits": map[string]string{
+			"memory": "2Gi",
+			"cpu":    "1000m",
+		},
+	}
 
 	securedClusterSensorResourcesSmall = map[string]interface{}{
 		"requests": map[string]string{
