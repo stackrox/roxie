@@ -1,0 +1,61 @@
+name: E2E Tests (kind)
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        required: true
+        type: string
+
+env:
+  REGISTRY: quay.io
+
+jobs:
+  e2e-tests-kind:
+    runs-on: ubuntu-latest
+    env:
+      SKIP_OLM_TESTS: "true"
+      ROXIE_RESOURCE_PROFILE: "tiny"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Log in to Quay.io
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Extract roxie binary from image
+        run: |
+          docker create --name roxie-extract "${{ inputs.image }}"
+          docker cp roxie-extract:/usr/local/bin/roxie "$GITHUB_WORKSPACE/roxie"
+          docker rm roxie-extract
+
+      - name: Install roxie binary
+        run: |
+          cp "${GITHUB_WORKSPACE}/roxie" /usr/local/bin/roxie
+          chmod +x /usr/local/bin/roxie
+          roxie version
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: roxie-e2e
+
+      - name: Run e2e tests
+        env:
+          REGISTRY_USERNAME: ${{ secrets.QUAY_RHACS_ENG_RO_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.QUAY_RHACS_ENG_RO_PASSWORD }}
+        run: |
+          make run-test-e2e
