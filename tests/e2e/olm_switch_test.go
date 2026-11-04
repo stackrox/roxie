@@ -215,10 +215,7 @@ func TestSecuredClusterWithOLMSwitch(t *testing.T) {
 	verifyNamespaceExists(t, centralNamespace)
 
 	// Load envrc for secured-cluster
-	envrcEnv, err := loadEnvrcFile(envrcPath)
-	if err != nil {
-		t.Fatalf("Failed to load envrc file: %v", err)
-	}
+	envrcEnv := loadEnvrcFile(t, envrcPath)
 
 	// Step 2: Deploy secured-cluster (should reuse OLM operator)
 	t.Log("=== Step 2: Deploy secured-cluster (should reuse OLM operator) ===")

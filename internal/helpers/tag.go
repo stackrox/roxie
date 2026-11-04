@@ -16,7 +16,7 @@ import (
 	"github.com/stackrox/roxie/internal/stackroxversions"
 )
 
-func LookupMainImageTag(ctx context.Context) (string, error) {
+func LookupMainImageTag(ctx context.Context, imageRegistry string) (string, error) {
 	log.Dim("Checking if main image tag is defined in the environment")
 	if tag := os.Getenv("MAIN_IMAGE_TAG"); tag != "" {
 		log.Infof("Using MAIN_IMAGE_TAG from environment: %s", tag)
@@ -38,7 +38,7 @@ func LookupMainImageTag(ctx context.Context) (string, error) {
 	log.Warning("Alternatively, execute roxie from within the stackrox repository, in which case the currently checked out stackrox tag will be used")
 
 	log.Dim("Checking what the latest released version tag is")
-	latestTag, err := LookupLatestTag(ctx)
+	latestTag, err := LookupLatestTag(ctx, imageRegistry)
 	if err != nil {
 		return "", fmt.Errorf("looking up latest release tag: %w", err)
 	}
@@ -48,7 +48,7 @@ func LookupMainImageTag(ctx context.Context) (string, error) {
 }
 
 // Computes the latest image tag for a pullable, released main image.
-func LookupLatestTag(ctx context.Context) (string, error) {
+func LookupLatestTag(ctx context.Context, imageRegistry string) (string, error) {
 	const atMost = 5
 
 	tags, err := stackroxversions.LookupLatestReleaseTagsViaGitHub(ctx, atMost)
@@ -56,9 +56,13 @@ func LookupLatestTag(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("looking up latest release tags: %w", err)
 	}
 
+	if imageRegistry == "" {
+		imageRegistry = constants.DefaultRegistry
+	}
+
 	// Verify we have a pullable main image.
 	for _, tag := range tags {
-		mainImage := fmt.Sprintf("%s/main:%s", constants.DefaultRegistry, tag)
+		mainImage := fmt.Sprintf("%s/main:%s", imageRegistry, tag)
 		if err := ocihelper.VerifyImageExistence(ctx, mainImage); err != nil {
 			var te *transport.Error
 			if errors.As(err, &te) && te.StatusCode == http.StatusNotFound {
