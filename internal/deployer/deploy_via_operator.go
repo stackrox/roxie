@@ -5,11 +5,11 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"time"
 
@@ -665,6 +665,58 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 	return "", errors.New("timeout waiting for LoadBalancer to get external address")
 }
 
+// routeStatus is the subset of the OpenShift Route object waitForRoute needs.
+type routeStatus struct {
+	Spec struct {
+		Host string `json:"host"`
+	} `json:"spec"`
+	Status struct {
+		Ingress []struct {
+			Host       string `json:"host"`
+			Conditions []struct {
+				Type   string `json:"type"`
+				Status string `json:"status"`
+			} `json:"conditions"`
+		} `json:"ingress"`
+	} `json:"status"`
+}
+
+// fetchRouteStatus reads the Route's host and admission state from a single
+// object, so both reflect the same state of the Route. Admission conditions
+// live on the per-router status.ingress entries; a host conflict can leave the
+// Route unadmitted with a host set, so admission is only reported when an
+// ingress entry for the host carries Admitted=True.
+func fetchRouteStatus(ctx context.Context, namespace, routeName string) (host string, admitted bool, err error) {
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
+		Args: []string{"get", "route", routeName, "-n", namespace, "-o", "json"},
+	})
+	if err != nil {
+		return "", false, err
+	}
+	var route routeStatus
+	if err := json.Unmarshal([]byte(result.Stdout), &route); err != nil {
+		return "", false, err
+	}
+	host, admitted = routeAdmittedFor(route)
+	return host, admitted, nil
+}
+
+// routeAdmittedFor reports the Route's host and whether an ingress entry for
+// that host carries an Admitted=True condition.
+func routeAdmittedFor(route routeStatus) (string, bool) {
+	for _, ingress := range route.Status.Ingress {
+		if ingress.Host != route.Spec.Host {
+			continue
+		}
+		for _, condition := range ingress.Conditions {
+			if condition.Type == "Admitted" && condition.Status == "True" {
+				return route.Spec.Host, true
+			}
+		}
+	}
+	return route.Spec.Host, false
+}
+
 // waitForRoute waits for an OpenShift Route to be admitted by the router.
 // Returns the endpoint as "host:port", with no https:// prefix.
 func (d *Deployer) waitForRoute(ctx context.Context, namespace, routeName string, waitTime time.Duration) (string, error) {
@@ -672,30 +724,14 @@ func (d *Deployer) waitForRoute(ctx context.Context, namespace, routeName string
 
 	start := time.Now()
 	for time.Since(start) < waitTime {
-		result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
-			Args: []string{"get", "route", routeName, "-n", namespace, "-o", "jsonpath={.spec.host}"},
-		})
-		if err == nil {
-			hostname := strings.TrimSpace(result.Stdout)
-			// The host is assigned on admission, but a host conflict can leave
-			// the Route unadmitted with a host set; require Admitted=True.
-			if hostname != "" {
-				// Admission conditions live on the per-router status.ingress
-				// entries; a host conflict can leave the Route unadmitted with
-				// a host set, so require an admitted ingress for the host.
-				admitted, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
-					Args: []string{"get", "route", routeName, "-n", namespace, "-o", fmt.Sprintf(`jsonpath={.status.ingress[?(@.host=="%s")].conditions[?(@.type=="Admitted")].status}`, hostname)},
-				})
-				admittedStatuses := strings.Fields(admitted.Stdout)
-				if err == nil && slices.Contains(admittedStatuses, "True") {
-					if env.RunningInteractively {
-						log.Successf("✓ Route admitted with hostname: %s", hostname)
-					} else {
-						log.Success("✓ Route admitted")
-					}
-					return fmt.Sprintf("%s:443", hostname), nil
-				}
+		hostname, admitted, err := fetchRouteStatus(ctx, namespace, routeName)
+		if err == nil && hostname != "" && admitted {
+			if env.RunningInteractively {
+				log.Successf("✓ Route admitted with hostname: %s", hostname)
+			} else {
+				log.Success("✓ Route admitted")
 			}
+			return fmt.Sprintf("%s:443", hostname), nil
 		}
 
 		select {
