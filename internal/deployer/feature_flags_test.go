@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"dario.cat/mergo"
 	"github.com/stackrox/roxie/internal/envvars"
-	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,7 +155,7 @@ func TestDeepMergeWithDeduplicateEnvVars(t *testing.T) {
 	}
 	overlay := featureFlagsToOverrides(map[string]bool{"ROX_FOO": false, "ROX_NEW": true})
 
-	err := helpers.DeepMerge(spec, overlay)
+	err := mergo.Merge(&spec, overlay, mergo.WithOverride, mergo.WithAppendSlice)
 	require.NoError(t, err)
 
 	err = envvars.DeduplicateInUnstructured(spec, "customize", "envVars")

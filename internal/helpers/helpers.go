@@ -67,7 +67,7 @@ func MergeMaps(base map[string]interface{}, overlays ...map[string]interface{}) 
 	result := deepCopy(base)
 
 	for _, overlay := range overlays {
-		if err := DeepMerge(result, overlay); err != nil {
+		if err := mergo.Merge(&result, overlay, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 			return nil, err
 		}
 	}
@@ -105,12 +105,6 @@ func deepCopySlice(s []interface{}) []interface{} {
 		}
 	}
 	return result
-}
-
-// DeepMerge recursively merges overlay into base.
-// Slices are appended, with values from overlay appearing after values from base.
-func DeepMerge(base, overlay map[string]any) error {
-	return mergo.Merge(&base, &overlay, mergo.WithOverride, mergo.WithAppendSlice)
 }
 
 func MapToStruct(m map[string]interface{}, out interface{}) error {
