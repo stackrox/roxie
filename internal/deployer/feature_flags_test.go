@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stackrox/roxie/internal/envvars"
+	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stretchr/testify/require"
 )
 
@@ -142,266 +144,37 @@ func TestParseFeatureFlags(t *testing.T) {
 	}
 }
 
-func TestMergeEnvVars(t *testing.T) {
-	tests := []struct {
-		name          string
-		base          []interface{}
-		overlay       []interface{}
-		expected      map[string]string
-		checkOrdering bool
-		expectedOrder []string
-	}{
-		{
-			name: "overlapping names - overlay wins",
-			base: []interface{}{
-				map[string]interface{}{"name": "ROX_FOO", "value": "old"},
-				map[string]interface{}{"name": "ROX_BAR", "value": "keep"},
+func TestDeepMergeWithDeduplicateEnvVars(t *testing.T) {
+	spec := map[string]any{
+		"customize": map[string]any{
+			"envVars": []any{
+				map[string]any{"name": "MY_VAR", "value": "keep"},
+				map[string]any{"name": "ROX_FOO", "value": "old"},
 			},
-			overlay: []interface{}{
-				map[string]interface{}{"name": "ROX_FOO", "value": "new"},
-			},
-			expected: map[string]string{
-				"ROX_FOO": "new",
-				"ROX_BAR": "keep",
-			},
-		},
-		{
-			name: "no overlapping names",
-			base: []interface{}{
-				map[string]interface{}{"name": "ROX_FOO", "value": "foo"},
-			},
-			overlay: []interface{}{
-				map[string]interface{}{"name": "ROX_BAR", "value": "bar"},
-			},
-			expected: map[string]string{
-				"ROX_FOO": "foo",
-				"ROX_BAR": "bar",
-			},
-		},
-		{
-			name: "empty base",
-			base: []interface{}{},
-			overlay: []interface{}{
-				map[string]interface{}{"name": "ROX_FOO", "value": "foo"},
-			},
-			expected: map[string]string{
-				"ROX_FOO": "foo",
-			},
-		},
-		{
-			name: "empty overlay",
-			base: []interface{}{
-				map[string]interface{}{"name": "ROX_FOO", "value": "foo"},
-			},
-			overlay: []interface{}{},
-			expected: map[string]string{
-				"ROX_FOO": "foo",
-			},
-		},
-		{
-			name: "malformed envVar without name field",
-			base: []interface{}{
-				map[string]interface{}{"name": "ROX_FOO", "value": "foo"},
-			},
-			overlay: []interface{}{
-				map[string]interface{}{"value": "no-name"}, // missing "name" field
-				map[string]interface{}{"name": "ROX_BAR", "value": "bar"},
-			},
-			expected: map[string]string{
-				"ROX_FOO": "foo",
-				"ROX_BAR": "bar",
-			},
-		},
-		{
-			name: "result is sorted alphabetically",
-			base: []interface{}{
-				map[string]interface{}{"name": "ROX_ZZZ", "value": "z"},
-				map[string]interface{}{"name": "ROX_AAA", "value": "a"},
-			},
-			overlay: []interface{}{
-				map[string]interface{}{"name": "ROX_MMM", "value": "m"},
-			},
-			expected: map[string]string{
-				"ROX_AAA": "a",
-				"ROX_MMM": "m",
-				"ROX_ZZZ": "z",
-			},
-			checkOrdering: true,
-			expectedOrder: []string{"ROX_AAA", "ROX_MMM", "ROX_ZZZ"},
 		},
 	}
+	overlay := featureFlagsToOverrides(map[string]bool{"ROX_FOO": false, "ROX_NEW": true})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := mergeEnvVars(tt.base, tt.overlay)
+	err := helpers.DeepMerge(spec, overlay)
+	require.NoError(t, err)
 
-			if len(result) != len(tt.expected) {
-				t.Fatalf("expected %d env vars, got %d", len(tt.expected), len(result))
-			}
+	err = envvars.DeduplicateInUnstructured(spec, "customize", "envVars")
+	require.NoError(t, err)
 
-			resultMap := make(map[string]string)
-			for _, item := range result {
-				envVar := item.(map[string]interface{})
-				if name, ok := envVar["name"].(string); ok {
-					resultMap[name] = envVar["value"].(string)
-				}
-			}
+	customize := spec["customize"].(map[string]any)
+	envVars := customize["envVars"].([]any)
 
-			if !reflect.DeepEqual(resultMap, tt.expected) {
-				t.Errorf("got %v, want %v", resultMap, tt.expected)
-			}
-
-			if tt.checkOrdering {
-				actualOrder := make([]string, len(result))
-				for i, item := range result {
-					envVar := item.(map[string]interface{})
-					actualOrder[i] = envVar["name"].(string)
-				}
-				if !reflect.DeepEqual(actualOrder, tt.expectedOrder) {
-					t.Errorf("ordering: got %v, want %v", actualOrder, tt.expectedOrder)
-				}
-			}
-		})
-	}
-}
-
-func TestMergeWithEnvVarSupport(t *testing.T) {
-	tests := []struct {
-		name             string
-		base             map[string]interface{}
-		overlay          map[string]interface{}
-		expectedEnvVars  map[string]string
-		checkOtherFields bool
-	}{
-		{
-			name: "both have envVars with overlap",
-			base: map[string]interface{}{
-				"spec": map[string]interface{}{
-					"customize": map[string]interface{}{
-						"envVars": []interface{}{
-							map[string]interface{}{"name": "ROX_FOO", "value": "old"},
-							map[string]interface{}{"name": "ROX_KEEP", "value": "me"},
-						},
-					},
-				},
-			},
-			overlay: map[string]interface{}{
-				"spec": map[string]interface{}{
-					"customize": map[string]interface{}{
-						"envVars": []interface{}{
-							map[string]interface{}{"name": "ROX_FOO", "value": "new"},
-						},
-					},
-				},
-			},
-			expectedEnvVars: map[string]string{
-				"ROX_FOO":  "new",
-				"ROX_KEEP": "me",
-			},
-		},
-		{
-			name: "base has envVars, overlay has none",
-			base: map[string]interface{}{
-				"spec": map[string]interface{}{
-					"customize": map[string]interface{}{
-						"envVars": []interface{}{
-							map[string]interface{}{"name": "ROX_FOO", "value": "foo"},
-						},
-					},
-				},
-			},
-			overlay: map[string]interface{}{
-				"spec": map[string]interface{}{
-					"other": "field",
-				},
-			},
-			expectedEnvVars: map[string]string{
-				"ROX_FOO": "foo",
-			},
-		},
-		{
-			name: "overlay has envVars, base has none",
-			base: map[string]interface{}{
-				"spec": map[string]interface{}{
-					"other": "field",
-				},
-			},
-			overlay: map[string]interface{}{
-				"spec": map[string]interface{}{
-					"customize": map[string]interface{}{
-						"envVars": []interface{}{
-							map[string]interface{}{"name": "ROX_FOO", "value": "foo"},
-						},
-					},
-				},
-			},
-			expectedEnvVars: map[string]string{
-				"ROX_FOO": "foo",
-			},
-		},
-		{
-			name: "neither has envVars",
-			base: map[string]interface{}{
-				"spec": map[string]interface{}{
-					"other": "field",
-				},
-			},
-			overlay: map[string]interface{}{
-				"spec": map[string]interface{}{
-					"another": "field",
-				},
-			},
-			expectedEnvVars:  nil,
-			checkOtherFields: true,
-		},
+	resultMap := make(map[string]string)
+	for _, item := range envVars {
+		envVar := item.(map[string]any)
+		resultMap[envVar["name"].(string)] = envVar["value"].(string)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := mergeWithEnvVarSupport(tt.base, tt.overlay)
-			require.NoError(t, err)
-
-			spec, ok := result["spec"].(map[string]interface{})
-			if !ok {
-				t.Fatal("spec should be a map")
-			}
-
-			if tt.expectedEnvVars != nil {
-				customize, ok := spec["customize"].(map[string]interface{})
-				if !ok {
-					t.Fatal("customize should be a map")
-				}
-
-				envVars, ok := customize["envVars"].([]interface{})
-				if !ok {
-					t.Fatal("envVars should be a slice")
-				}
-
-				if len(envVars) != len(tt.expectedEnvVars) {
-					t.Fatalf("expected %d env vars, got %d", len(tt.expectedEnvVars), len(envVars))
-				}
-
-				resultMap := make(map[string]string)
-				for _, item := range envVars {
-					envVar := item.(map[string]interface{})
-					resultMap[envVar["name"].(string)] = envVar["value"].(string)
-				}
-
-				if !reflect.DeepEqual(resultMap, tt.expectedEnvVars) {
-					t.Errorf("got %v, want %v", resultMap, tt.expectedEnvVars)
-				}
-			}
-
-			if tt.checkOtherFields {
-				if spec["other"] != "field" {
-					t.Errorf("expected base field to be preserved")
-				}
-				if spec["another"] != "field" {
-					t.Errorf("expected overlay field to be added")
-				}
-			}
-		})
-	}
+	require.Equal(t, map[string]string{
+		"MY_VAR":  "keep",
+		"ROX_FOO": "false",
+		"ROX_NEW": "true",
+	}, resultMap)
 }
 
 func TestFeatureFlagsConversion(t *testing.T) {
