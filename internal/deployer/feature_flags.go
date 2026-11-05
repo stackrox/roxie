@@ -2,13 +2,8 @@ package deployer
 
 import (
 	"fmt"
-	"slices"
-	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/stackrox/roxie/internal/helpers"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // parseFlagWithEquals parses a feature flag in the format "ROX_FOO=true" or "ROX_FOO=false"
@@ -110,49 +105,4 @@ func featureFlagsToOverrides(flags map[string]bool) map[string]interface{} {
 			"envVars": featureFlagsToEnvVars(flags),
 		},
 	}
-}
-
-// mergeEnvVars smartly merges envVars arrays, with newer values overriding older ones by name.
-// This allows feature flags to override specific env vars without wiping the entire array.
-func mergeEnvVars(base, overlay []interface{}) []interface{} {
-	envVarMap := make(map[string]interface{})
-
-	for _, item := range slices.Concat(base, overlay) {
-		if envVar, ok := item.(map[string]interface{}); ok {
-			if name, ok := envVar["name"].(string); ok {
-				envVarMap[name] = envVar
-			}
-		}
-	}
-
-	result := make([]interface{}, 0, len(envVarMap))
-	for _, envVar := range envVarMap {
-		result = append(result, envVar)
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].(map[string]interface{})["name"].(string) <
-			result[j].(map[string]interface{})["name"].(string)
-	})
-
-	return result
-}
-
-// mergeWithEnvVarSupport merges two maps, with special handling for spec.customize.envVars arrays.
-// Instead of replacing the entire envVars array, it merges individual env vars by name,
-// allowing overlay to override specific env vars while preserving others from base.
-func mergeWithEnvVarSupport(base, overlay map[string]interface{}) (map[string]interface{}, error) {
-	result, err := helpers.MergeMaps(base, overlay)
-	if err != nil {
-		return nil, err
-	}
-
-	baseEnvVars, baseFound, _ := unstructured.NestedSlice(base, "spec", "customize", "envVars")
-	overlayEnvVars, overlayFound, _ := unstructured.NestedSlice(overlay, "spec", "customize", "envVars")
-
-	if baseFound && overlayFound {
-		_ = unstructured.SetNestedSlice(result, mergeEnvVars(baseEnvVars, overlayEnvVars), "spec", "customize", "envVars")
-	}
-
-	return result, nil
 }
