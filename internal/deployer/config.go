@@ -88,6 +88,7 @@ type RoxieConfig struct {
 	FeatureFlags  map[string]bool   `yaml:"featureFlags,omitempty"`
 	ClusterType   types.ClusterType `yaml:"clusterType,omitempty"`
 	HAProxy       HAProxyConfig     `yaml:"haProxy,omitempty"`
+	Envrc         *string           `yaml:"envrc,omitempty"`
 }
 
 // UsesCustomRegistry returns whether a custom image registry was configured.
@@ -101,6 +102,10 @@ func (c *RoxieConfig) KonfluxImagesSet() bool {
 
 func (c *RoxieConfig) KonfluxImagesEnabled() bool {
 	return c.KonfluxImages != nil && *c.KonfluxImages
+}
+
+func (c *RoxieConfig) EnvrcSet() bool {
+	return c.Envrc != nil && *c.Envrc != ""
 }
 
 // NewRoxieConfig returns a RoxieConfig with initialized defaults.
@@ -356,7 +361,11 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("resource profile 'auto' should have been resolved before building the CR")
 	}
 	if c.ResourceProfile != types.ResourceProfileAcsDefaults {
-		if err := helpers.DeepMerge(cr, getCentralResourcesOperator(c.ResourceProfile)); err != nil {
+		profileCopy, err := helpers.MergeMaps(getCentralResourcesOperator(c.ResourceProfile))
+		if err != nil {
+			return nil, fmt.Errorf("copying resource profile: %w", err)
+		}
+		if err := helpers.DeepMerge(cr, profileCopy); err != nil {
 			return nil, fmt.Errorf("merging resource profile into Central CR: %w", err)
 		}
 	}
@@ -457,7 +466,11 @@ func (s *SecuredClusterConfig) CustomResource() (map[string]interface{}, error) 
 		return nil, fmt.Errorf("resource profile 'auto' must have been resolved before building the CR")
 	}
 	if s.ResourceProfile != types.ResourceProfileAcsDefaults {
-		if err := helpers.DeepMerge(cr, getSecuredClusterResourcesOperator(s.ResourceProfile)); err != nil {
+		profileCopy, err := helpers.MergeMaps(getSecuredClusterResourcesOperator(s.ResourceProfile))
+		if err != nil {
+			return nil, fmt.Errorf("copying resource profile: %w", err)
+		}
+		if err := helpers.DeepMerge(cr, profileCopy); err != nil {
 			return nil, fmt.Errorf("merging resource profile into SecuredCluster CR: %w", err)
 		}
 	}

@@ -31,19 +31,18 @@ type Logger struct {
 
 // New creates a new roxie logger.
 func New() *Logger {
-	return NewWithWriters(os.Stdout, os.Stderr)
+	return NewWithWriter(os.Stderr)
 }
 
-// NewWithWriters creates a new roxie logger with configurable writers for stdout/stderr.
-func NewWithWriters(stdout, stderr io.Writer) *Logger {
+// NewWithWriter creates a new roxie logger that writes all output to w.
+func NewWithWriter(w io.Writer) *Logger {
 	level := &slog.LevelVar{}
 	level.Set(LevelDim)
 
 	h := &handler{
 		level:     level,
 		startTime: time.Now(),
-		stdout:    stdout,
-		stderr:    stderr,
+		stderr:    w,
 	}
 
 	return &Logger{
@@ -172,7 +171,6 @@ type handler struct {
 	mu        sync.Mutex
 	level     *slog.LevelVar
 	startTime time.Time
-	stdout    io.Writer
 	stderr    io.Writer
 }
 
@@ -192,14 +190,9 @@ func (h *handler) Handle(_ context.Context, r slog.Record) error {
 	timestamp := color.GreenString("%02d:%02d", minutes, seconds)
 	message := styleForLevel(r.Level).Sprint(r.Message)
 
-	w := h.stdout
-	if r.Level >= slog.LevelError {
-		w = h.stderr
-	}
-
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	fmt.Fprintf(w, "%s %s\n", timestamp, message)
+	fmt.Fprintf(h.stderr, "%s %s\n", timestamp, message)
 	return nil
 }
 

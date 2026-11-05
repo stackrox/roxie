@@ -19,6 +19,7 @@ import (
 	"github.com/stackrox/roxie/internal/containerrt"
 	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagecache"
 	"github.com/stackrox/roxie/internal/k8s"
 	log "github.com/stackrox/roxie/internal/logger"
@@ -44,7 +45,6 @@ type Deployer struct {
 	dockerAuth  *dockerauth.DockerAuth
 	imageCache  *imagecache.ImageCache
 	dockerCreds *dockerauth.Credentials
-	envrcFile   string
 
 	kubeContext            string
 	containerRuntimeSocket string
@@ -118,6 +118,10 @@ func (d *Deployer) deleteCentralResources(ctx context.Context) error {
 	for _, resource := range []ResourceToDelete{
 		{Name: "central-db", Kind: "pvc"},
 		{Name: "central-db-backup", Kind: "pvc"},
+		// scanner-v4-db is not managed by the operator's ReconcilePVCExtension, so its ownerReference
+		// is only cleaned up by K8s GC. On redeploy, GC may not finish before the new CR is created,
+		// leaving a stale ownerReference that causes the operator to error-loop. See #291.
+		{Name: "scanner-v4-db", Kind: "pvc", OwnerName: centralCrName},
 		{Name: "admin-password", Kind: "secret"},
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: centralCrName},
 		{Name: "stackrox-central-helm", Kind: "configmap"},
@@ -177,6 +181,10 @@ func (d *Deployer) deleteSecuredClusterResources(ctx context.Context) error {
 	// Delete resources, which are treated special.
 	for _, resource := range []ResourceToDelete{
 		{Name: "cluster-registration-secret", Kind: "secret"},
+		// scanner-v4-db is not managed by the operator's ReconcilePVCExtension, so its ownerReference
+		// is only cleaned up by K8s GC. On redeploy, GC may not finish before the new CR is created,
+		// leaving a stale ownerReference that causes the operator to error-loop. See #291.
+		{Name: "scanner-v4-db", Kind: "pvc", OwnerName: securedClusterCrName},
 		// We need to make sure that don't accidentally delete a scanner-db-password belonging to the central CR,
 		// when both are deployed into the same namespace.
 		{Name: "scanner-db-password", Kind: "secret", OwnerName: securedClusterCrName},
@@ -265,7 +273,7 @@ func New() (*Deployer, error) {
 
 // Cleanup cleans up any temporary resources created by the deployer, such as temporary files.
 func (d *Deployer) Cleanup() {
-	if d.tempDir != "" && d.envrcFile == "" {
+	if d.tempDir != "" && !d.config.Roxie.EnvrcSet() {
 		// In the case of envrc file usage, we need to keep temporary files around after deployment.
 		// (It contains CA certificates, for example.)
 		if err := os.RemoveAll(d.tempDir); err != nil {
@@ -408,6 +416,7 @@ func (d *Deployer) prepareCredentials(ctx context.Context) error {
 
 func (d *Deployer) deployCentral(ctx context.Context) error {
 	log.Infof("Deploying Central to namespace %s", d.config.Central.Namespace)
+	log.Infof("Central resource profile: %s", d.config.Central.ResourceProfile)
 	if d.namespaceExists(d.config.Central.Namespace) {
 		log.Info("Existing Central deployment found, tearing down...")
 		if err := d.teardownCentral(ctx); err != nil {
@@ -419,9 +428,9 @@ func (d *Deployer) deployCentral(ctx context.Context) error {
 		return err
 	}
 
-	if d.envrcFile != "" {
-		log.Dimf("Writing environment variables to %s", d.envrcFile)
-		if err := d.writeEnvrcFile(ctx); err != nil {
+	if d.config.Roxie.EnvrcSet() {
+		log.Dimf("Writing environment variables to %s", *d.config.Roxie.Envrc)
+		if err := d.writeEnvrcFile(ctx, *d.config.Roxie.Envrc); err != nil {
 			log.Warningf("Failed to write envrc file: %v", err)
 		}
 	}
@@ -431,6 +440,7 @@ func (d *Deployer) deployCentral(ctx context.Context) error {
 
 func (d *Deployer) deploySecuredCluster(ctx context.Context) error {
 	log.Infof("Deploying SecuredCluster to namespace %s", d.config.SecuredCluster.Namespace)
+	log.Infof("SecuredCluster resource profile: %s", d.config.SecuredCluster.ResourceProfile)
 	if d.namespaceExists(d.config.SecuredCluster.Namespace) {
 		log.Info("Existing SecuredCluster deployment found, tearing down...")
 		if err := d.teardownSecuredCluster(ctx); err != nil {
@@ -644,10 +654,6 @@ func generatePassword() string {
 	return string(password)
 }
 
-func (d *Deployer) SetEnvrcFile(path string) {
-	d.envrcFile = path
-}
-
 func (d *Deployer) doesResourceExist(ctx context.Context, resourceType, resourceName, namespace string) bool {
 	_, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
 		Args: []string{
@@ -769,21 +775,21 @@ func (d *Deployer) cleanupTempDir(path string, description string) {
 	}
 }
 
-func (d *Deployer) writeEnvrcFile(ctx context.Context) error {
+func (d *Deployer) writeEnvrcFile(ctx context.Context, filename string) error {
 	var content strings.Builder
 	for name, val := range roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo()).Export() {
-		fmt.Fprintf(&content, "export %s=%q\n", name, val)
+		fmt.Fprintf(&content, "export %s=%s\n", name, helpers.ShellQuote(val))
 	}
 
 	if d.portForwardPID != 0 {
 		fmt.Fprintf(&content, "export ROXIE_PORT_FORWARD_PID=%d\n", d.portForwardPID)
 	}
 
-	if err := os.WriteFile(d.envrcFile, []byte(content.String()), 0600); err != nil {
+	if err := os.WriteFile(filename, []byte(content.String()), 0600); err != nil {
 		return fmt.Errorf("failed to write envrc file: %w", err)
 	}
 
-	log.Successf("✓ Environment variables written to %s", d.envrcFile)
+	log.Successf("✓ Environment variables written to %s", filename)
 	return nil
 }
 

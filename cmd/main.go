@@ -9,6 +9,7 @@ import (
 
 	"dario.cat/mergo"
 	"github.com/fatih/color"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/helpers"
@@ -22,8 +23,9 @@ var (
 	// Global flags
 	verbose bool
 	shell   string
-	envrc   string
 	dryRun  bool
+
+	evalMode bool
 
 	skipUserConfig bool
 
@@ -79,6 +81,12 @@ Red Hat Advanced Cluster Security (ACS) on any Kubernetes/OpenShift cluster.`,
 }
 
 func init() {
+	// All log output goes to stderr, so base the color decision on stderr's TTY status
+	// instead of the fatih/color default (stdout). This keeps colors working when stdout
+	// is captured, e.g. eval "$(roxie deploy --eval)".
+	_, noColorSet := os.LookupEnv("NO_COLOR")
+	color.NoColor = noColorSet || os.Getenv("TERM") == "dumb" || !isatty.IsTerminal(os.Stderr.Fd())
+
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output (show CRs)")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Do not actually modify cluster")
 	rootCmd.PersistentFlags().BoolVar(&skipUserConfig, "skip-user-config", false,

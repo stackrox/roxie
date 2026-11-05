@@ -185,10 +185,8 @@ RUN ARCH=${TARGETARCH:-amd64} && \
     chmod +x /usr/local/bin/kubelogin && \
     rm -rf /tmp/kubelogin.zip /tmp/bin
 
-# Copy roxie binary and scripts from builder
+# Copy roxie binary from builder
 COPY --from=builder /build/roxie /usr/local/bin/roxie
-COPY scripts/roxcurl /usr/local/bin/roxcurl
-RUN chmod +x /usr/local/bin/roxcurl
 
 # Create non-root user with / as home directory for simplified volume mounting
 # This allows users to mount credentials directly at their standard paths:

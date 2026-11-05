@@ -238,6 +238,57 @@ central:
 		},
 
 		{
+			name: "envrc via CLI flag",
+			args: []string{"--envrc", "/tmp/my.envrc"},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Roxie.Envrc, "Roxie.Envrc should be set")
+				assert.Equal(t, "/tmp/my.envrc", *cfg.Roxie.Envrc)
+			},
+		},
+		{
+			name: "envrc via config file",
+			config: `
+roxie:
+  envrc: /tmp/from-config.envrc
+`,
+			args: []string{"--config", configFilePath},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Roxie.Envrc, "Roxie.Envrc should be set")
+				assert.Equal(t, "/tmp/from-config.envrc", *cfg.Roxie.Envrc)
+			},
+		},
+		{
+			name: "envrc CLI flag overrides config file",
+			config: `
+roxie:
+  envrc: /tmp/from-config.envrc
+`,
+			args: []string{"--config", configFilePath, "--envrc", "/tmp/from-cli.envrc"},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Roxie.Envrc, "Roxie.Envrc should be set")
+				assert.Equal(t, "/tmp/from-cli.envrc", *cfg.Roxie.Envrc)
+			},
+		},
+		{
+			name: "envrc CLI flag can clear config file value",
+			config: `
+roxie:
+  envrc: /tmp/from-config.envrc
+`,
+			args: []string{"--config", configFilePath, "--envrc", ""},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				require.NotNil(t, cfg.Roxie.Envrc, "Roxie.Envrc should be set (to empty)")
+				assert.Empty(t, *cfg.Roxie.Envrc)
+			},
+		},
+		{
+			name: "envrc not set by default",
+			args: []string{"--tag", "4.7.0"},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				assert.Nil(t, cfg.Roxie.Envrc, "Roxie.Envrc should not be set")
+			},
+		},
+		{
 			name: "set expressions can be used",
 			args: []string{"--set", "roxie.version=0.99.1", "--set", "central.deployTimeout=4m", "--set", "securedCluster.spec.clusterName=foo"},
 			assert: func(t *testing.T, cfg deployer.Config) {
