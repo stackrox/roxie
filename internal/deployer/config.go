@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/stackrox/roxie/internal/constants"
 	"github.com/stackrox/roxie/internal/envvars"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // Config is the top-level deployment configuration, combining settings for
@@ -37,6 +39,28 @@ func NewConfig() Config {
 		Central:        NewCentralConfig(),
 		SecuredCluster: NewSecuredClusterConfig(),
 	}
+}
+
+// MergeConfig merges overlay into base with envVar-aware handling.
+// Generic slices use replacement semantics (overlay wins), but
+// customize.envVars entries are merged by name across sources
+// (--config, --set, user defaults) with last-one-wins deduplication.
+func MergeConfig(base, overlay *Config) error {
+	envVarsPath := []string{"customize", "envVars"}
+	baseCentralEnvVars, _, _ := unstructured.NestedSlice(base.Central.Spec, envVarsPath...)
+	baseSCEnvVars, _, _ := unstructured.NestedSlice(base.SecuredCluster.Spec, envVarsPath...)
+
+	if err := mergo.Merge(base, overlay, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+		return err
+	}
+
+	if err := envvars.MergeByNameInUnstructured(base.Central.Spec, baseCentralEnvVars, envVarsPath...); err != nil {
+		return fmt.Errorf("reconciling Central env vars: %w", err)
+	}
+	if err := envvars.MergeByNameInUnstructured(base.SecuredCluster.Spec, baseSCEnvVars, envVarsPath...); err != nil {
+		return fmt.Errorf("reconciling SecuredCluster env vars: %w", err)
+	}
+	return nil
 }
 
 // DeepCopy creates a deep-copy of the provided config using a YAML marshaling/unmarshaling roundtrip.
