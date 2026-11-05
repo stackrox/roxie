@@ -9,28 +9,28 @@ import (
 )
 
 func TestDebugOnlyEmitsWhenVerbose(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	l := NewWithWriters(&stdout, &stderr)
+	var buf bytes.Buffer
+	l := NewWithWriter(&buf)
 
 	// Debug is suppressed at the default level (LevelDim).
 	l.Debug("hidden")
-	if stdout.Len() != 0 {
-		t.Fatalf("expected no output before SetVerbose(true), got %q", stdout.String())
+	if buf.Len() != 0 {
+		t.Fatalf("expected no output before SetVerbose(true), got %q", buf.String())
 	}
 
 	// Enabling verbose lowers the level to slog.LevelDebug, so Debug emits.
 	l.SetVerbose(true)
 	l.Debug("visible")
-	if !strings.Contains(stdout.String(), "visible") {
-		t.Fatalf("expected debug output to contain %q, got %q", "visible", stdout.String())
+	if !strings.Contains(buf.String(), "visible") {
+		t.Fatalf("expected debug output to contain %q, got %q", "visible", buf.String())
 	}
 
 	// Disabling verbose restores the default level and suppresses Debug again.
-	before := stdout.Len()
+	before := buf.Len()
 	l.SetVerbose(false)
 	l.Debug("hidden again")
-	if stdout.Len() != before {
-		t.Fatalf("expected no new output after SetVerbose(false), got %q", stdout.String()[before:])
+	if buf.Len() != before {
+		t.Fatalf("expected no new output after SetVerbose(false), got %q", buf.String()[before:])
 	}
 }
 

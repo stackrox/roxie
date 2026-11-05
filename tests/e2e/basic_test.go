@@ -58,8 +58,7 @@ func TestDetachedPortForwarding(t *testing.T) {
 	args := append([]string{roxieBinary, "deploy", "--early-readiness", "central", "--exposure=none", "--port-forwarding", "--envrc", envrcPath}, commonDeployArgs...)
 	runCommand(t, deployTimeout, nil, args...)
 
-	env, err := loadEnvrcFile(envrcPath)
-	require.NoError(t, err, "Failed to load envrc file")
+	env := loadEnvrcFile(t, envrcPath)
 	pidStr, ok := env["ROXIE_PORT_FORWARD_PID"]
 	require.True(t, ok, "ROXIE_PORT_FORWARD_PID not set in envrc")
 	pid, err := strconv.Atoi(pidStr)

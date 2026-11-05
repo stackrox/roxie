@@ -77,6 +77,14 @@ jobs:
       skip-olm-tests: 'false'
     secrets: inherit
 
+  e2e-tests-kind:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    needs: [ build-roxie-image ]
+    uses: ./.github/workflows/e2e-tests-kind.yml
+    with:
+      image: ${{ needs.build-roxie-image.outputs.image }}
+    secrets: inherit
+
   delete-gke-cluster:
     if: ${{ always() && needs.create-gke-cluster.result == 'success' && github.event.pull_request.head.repo.full_name == github.repository }}
     needs: [ create-gke-cluster, e2e-tests ]

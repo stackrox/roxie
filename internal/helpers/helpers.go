@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"reflect"
+	"strings"
 
+	"dario.cat/mergo"
 	"gopkg.in/yaml.v3"
 )
 
@@ -106,29 +107,10 @@ func deepCopySlice(s []interface{}) []interface{} {
 	return result
 }
 
-// deepMerge recursively merges overlay into base
-func DeepMerge(base, overlay map[string]interface{}) error {
-	for k, v := range overlay {
-		if IsNil(v) {
-			continue
-		}
-		if baseVal, ok := base[k]; ok {
-			// Both are maps - merge recursively
-			if baseMap, baseIsMap := baseVal.(map[string]interface{}); baseIsMap {
-				if overlayMap, overlayIsMap := v.(map[string]interface{}); overlayIsMap {
-					if err := DeepMerge(baseMap, overlayMap); err != nil {
-						return err
-					}
-					continue
-				} else {
-					return fmt.Errorf("incompatible types in maps to merge (map vs. %T)", v)
-				}
-			}
-		}
-		// Override with overlay value
-		base[k] = v
-	}
-	return nil
+// DeepMerge recursively merges overlay into base.
+// Slices are appended, with values from overlay appearing after values from base.
+func DeepMerge(base, overlay map[string]any) error {
+	return mergo.Merge(&base, &overlay, mergo.WithOverride, mergo.WithAppendSlice)
 }
 
 func MapToStruct(m map[string]interface{}, out interface{}) error {
@@ -139,14 +121,7 @@ func MapToStruct(m map[string]interface{}, out interface{}) error {
 	return yaml.Unmarshal(bytes, out)
 }
 
-// IsNil uses reflection to reliably check if the provided argument is a Nil pointer.
-func IsNil(i interface{}) bool {
-	if i == nil {
-		return true
-	}
-	switch reflect.TypeOf(i).Kind() {
-	case reflect.Pointer, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
-		return reflect.ValueOf(i).IsNil()
-	}
-	return false
+// ShellQuote wraps s in POSIX single quotes, safe for use in shell eval contexts.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }

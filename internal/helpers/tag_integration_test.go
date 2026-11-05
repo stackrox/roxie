@@ -23,7 +23,7 @@ func TestLookupLatestTag_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
-	tag, err := LookupLatestTag(ctx)
+	tag, err := LookupLatestTag(ctx, "")
 	require.NoError(t, err)
 	require.NotEmpty(t, tag)
 

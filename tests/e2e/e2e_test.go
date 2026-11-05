@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 func lookupLatestTag() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	tag, err := helpers.LookupLatestTag(ctx)
+	tag, err := helpers.LookupLatestTag(ctx, "")
 	if err != nil {
 		return "", err
 	}
