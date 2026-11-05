@@ -129,21 +129,24 @@ func TestDetectClusterType_CRC_OpenShiftPreset(t *testing.T) {
 		"clusterversions.config.openshift.io",
 		"clusteroperators.config.openshift.io",
 	}
+	kubernetesResources := []string{"pods", "services"}
 
 	tests := []struct {
-		name        string
-		kubeContext string
-		server      string
-		want        types.ClusterType
+		name         string
+		kubeContext  string
+		server       string
+		apiResources []string
+		want         types.ClusterType
 	}{
-		{name: "crc server host", kubeContext: "crc-admin", server: "https://api.crc.testing:6443", want: types.ClusterTypeCRC},
-		{name: "crc server host, arbitrary context", kubeContext: "whatever", server: "https://api.crc.testing:6443", want: types.ClusterTypeCRC},
+		{name: "crc server host", kubeContext: "crc-admin", server: "https://api.crc.testing:6443", apiResources: openShift4Resources, want: types.ClusterTypeCRC},
+		{name: "crc server host, arbitrary context", kubeContext: "whatever", server: "https://api.crc.testing:6443", apiResources: openShift4Resources, want: types.ClusterTypeCRC},
 		// Hostnames are case-insensitive, so an uppercase CRC server host must
 		// still be detected as CRC.
-		{name: "crc server host, uppercase", kubeContext: "crc-admin", server: "https://API.CRC.TESTING:6443", want: types.ClusterTypeCRC},
+		{name: "crc server host, uppercase", kubeContext: "crc-admin", server: "https://API.CRC.TESTING:6443", apiResources: openShift4Resources, want: types.ClusterTypeCRC},
+		{name: "crc server host, Kubernetes-only resources", kubeContext: "crc-admin", server: "https://api.crc.testing:6443", apiResources: kubernetesResources, want: types.ClusterTypeUnknown},
 		// A non-CRC server host must be detected as plain OpenShift4, even if the
 		// context name happens to contain "crc".
-		{name: "non-crc server, crc-like context", kubeContext: "acrc-cluster", server: "https://api.my-cluster.example.com:6443", want: types.ClusterTypeOpenShift4},
+		{name: "non-crc server, crc-like context", kubeContext: "acrc-cluster", server: "https://api.my-cluster.example.com:6443", apiResources: openShift4Resources, want: types.ClusterTypeOpenShift4},
 	}
 
 	for _, tt := range tests {
@@ -158,9 +161,9 @@ func TestDetectClusterType_CRC_OpenShiftPreset(t *testing.T) {
 				},
 			}
 
-			result := DetectClusterType(config, openShift4Resources)
+			result := DetectClusterType(config, tt.apiResources)
 			assert.Equal(t, tt.want, result,
-				"context %q / server %q with OpenShift4 API resources", tt.kubeContext, tt.server)
+				"context %q / server %q with API resources", tt.kubeContext, tt.server)
 		})
 	}
 }
@@ -322,7 +325,7 @@ func TestIsOpenShift4(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isOpenShift4(tt.apiResources)
+			got := hasOpenShiftResources(tt.apiResources)
 			if got != tt.want {
 				t.Errorf("isOpenShift4() = %v, want %v", got, tt.want)
 			}

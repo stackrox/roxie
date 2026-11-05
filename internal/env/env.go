@@ -170,7 +170,7 @@ func DetectClusterType(config KubeConfig, apiResources []string) types.ClusterTy
 	}
 
 	// Check for OpenShift 4 clusters.
-	if isOpenShift4(apiResources) {
+	if hasOpenShiftResources(apiResources) {
 		if isCRC(parsedURL) {
 			return types.ClusterTypeCRC
 		}
@@ -219,8 +219,8 @@ func getServerURL(config KubeConfig) string {
 	return config.Clusters[0].Server
 }
 
-// isOpenShift4 checks if the cluster is running OpenShift 4.x by examining the API resources list
-func isOpenShift4(apiResources []string) bool {
+// hasOpenShiftResources checks if the cluster is running OpenShift 4.x by examining the API resources list
+func hasOpenShiftResources(apiResources []string) bool {
 	// Check for the presence of the config.openshift.io API group
 	// OpenShift 4 clusters have resources in this API group
 	for _, resource := range apiResources {
