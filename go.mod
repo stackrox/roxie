@@ -14,7 +14,7 @@ require (
 	golang.org/x/term v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.22.1
-	k8s.io/apimachinery v0.37.1
+	k8s.io/apimachinery v0.37.2
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd
 )
 
