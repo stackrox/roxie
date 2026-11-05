@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stackrox/roxie/internal/constants"
+	"github.com/stackrox/roxie/internal/envvars"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/types"
@@ -327,8 +328,12 @@ func (c *CentralConfig) ConfigureSpec(roxieConfig *RoxieConfig) error {
 	if err != nil {
 		return err
 	}
-	if err = helpers.DeepMerge(c.Spec, map[string]interface{}{
-		"central": map[string]interface{}{
+	err = envvars.DeduplicateInUnstructured(c.Spec, "customize", "envVars")
+	if err != nil {
+		return fmt.Errorf("deduplicating Central env vars: %w", err)
+	}
+	if err = helpers.DeepMerge(c.Spec, map[string]any{
+		"central": map[string]any{
 			"exposure": c.Exposure.ToUnstructuredConfig(),
 		},
 	}); err != nil {
@@ -441,7 +446,9 @@ func (s *SecuredClusterConfig) ConfigureSpec(roxieConfig *RoxieConfig, centralCo
 	if err := helpers.DeepMerge(s.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags)); err != nil {
 		return err
 	}
-
+	if err := envvars.DeduplicateInUnstructured(s.Spec, "customize", "envVars"); err != nil {
+		return fmt.Errorf("deduplicating SecuredCluster env vars: %w", err)
+	}
 	if _, exists := s.Spec["centralEndpoint"]; !exists {
 		s.Spec["centralEndpoint"] = internalCentralEndpoint(centralConfig.Namespace)
 	}
