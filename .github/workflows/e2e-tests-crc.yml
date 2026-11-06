@@ -1,0 +1,107 @@
+name: E2E Tests (CRC OpenShift)
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        required: true
+        type: string
+    secrets:
+      REGISTRY_USERNAME:
+        required: true
+      REGISTRY_TOKEN:
+        required: true
+      QUAY_RHACS_ENG_RO_USERNAME:
+        required: true
+      QUAY_RHACS_ENG_RO_PASSWORD:
+        required: true
+
+env:
+  REGISTRY: quay.io
+
+jobs:
+  e2e-tests-crc:
+    # CRC requires nested virtualization and enough RAM for the OpenShift VM.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      SKIP_OLM_TESTS: "true"
+      ROXIE_RESOURCE_PROFILE: "tiny"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Free disk space for CRC
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          # Keep swap available while OpenShift and the Go tests share the runner.
+          swap-storage: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Log in to Quay.io
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Extract roxie binary from image
+        env:
+          ROXIE_IMAGE: ${{ inputs.image }}
+        run: |
+          docker create --name roxie-extract "$ROXIE_IMAGE"
+          docker cp roxie-extract:/usr/local/bin/roxie "$GITHUB_WORKSPACE/roxie"
+          docker rm roxie-extract
+
+      - name: Install roxie binary
+        run: |
+          sudo install -m 0755 "$GITHUB_WORKSPACE/roxie" /usr/local/bin/roxie
+          roxie version
+
+      - name: Create CRC OpenShift cluster
+        uses: crc-org/crc-github-action@v1.0.1
+        with:
+          preset: openshift
+          cpus: 4
+          memory: 10752
+          disk: 40
+
+      - name: Wait for cluster readiness
+        run: |
+          kubectl wait --for=condition=Ready nodes --all --timeout=10m
+          kubectl get namespaces
+
+      - name: Run e2e tests
+        env:
+          REGISTRY_USERNAME: ${{ secrets.QUAY_RHACS_ENG_RO_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.QUAY_RHACS_ENG_RO_PASSWORD }}
+        run: make run-test-e2e 2>&1 | tee e2e-crc.log
+
+      - name: Collect cluster diagnostics
+        if: failure()
+        continue-on-error: true
+        run: |
+          crc status || true
+          kubectl get nodes -o wide || true
+          kubectl get pods -A -o wide || true
+          kubectl get events -A --sort-by=.lastTimestamp || true
+
+      - name: Upload e2e log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-crc-log
+          path: e2e-crc.log
+          if-no-files-found: ignore
