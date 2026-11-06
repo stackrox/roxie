@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/stackrox/roxie/internal/constants"
+	"github.com/stackrox/roxie/internal/envvars"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagetag"
 	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // Config is the top-level deployment configuration, combining settings for
@@ -36,6 +39,28 @@ func NewConfig() Config {
 		Central:        NewCentralConfig(),
 		SecuredCluster: NewSecuredClusterConfig(),
 	}
+}
+
+// MergeConfig merges overlay into base with envVar-aware handling.
+// Generic slices use replacement semantics (overlay wins), but
+// customize.envVars entries are merged by name across sources
+// (--config, --set, user defaults) with last-one-wins deduplication.
+func MergeConfig(base, overlay *Config) error {
+	envVarsPath := []string{"customize", "envVars"}
+	baseCentralEnvVars, _, _ := unstructured.NestedSlice(base.Central.Spec, envVarsPath...)
+	baseSCEnvVars, _, _ := unstructured.NestedSlice(base.SecuredCluster.Spec, envVarsPath...)
+
+	if err := mergo.Merge(base, overlay, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+		return err
+	}
+
+	if err := envvars.MergeByNameInUnstructured(base.Central.Spec, baseCentralEnvVars, envVarsPath...); err != nil {
+		return fmt.Errorf("reconciling Central env vars: %w", err)
+	}
+	if err := envvars.MergeByNameInUnstructured(base.SecuredCluster.Spec, baseSCEnvVars, envVarsPath...); err != nil {
+		return fmt.Errorf("reconciling SecuredCluster env vars: %w", err)
+	}
+	return nil
 }
 
 // DeepCopy creates a deep-copy of the provided config using a YAML marshaling/unmarshaling roundtrip.
@@ -323,15 +348,19 @@ func (c *CentralConfig) GetExposure() types.Exposure {
 
 // ConfigureSpec applies feature flags and exposure settings to the Central spec.
 func (c *CentralConfig) ConfigureSpec(roxieConfig *RoxieConfig) error {
-	err := helpers.DeepMerge(c.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags))
+	err := mergo.Merge(&c.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags), mergo.WithOverride, mergo.WithAppendSlice)
 	if err != nil {
 		return err
 	}
-	if err = helpers.DeepMerge(c.Spec, map[string]interface{}{
-		"central": map[string]interface{}{
+	err = envvars.DeduplicateInUnstructured(c.Spec, "customize", "envVars")
+	if err != nil {
+		return fmt.Errorf("deduplicating Central env vars: %w", err)
+	}
+	if err = mergo.Merge(&c.Spec, map[string]any{
+		"central": map[string]any{
 			"exposure": c.Exposure.ToUnstructuredConfig(),
 		},
-	}); err != nil {
+	}, mergo.WithOverride); err != nil {
 		return err
 	}
 	return nil
@@ -361,18 +390,15 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("resource profile 'auto' should have been resolved before building the CR")
 	}
 	if c.ResourceProfile != types.ResourceProfileAcsDefaults {
-		profileCopy, err := helpers.MergeMaps(getCentralResourcesOperator(c.ResourceProfile))
-		if err != nil {
-			return nil, fmt.Errorf("copying resource profile: %w", err)
-		}
-		if err := helpers.DeepMerge(cr, profileCopy); err != nil {
+		profileCopy := helpers.DeepCopyMap(getCentralResourcesOperator(c.ResourceProfile))
+		if err := mergo.Merge(&cr, profileCopy, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 			return nil, fmt.Errorf("merging resource profile into Central CR: %w", err)
 		}
 	}
-	if err := helpers.DeepMerge(cr, map[string]interface{}{
+	if err := mergo.Merge(&cr, map[string]interface{}{
 		"metadata": c.Metadata.toMap(),
 		"spec":     c.Spec,
-	}); err != nil {
+	}, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 		return nil, fmt.Errorf("merging metadata and spec into Central CR: %w", err)
 	}
 	return cr, nil
@@ -438,10 +464,12 @@ func (s *SecuredClusterConfig) GetWaitConfig() WaitConfig {
 
 // ConfigureSpec applies feature flags and the central endpoint to the SecuredCluster spec.
 func (s *SecuredClusterConfig) ConfigureSpec(roxieConfig *RoxieConfig, centralConfig *CentralConfig) error {
-	if err := helpers.DeepMerge(s.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags)); err != nil {
+	if err := mergo.Merge(&s.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags), mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 		return err
 	}
-
+	if err := envvars.DeduplicateInUnstructured(s.Spec, "customize", "envVars"); err != nil {
+		return fmt.Errorf("deduplicating SecuredCluster env vars: %w", err)
+	}
 	if _, exists := s.Spec["centralEndpoint"]; !exists {
 		s.Spec["centralEndpoint"] = internalCentralEndpoint(centralConfig.Namespace)
 	}
@@ -466,19 +494,16 @@ func (s *SecuredClusterConfig) CustomResource() (map[string]interface{}, error) 
 		return nil, fmt.Errorf("resource profile 'auto' must have been resolved before building the CR")
 	}
 	if s.ResourceProfile != types.ResourceProfileAcsDefaults {
-		profileCopy, err := helpers.MergeMaps(getSecuredClusterResourcesOperator(s.ResourceProfile))
-		if err != nil {
-			return nil, fmt.Errorf("copying resource profile: %w", err)
-		}
-		if err := helpers.DeepMerge(cr, profileCopy); err != nil {
+		profileCopy := helpers.DeepCopyMap(getSecuredClusterResourcesOperator(s.ResourceProfile))
+		if err := mergo.Merge(&cr, profileCopy, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 			return nil, fmt.Errorf("merging resource profile into SecuredCluster CR: %w", err)
 		}
 	}
 
-	if err := helpers.DeepMerge(cr, map[string]interface{}{
+	if err := mergo.Merge(&cr, map[string]interface{}{
 		"metadata": s.Metadata.toMap(),
 		"spec":     s.Spec,
-	}); err != nil {
+	}, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 		return nil, fmt.Errorf("merging metadata and spec into SecuredCluster CR: %w", err)
 	}
 	return cr, nil

@@ -7,7 +7,6 @@ import (
 	"os"
 	"reflect"
 
-	"dario.cat/mergo"
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
@@ -60,7 +59,7 @@ func tryApplyUserDefaults(config *deployer.Config) error {
 	if err := yaml.Unmarshal(data, &userDefaults); err != nil {
 		return fmt.Errorf("parsing user config %q: %w", path, err)
 	}
-	if err := mergo.Merge(config, &userDefaults, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+	if err := deployer.MergeConfig(config, &userDefaults); err != nil {
 		return fmt.Errorf("merging user config %q: %w", path, err)
 	}
 	log.Dimf("Applied user config from %s", path)
@@ -111,7 +110,7 @@ func init() {
 			if err := yaml.Unmarshal(data, &configFromFile); err != nil {
 				return fmt.Errorf("failed to unmarshal config from %q: %w", filename, err)
 			}
-			if err := mergo.Merge(config, &configFromFile, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+			if err := deployer.MergeConfig(config, &configFromFile); err != nil {
 				return fmt.Errorf("merging config from %q into deployer Config: %w", filename, err)
 			}
 			return nil
@@ -135,7 +134,7 @@ func init() {
 				return fmt.Errorf("set expression %q had no effect -- typo?", expr)
 			}
 
-			if err := mergo.Merge(config, &patch, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+			if err := deployer.MergeConfig(config, &patch); err != nil {
 				return fmt.Errorf("merging set-expression %q into deployer Config: %w", expr, err)
 			}
 

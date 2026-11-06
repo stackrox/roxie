@@ -4,79 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
-
-func TestMergeMaps(t *testing.T) {
-	base := map[string]interface{}{
-		"a": "value_a",
-		"b": map[string]interface{}{
-			"c": "value_c",
-			"d": "value_d",
-		},
-	}
-
-	overlay := map[string]interface{}{
-		"b": map[string]interface{}{
-			"d": "value_d_override",
-			"e": "value_e_new",
-		},
-		"f": "value_f",
-	}
-
-	result, err := MergeMaps(base, overlay)
-	require.NoError(t, err, "MergeMaps failed")
-
-	// Check that base values are preserved
-	if result["a"] != "value_a" {
-		t.Errorf("Expected a='value_a', got '%v'", result["a"])
-	}
-
-	// Check deep merge
-	bMap, ok := result["b"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Expected b to be a map")
-	}
-
-	if bMap["c"] != "value_c" {
-		t.Errorf("Expected b.c='value_c', got '%v'", bMap["c"])
-	}
-
-	if bMap["d"] != "value_d_override" {
-		t.Errorf("Expected b.d to be overridden to 'value_d_override', got '%v'", bMap["d"])
-	}
-
-	if bMap["e"] != "value_e_new" {
-		t.Errorf("Expected b.e='value_e_new', got '%v'", bMap["e"])
-	}
-
-	// Check new top-level key
-	if result["f"] != "value_f" {
-		t.Errorf("Expected f='value_f', got '%v'", result["f"])
-	}
-}
-
-func TestMergeMapsMultipleOverlays(t *testing.T) {
-	base := map[string]interface{}{
-		"key": "base",
-	}
-
-	overlay1 := map[string]interface{}{
-		"key": "overlay1",
-	}
-
-	overlay2 := map[string]interface{}{
-		"key": "overlay2",
-	}
-
-	result, err := MergeMaps(base, overlay1, overlay2)
-	require.NoError(t, err, "MergeMaps failed")
-
-	if result["key"] != "overlay2" {
-		t.Errorf("Expected last overlay to win, got '%v'", result["key"])
-	}
-}
 
 func TestLoadYAMLFileValid(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -147,49 +75,6 @@ func TestLoadYAMLFileInvalidYAML(t *testing.T) {
 	}
 }
 
-func TestDeepMergeAppendsSlices(t *testing.T) {
-	base := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"imagePullSecrets": []interface{}{
-				map[string]interface{}{"name": "secret-a"},
-			},
-			"keep": "this",
-		},
-	}
-
-	overlay := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"imagePullSecrets": []interface{}{
-				map[string]interface{}{"name": "secret-b"},
-			},
-		},
-	}
-
-	err := DeepMerge(base, overlay)
-	require.NoError(t, err)
-
-	spec := base["spec"].(map[string]interface{})
-	require.Equal(t, "this", spec["keep"])
-
-	secrets := spec["imagePullSecrets"].([]interface{})
-	require.Len(t, secrets, 2)
-	require.Equal(t, map[string]interface{}{"name": "secret-a"}, secrets[0])
-	require.Equal(t, map[string]interface{}{"name": "secret-b"}, secrets[1])
-}
-
-func TestDeepMergeOverrideOnTypeMismatch(t *testing.T) {
-	base := map[string]interface{}{
-		"items": []interface{}{"a"},
-	}
-	overlay := map[string]interface{}{
-		"items": "not-a-slice",
-	}
-
-	err := DeepMerge(base, overlay)
-	require.NoError(t, err)
-	require.Equal(t, "not-a-slice", base["items"])
-}
-
 func TestDeepCopy(t *testing.T) {
 	original := map[string]interface{}{
 		"a": "value",
@@ -198,7 +83,7 @@ func TestDeepCopy(t *testing.T) {
 		},
 	}
 
-	copied := deepCopy(original)
+	copied := DeepCopyMap(original)
 
 	// Modify the copy
 	copied["a"] = "modified"
