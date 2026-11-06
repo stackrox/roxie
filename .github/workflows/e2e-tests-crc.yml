@@ -74,9 +74,6 @@ jobs:
         uses: crc-org/crc-github-action@v1.0.1
         with:
           preset: openshift
-          cpus: 4
-          memory: 10752
-          disk: 40
 
       - name: Wait for cluster readiness
         run: |
