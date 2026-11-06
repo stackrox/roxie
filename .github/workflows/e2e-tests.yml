@@ -31,6 +31,7 @@ jobs:
       KUBECONFIG: /github/home/artifacts/kubeconfig
       INFRA_TOKEN: ${{ secrets.INFRA_CI_TOKEN }}
       INFRACTL: bin/infractl -k -e localhost:8443
+      ROXIE_RESOURCE_PROFILE: "small"
     steps:
       - name: Checkout
         uses: actions/checkout@v7

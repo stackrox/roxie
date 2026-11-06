@@ -357,6 +357,38 @@ func (d *Deployer) createAdminPasswordSecret(ctx context.Context) error {
 
 func getCentralResourcesOperator(resourcesProfile types.ResourceProfile) map[string]interface{} {
 	switch resourcesProfile {
+	case types.ResourceProfileTiny:
+		return map[string]interface{}{
+			"spec": map[string]interface{}{
+				"central": map[string]interface{}{
+					"resources": centralResourcesTiny,
+					"db": map[string]interface{}{
+						"resources": centralDbResourcesTiny,
+						"persistence": map[string]interface{}{
+							"persistentVolumeClaim": map[string]interface{}{
+								"size": centralDbPVCSizeTiny,
+							},
+						},
+					},
+				},
+				"scanner": map[string]interface{}{
+					"scannerComponent": "Disabled",
+				},
+				"scannerV4": map[string]interface{}{
+					"db": map[string]interface{}{
+						"resources": centralScannerV4DbResourcesTiny,
+					},
+					"indexer": map[string]interface{}{
+						"resources": centralScannerV4IndexerResourcesTiny,
+						"scaling":   noScaling,
+					},
+					"matcher": map[string]interface{}{
+						"resources": centralScannerV4MatcherResourcesTiny,
+						"scaling":   noScaling,
+					},
+				},
+			},
+		}
 	case types.ResourceProfileSmall:
 		return map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -960,9 +992,45 @@ func (d *Deployer) deploySecuredClusterOperator(ctx context.Context) error {
 
 func getSecuredClusterResourcesOperator(resourceProfile types.ResourceProfile) map[string]interface{} {
 	switch resourceProfile {
+	case types.ResourceProfileTiny:
+		return map[string]interface{}{
+			"spec": map[string]interface{}{
+				"admissionControl": map[string]interface{}{
+					"replicas": 1,
+				},
+				"sensor": map[string]interface{}{
+					"resources": securedClusterSensorResourcesTiny,
+				},
+				"scanner": map[string]interface{}{
+					"scannerComponent": "Disabled",
+				},
+				"scannerV4": map[string]interface{}{
+					"scannerComponent": "Disabled",
+				},
+				// The CRS init container's resource requests are not exposed in the CR spec,
+				// so we use the operator's overlay mechanism to lower them for tiny clusters.
+				"overlays": []any{
+					map[string]any{
+						"apiVersion": "apps/v1",
+						"kind":       "Deployment",
+						"name":       "sensor",
+						"optional":   true,
+						"patches": []any{
+							map[string]any{
+								"path":  "spec.template.spec.initContainers[name:crs].resources.requests",
+								"value": `{"cpu":"80m", "memory": "150Mi"}`,
+							},
+						},
+					},
+				},
+			},
+		}
 	case types.ResourceProfileSmall:
 		return map[string]interface{}{
 			"spec": map[string]interface{}{
+				"admissionControl": map[string]interface{}{
+					"replicas": 1,
+				},
 				"sensor": map[string]interface{}{
 					"resources": securedClusterSensorResourcesSmall,
 				},

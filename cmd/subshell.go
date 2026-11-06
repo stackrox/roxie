@@ -205,7 +205,9 @@ func printBanner(w io.Writer, centralDeploymentInfo types.CentralDeploymentInfo)
 	cyan.Fprintln(w, "\n[roxie] Environment is set up for talking to ACS Central. Examples:")
 	cyan.Fprintln(w, "[roxie]")
 	cyan.Fprintln(w, "[roxie]   * roxctl central whoami")
-	cyan.Fprintln(w, "[roxie]   * roxcurl /v1/clusters")
+	if !env.RunningInRoxieContainer {
+		cyan.Fprintln(w, "[roxie]   * roxcurl /v1/clusters (https://github.com/stackrox/workflow)")
+	}
 	cyan.Fprintln(w, "[roxie]")
 
 	if port := centralDeploymentInfo.HAProxyPort; port > 0 {

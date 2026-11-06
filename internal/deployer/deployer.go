@@ -416,6 +416,7 @@ func (d *Deployer) prepareCredentials(ctx context.Context) error {
 
 func (d *Deployer) deployCentral(ctx context.Context) error {
 	log.Infof("Deploying Central to namespace %s", d.config.Central.Namespace)
+	log.Infof("Central resource profile: %s", d.config.Central.ResourceProfile)
 	if d.namespaceExists(d.config.Central.Namespace) {
 		log.Info("Existing Central deployment found, tearing down...")
 		if err := d.teardownCentral(ctx); err != nil {
@@ -439,6 +440,7 @@ func (d *Deployer) deployCentral(ctx context.Context) error {
 
 func (d *Deployer) deploySecuredCluster(ctx context.Context) error {
 	log.Infof("Deploying SecuredCluster to namespace %s", d.config.SecuredCluster.Namespace)
+	log.Infof("SecuredCluster resource profile: %s", d.config.SecuredCluster.ResourceProfile)
 	if d.namespaceExists(d.config.SecuredCluster.Namespace) {
 		log.Info("Existing SecuredCluster deployment found, tearing down...")
 		if err := d.teardownSecuredCluster(ctx); err != nil {
