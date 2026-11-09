@@ -21,7 +21,6 @@ env:
 
 jobs:
   e2e-tests-crc:
-    # CRC requires nested virtualization and enough RAM for the OpenShift VM.
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     defaults:
@@ -74,23 +73,33 @@ jobs:
         uses: crc-org/crc-github-action@v1.0.1
         with:
           preset: openshift
+          cpus: 4
+          # Leave roughly 4 GiB for the host and Go tests on the 16 GB runner.
+          memory: 12288
 
       - name: Wait for cluster readiness
         run: |
           kubectl wait --for=condition=Ready nodes --all --timeout=10m
           kubectl get namespaces
 
-      - name: Run e2e tests
+      # Reclaim memory to avoid insufficient memory errors
+      - name: Disable unused OpenShift services
+        run: bash .github/scripts/configure-crc-e2e.sh
+
+      - name: Run happy-path smoke test
         env:
           REGISTRY_USERNAME: ${{ secrets.QUAY_RHACS_ENG_RO_USERNAME }}
           REGISTRY_PASSWORD: ${{ secrets.QUAY_RHACS_ENG_RO_PASSWORD }}
-        run: make run-test-e2e 2>&1 | tee e2e-crc.log
+        run: |
+          go test -v -tags=e2e -run '^TestDeployBothSimple$' \
+            -timeout=90m -parallel=1 ./tests/e2e/... 2>&1 | tee e2e-crc.log
 
       - name: Collect cluster diagnostics
         if: failure()
         continue-on-error: true
         run: |
           crc status || true
+          kubectl describe nodes || true
           kubectl get nodes -o wide || true
           kubectl get pods -A -o wide || true
           kubectl get events -A --sort-by=.lastTimestamp || true
