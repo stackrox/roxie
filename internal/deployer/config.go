@@ -9,6 +9,7 @@ import (
 	"github.com/stackrox/roxie/internal/envvars"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagetag"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -60,7 +61,21 @@ func MergeConfig(base, overlay *Config) error {
 	if err := envvars.MergeByNameInUnstructured(base.SecuredCluster.Spec, baseSCEnvVars, envVarsPath...); err != nil {
 		return fmt.Errorf("reconciling SecuredCluster env vars: %w", err)
 	}
+
+	warnUnresolvedEnvVarRefs("Central", base.Central.Spec, envVarsPath)
+	warnUnresolvedEnvVarRefs("SecuredCluster", base.SecuredCluster.Spec, envVarsPath)
 	return nil
+}
+
+func warnUnresolvedEnvVarRefs(component string, spec map[string]any, path []string) {
+	envVars, found, _ := unstructured.NestedSlice(spec, path...)
+	if !found {
+		return
+	}
+	for _, ref := range envvars.FindUnresolvedRefs(envVars) {
+		log.Warningf("%s env var %s references $(%s), which is not defined at that point — Kubernetes will not resolve it",
+			component, ref.Name, ref.RefName)
+	}
 }
 
 // DeepCopy creates a deep-copy of the provided config using a YAML marshaling/unmarshaling roundtrip.
@@ -356,6 +371,7 @@ func (c *CentralConfig) ConfigureSpec(roxieConfig *RoxieConfig) error {
 	if err != nil {
 		return fmt.Errorf("deduplicating Central env vars: %w", err)
 	}
+	warnUnresolvedEnvVarRefs("Central", c.Spec, []string{"customize", "envVars"})
 	if err = mergo.Merge(&c.Spec, map[string]any{
 		"central": map[string]any{
 			"exposure": c.Exposure.ToUnstructuredConfig(),
@@ -470,6 +486,7 @@ func (s *SecuredClusterConfig) ConfigureSpec(roxieConfig *RoxieConfig, centralCo
 	if err := envvars.DeduplicateInUnstructured(s.Spec, "customize", "envVars"); err != nil {
 		return fmt.Errorf("deduplicating SecuredCluster env vars: %w", err)
 	}
+	warnUnresolvedEnvVarRefs("SecuredCluster", s.Spec, []string{"customize", "envVars"})
 	if _, exists := s.Spec["centralEndpoint"]; !exists {
 		s.Spec["centralEndpoint"] = internalCentralEndpoint(centralConfig.Namespace)
 	}
