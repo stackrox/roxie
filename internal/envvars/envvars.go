@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	// Note, we match the dollars in a seperate match group to be able to check for escaped dollar characters.
+	// Note, we match the dollars in a separate match group to be able to check for escaped dollar characters.
 	varRefPattern = regexp.MustCompile(`(\$+)\(([^)]+)\)`)
 )
 
