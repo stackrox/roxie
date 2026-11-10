@@ -99,19 +99,6 @@ func deduplicate(envVars []any) []any {
 	return result
 }
 
-// DeduplicateInUnstructured deduplicates the envVars slice at the given
-// path inside an unstructured map. No-op if the path does not exist.
-func DeduplicateInUnstructured(obj map[string]any, path ...string) error {
-	envVars, found, err := unstructured.NestedSlice(obj, path...)
-	if err != nil {
-		return fmt.Errorf("retrieving nested slice at path %s from unstructured object: %w", strings.Join(path, "."), err)
-	}
-	if !found {
-		return nil
-	}
-	return unstructured.SetNestedSlice(obj, deduplicate(envVars), path...)
-}
-
 // MergeByNameInUnstructured prepends baseEnvVars to the envVars already at
 // path in obj, then deduplicates by name (last-one-wins, so current entries
 // from an overlay take precedence over base). No-op if both sources are empty.
