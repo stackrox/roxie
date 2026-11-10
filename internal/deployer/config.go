@@ -363,16 +363,16 @@ func (c *CentralConfig) GetExposure() types.Exposure {
 
 // ConfigureSpec applies feature flags and exposure settings to the Central spec.
 func (c *CentralConfig) ConfigureSpec(roxieConfig *RoxieConfig) error {
-	err := mergo.Merge(&c.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags), mergo.WithOverride, mergo.WithAppendSlice)
-	if err != nil {
+	envVarsPath := []string{"customize", "envVars"}
+	baseEnvVars, _, _ := unstructured.NestedSlice(c.Spec, envVarsPath...)
+	if err := mergo.Merge(&c.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags), mergo.WithOverride); err != nil {
 		return err
 	}
-	err = envvars.DeduplicateInUnstructured(c.Spec, "customize", "envVars")
-	if err != nil {
-		return fmt.Errorf("deduplicating Central env vars: %w", err)
+	if err := envvars.MergeByNameInUnstructured(c.Spec, baseEnvVars, envVarsPath...); err != nil {
+		return fmt.Errorf("merging Central env vars by name: %w", err)
 	}
 	warnUnresolvedEnvVarRefs("Central", c.Spec, []string{"customize", "envVars"})
-	if err = mergo.Merge(&c.Spec, map[string]any{
+	if err := mergo.Merge(&c.Spec, map[string]any{
 		"central": map[string]any{
 			"exposure": c.Exposure.ToUnstructuredConfig(),
 		},
@@ -480,11 +480,13 @@ func (s *SecuredClusterConfig) GetWaitConfig() WaitConfig {
 
 // ConfigureSpec applies feature flags and the central endpoint to the SecuredCluster spec.
 func (s *SecuredClusterConfig) ConfigureSpec(roxieConfig *RoxieConfig, centralConfig *CentralConfig) error {
-	if err := mergo.Merge(&s.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags), mergo.WithOverride, mergo.WithAppendSlice); err != nil {
+	envVarsPath := []string{"customize", "envVars"}
+	baseEnvVars, _, _ := unstructured.NestedSlice(s.Spec, envVarsPath...)
+	if err := mergo.Merge(&s.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags), mergo.WithOverride); err != nil {
 		return err
 	}
-	if err := envvars.DeduplicateInUnstructured(s.Spec, "customize", "envVars"); err != nil {
-		return fmt.Errorf("deduplicating SecuredCluster env vars: %w", err)
+	if err := envvars.MergeByNameInUnstructured(s.Spec, baseEnvVars, envVarsPath...); err != nil {
+		return fmt.Errorf("merging SecuredCluster env vars by name: %w", err)
 	}
 	warnUnresolvedEnvVarRefs("SecuredCluster", s.Spec, []string{"customize", "envVars"})
 	if _, exists := s.Spec["centralEndpoint"]; !exists {
