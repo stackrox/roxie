@@ -56,10 +56,10 @@ func MergeConfig(base, overlay *Config) error {
 	}
 
 	if err := envvars.MergeByNameInUnstructured(base.Central.Spec, baseCentralEnvVars, envVarsPath...); err != nil {
-		return fmt.Errorf("reconciling Central env vars: %w", err)
+		return fmt.Errorf("merging Central env vars: %w", err)
 	}
 	if err := envvars.MergeByNameInUnstructured(base.SecuredCluster.Spec, baseSCEnvVars, envVarsPath...); err != nil {
-		return fmt.Errorf("reconciling SecuredCluster env vars: %w", err)
+		return fmt.Errorf("merging SecuredCluster env vars: %w", err)
 	}
 
 	warnUnresolvedEnvVarRefs("Central", base.Central.Spec, envVarsPath)
