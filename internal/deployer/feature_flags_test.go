@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	"dario.cat/mergo"
 	"github.com/stackrox/roxie/internal/envvars"
 	"github.com/stretchr/testify/require"
 )
@@ -144,21 +143,14 @@ func TestParseFeatureFlags(t *testing.T) {
 	}
 }
 
-func TestDeepMergeWithDeduplicateEnvVars(t *testing.T) {
-	spec := map[string]any{
-		"customize": map[string]any{
-			"envVars": []any{
-				map[string]any{"name": "MY_VAR", "value": "keep"},
-				map[string]any{"name": "ROX_FOO", "value": "old"},
-			},
-		},
+func TestFeatureFlagMergeWithEnvVarDedup(t *testing.T) {
+	base := []any{
+		map[string]any{"name": "MY_VAR", "value": "keep"},
+		map[string]any{"name": "ROX_FOO", "value": "old"},
 	}
-	overlay := featureFlagsToOverrides(map[string]bool{"ROX_FOO": false, "ROX_NEW": true})
+	spec := featureFlagsToOverrides(map[string]bool{"ROX_FOO": false, "ROX_NEW": true})
 
-	err := mergo.Merge(&spec, overlay, mergo.WithOverride, mergo.WithAppendSlice)
-	require.NoError(t, err)
-
-	err = envvars.DeduplicateInUnstructured(spec, "customize", "envVars")
+	err := envvars.MergeByNameInUnstructured(spec, base, "customize", "envVars")
 	require.NoError(t, err)
 
 	customize := spec["customize"].(map[string]any)

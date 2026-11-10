@@ -1,16 +1,23 @@
 package envvars
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestDeduplicateEnvVars(t *testing.T) {
+func TestMergeByNameInUnstructured(t *testing.T) {
+	type envVar struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
+	}
+
 	tests := []struct {
 		name            string
+		base            []any
 		spec            map[string]interface{}
-		expectedEnvVars map[string]string
+		expectedEnvVars []envVar
 	}{
 		{
 			name: "duplicates are resolved with last-one-wins",
@@ -23,9 +30,9 @@ func TestDeduplicateEnvVars(t *testing.T) {
 					},
 				},
 			},
-			expectedEnvVars: map[string]string{
-				"ROX_FOO":  "new",
-				"ROX_KEEP": "me",
+			expectedEnvVars: []envVar{
+				{"ROX_FOO", "new"},
+				{"ROX_KEEP", "me"},
 			},
 		},
 		{
@@ -38,9 +45,9 @@ func TestDeduplicateEnvVars(t *testing.T) {
 					},
 				},
 			},
-			expectedEnvVars: map[string]string{
-				"ROX_A": "a",
-				"ROX_B": "b",
+			expectedEnvVars: []envVar{
+				{"ROX_A", "a"},
+				{"ROX_B", "b"},
 			},
 		},
 		{
@@ -53,34 +60,53 @@ func TestDeduplicateEnvVars(t *testing.T) {
 			spec:            map[string]interface{}{},
 			expectedEnvVars: nil,
 		},
+		{
+			name: "overlay wins over base",
+			base: []any{map[string]any{"name": "ROX_A", "value": "from-base"}},
+			spec: map[string]interface{}{
+				"customize": map[string]interface{}{
+					"envVars": []interface{}{
+						map[string]interface{}{"name": "ROX_A", "value": "from-overlay"},
+					},
+				},
+			},
+			expectedEnvVars: []envVar{{"ROX_A", "from-overlay"}},
+		},
+		{
+			name: "base entries preserved when not in overlay",
+			base: []any{map[string]any{"name": "ROX_BASE", "value": "kept"}},
+			spec: map[string]interface{}{
+				"customize": map[string]interface{}{
+					"envVars": []interface{}{
+						map[string]interface{}{"name": "ROX_NEW", "value": "added"},
+					},
+				},
+			},
+			expectedEnvVars: []envVar{{"ROX_BASE", "kept"}, {"ROX_NEW", "added"}},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := DeduplicateInUnstructured(tt.spec, "customize", "envVars")
+			err := MergeByNameInUnstructured(tt.spec, tt.base, "customize", "envVars")
 			require.NoError(t, err)
 
 			if tt.expectedEnvVars == nil {
 				return
 			}
 
-			customize := tt.spec["customize"].(map[string]interface{})
-			envVars := customize["envVars"].([]interface{})
-
-			require.Len(t, envVars, len(tt.expectedEnvVars))
-
-			resultMap := make(map[string]string)
-			for _, item := range envVars {
-				envVar := item.(map[string]interface{})
-				resultMap[envVar["name"].(string)] = envVar["value"].(string)
-			}
-
-			require.Equal(t, tt.expectedEnvVars, resultMap)
+			customize := tt.spec["customize"].(map[string]any)
+			envVars := customize["envVars"].([]any)
+			expectedEnvVarsJSON, err := json.Marshal(tt.expectedEnvVars)
+			require.NoError(t, err)
+			gotJSON, err := json.Marshal(envVars)
+			require.NoError(t, err)
+			require.JSONEq(t, string(expectedEnvVarsJSON), string(gotJSON))
 		})
 	}
 }
 
-func TestDeduplicateEnvVars_PreservesValueFrom(t *testing.T) {
+func TestMergeByNameInUnstructured_PreservesValueFrom(t *testing.T) {
 	valueFrom := map[string]any{
 		"secretKeyRef": map[string]any{
 			"name": "my-secret",
@@ -96,7 +122,7 @@ func TestDeduplicateEnvVars_PreservesValueFrom(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, DeduplicateInUnstructured(spec, "customize", "envVars"))
+	require.NoError(t, MergeByNameInUnstructured(spec, nil, "customize", "envVars"))
 
 	customize := spec["customize"].(map[string]any)
 	envVars := customize["envVars"].([]any)
@@ -109,7 +135,7 @@ func TestDeduplicateEnvVars_PreservesValueFrom(t *testing.T) {
 	require.False(t, hasValue, "valueFrom entry should not have a value field")
 }
 
-func TestDeduplicateEnvVars_PreservesDependencyOrder(t *testing.T) {
+func TestMergeByNameInUnstructured_PreservesDependencyOrder(t *testing.T) {
 	spec := map[string]any{
 		"customize": map[string]any{
 			"envVars": []any{
@@ -120,7 +146,7 @@ func TestDeduplicateEnvVars_PreservesDependencyOrder(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, DeduplicateInUnstructured(spec, "customize", "envVars"))
+	require.NoError(t, MergeByNameInUnstructured(spec, nil, "customize", "envVars"))
 
 	customize := spec["customize"].(map[string]any)
 	envVars := customize["envVars"].([]any)
