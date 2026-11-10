@@ -22,7 +22,8 @@ const (
 	ClusterTypeMinikube ClusterType = "Minikube"
 	// ClusterTypeK3s represents a K3s cluster
 	ClusterTypeK3s ClusterType = "K3s"
-	// ClusterTypeCRC represents a CRC (CodeReady Containers) cluster
+	// ClusterTypeCRC represents a CRC (CodeReady Containers) cluster.
+	// Only CRC's OpenShift preset is supported.
 	ClusterTypeCRC ClusterType = "CRC"
 	// ClusterTypeAKS represents a generic AKS (Azure Kubernetes Service) cluster.
 	ClusterTypeAKS ClusterType = "AKS"
@@ -35,7 +36,7 @@ func (ct ClusterType) IsGKE() bool {
 }
 
 func (ct ClusterType) IsOpenShift() bool {
-	return ct == ClusterTypeInfraOpenShift4 || ct == ClusterTypeOpenShift4
+	return ct == ClusterTypeInfraOpenShift4 || ct == ClusterTypeOpenShift4 || ct == ClusterTypeCRC
 }
 
 func (ct ClusterType) IsAKS() bool {
@@ -106,5 +107,8 @@ func (ct ClusterType) IsLocal() bool {
 }
 
 func (ct ClusterType) SupportsLoadBalancer() bool {
-	return ct.IsGKE() || ct.IsOpenShift() || ct.IsAKS() || ct.IsEKS()
+	if ct.IsOpenShift() {
+		return ct != ClusterTypeCRC
+	}
+	return ct.IsGKE() || ct.IsAKS() || ct.IsEKS()
 }

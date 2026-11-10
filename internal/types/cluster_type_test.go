@@ -60,6 +60,81 @@ func TestClusterTypeUnmarshalYAML(t *testing.T) {
 	}
 }
 
+func TestClusterTypeClassification(t *testing.T) {
+	tests := []struct {
+		clusterType                     ClusterType
+		isOpenShift                     bool
+		isLocal                         bool
+		supportsLoadBalancer            bool
+		needsDefaultRegistryPullSecrets bool
+	}{
+		{
+			clusterType:                     ClusterTypeCRC,
+			isOpenShift:                     true,
+			isLocal:                         true,
+			supportsLoadBalancer:            false,
+			needsDefaultRegistryPullSecrets: true,
+		},
+		{
+			clusterType:                     ClusterTypeOpenShift4,
+			isOpenShift:                     true,
+			isLocal:                         false,
+			supportsLoadBalancer:            true,
+			needsDefaultRegistryPullSecrets: true,
+		},
+		{
+			clusterType:                     ClusterTypeInfraOpenShift4,
+			isOpenShift:                     true,
+			isLocal:                         false,
+			supportsLoadBalancer:            true,
+			needsDefaultRegistryPullSecrets: false,
+		},
+		{
+			clusterType:                     ClusterTypeKind,
+			isOpenShift:                     false,
+			isLocal:                         true,
+			supportsLoadBalancer:            false,
+			needsDefaultRegistryPullSecrets: true,
+		},
+		{
+			clusterType:                     ClusterTypeMinikube,
+			isOpenShift:                     false,
+			isLocal:                         true,
+			supportsLoadBalancer:            false,
+			needsDefaultRegistryPullSecrets: true,
+		},
+		{
+			clusterType:                     ClusterTypeGKE,
+			isOpenShift:                     false,
+			isLocal:                         false,
+			supportsLoadBalancer:            true,
+			needsDefaultRegistryPullSecrets: true,
+		},
+		{
+			clusterType:                     ClusterTypeAKS,
+			isOpenShift:                     false,
+			isLocal:                         false,
+			supportsLoadBalancer:            true,
+			needsDefaultRegistryPullSecrets: true,
+		},
+		{
+			clusterType:                     ClusterTypeEKS,
+			isOpenShift:                     false,
+			isLocal:                         false,
+			supportsLoadBalancer:            true,
+			needsDefaultRegistryPullSecrets: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.clusterType), func(t *testing.T) {
+			assert.Equal(t, tt.isOpenShift, tt.clusterType.IsOpenShift(), "IsOpenShift")
+			assert.Equal(t, tt.isLocal, tt.clusterType.IsLocal(), "IsLocal")
+			assert.Equal(t, tt.supportsLoadBalancer, tt.clusterType.SupportsLoadBalancer(), "SupportsLoadBalancer")
+			assert.Equal(t, tt.needsDefaultRegistryPullSecrets, tt.clusterType.NeedsDefaultRegistryPullSecrets(), "NeedsDefaultRegistryPullSecrets")
+		})
+	}
+}
+
 func TestClusterTypeUnmarshalYAML_Invalid(t *testing.T) {
 	var ct ClusterType
 	err := yaml.Unmarshal([]byte("bogus"), &ct)
