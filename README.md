@@ -198,6 +198,37 @@ Add-ons are installed as Helm releases prefixed with `roxie-addon-` in the Centr
 During teardown, roxie discovers which add-ons have been installed as part of the most
 recent deployment and uninstalls those add-ons as part of a Central teardown.
 
+### Environment variables in CR specs
+
+roxie supports Kubernetes-style `$(VAR)` interpolation in `customize.envVars`.
+When env vars come from multiple sources (config files, `--set` flags, feature
+flags), roxie merges them by name: the first source to introduce a variable
+determines its position in the list, while later sources can override its value.
+
+This preserves **dependent env var ordering** required by Kubernetes — a variable
+that references another via `$(VAR)` must appear after the referent:
+
+```yaml
+central:
+  spec:
+    customize:
+      envVars:
+        - name: BASE_URL
+          value: "https://example.com"
+        - name: API_URL
+          value: "$(BASE_URL)/api"   # resolved by Kubernetes at runtime
+```
+
+roxie emits a warning when it detects a `$(VAR)` reference that cannot be
+resolved because the referent is not defined at that point in the list.
+
+**Limitation:** if a later config source introduces a new variable that an
+earlier source already references via `$(VAR)`, the new variable will appear
+after the reference and Kubernetes will not resolve it. To avoid this, define
+variables before their dependents within the same config source. This is a
+deliberate trade-off to keep the env var merging logic simple and predictable
+while still supporting dependent env vars in the common case.
+
 ## Development
 
 Enter the dev shell:

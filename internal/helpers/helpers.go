@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"dario.cat/mergo"
 	"gopkg.in/yaml.v3"
 )
 
@@ -62,26 +61,13 @@ func LoadYAMLFile(path string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-// MergeMaps deeply merges multiple maps, with later maps taking precedence
-func MergeMaps(base map[string]interface{}, overlays ...map[string]interface{}) (map[string]interface{}, error) {
-	result := deepCopy(base)
-
-	for _, overlay := range overlays {
-		if err := DeepMerge(result, overlay); err != nil {
-			return nil, err
-		}
-	}
-
-	return result, nil
-}
-
-// deepCopy creates a deep copy of a map
-func deepCopy(m map[string]interface{}) map[string]interface{} {
+// DeepCopyMap creates a deep copy of an unstructured map.
+func DeepCopyMap(m map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
 	for k, v := range m {
 		switch val := v.(type) {
 		case map[string]interface{}:
-			result[k] = deepCopy(val)
+			result[k] = DeepCopyMap(val)
 		case []interface{}:
 			result[k] = deepCopySlice(val)
 		default:
@@ -97,7 +83,7 @@ func deepCopySlice(s []interface{}) []interface{} {
 	for i, v := range s {
 		switch val := v.(type) {
 		case map[string]interface{}:
-			result[i] = deepCopy(val)
+			result[i] = DeepCopyMap(val)
 		case []interface{}:
 			result[i] = deepCopySlice(val)
 		default:
@@ -105,12 +91,6 @@ func deepCopySlice(s []interface{}) []interface{} {
 		}
 	}
 	return result
-}
-
-// DeepMerge recursively merges overlay into base.
-// Slices are appended, with values from overlay appearing after values from base.
-func DeepMerge(base, overlay map[string]any) error {
-	return mergo.Merge(&base, &overlay, mergo.WithOverride, mergo.WithAppendSlice)
 }
 
 func MapToStruct(m map[string]interface{}, out interface{}) error {
