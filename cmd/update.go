@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/creativeprojects/go-selfupdate"
@@ -74,7 +75,16 @@ func runUpdate(cmd *cobra.Command, _ []string, force bool) error {
 	if err != nil {
 		return fmt.Errorf("locating current executable: %w", err)
 	}
+	resolved, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		return fmt.Errorf("resolving executable path: %w", err)
+	}
+	if resolved != exe {
+		log.Infof("Resolved symlink %s → %s", exe, resolved)
+	}
+	exe = resolved
 
+	log.Infof("Replacing %s...", exe)
 	if err := updater.UpdateTo(cmd.Context(), latest, exe); err != nil {
 		return fmt.Errorf("updating binary: %w", err)
 	}
