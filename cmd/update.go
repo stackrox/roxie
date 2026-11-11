@@ -11,7 +11,7 @@ import (
 	log "github.com/stackrox/roxie/internal/logger"
 )
 
-var gitDescribeSuffix = regexp.MustCompile(`-\d+-g[0-9a-f]+$`)
+var gitDescribeSuffix = regexp.MustCompile(`-\d+-g[0-9a-f]+(-dirty)?$`)
 
 const (
 	updateRepoOwner = "stackrox"
