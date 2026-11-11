@@ -31,7 +31,7 @@ import (
 var (
 	DefaultCentralWaitTimeout        = 20 * time.Minute
 	DefaultSecuredClusterWaitTimeout = 20 * time.Minute
-	DefaultCRSAttempts               = uint(20)
+	DefaultCRSIssueAttempts          = uint(20)
 
 	pauseReconcileAnnotationKey = "stackrox.io/pause-reconcile"
 
