@@ -431,6 +431,7 @@ type SecuredClusterConfig struct {
 	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
 	Metadata            CRMetadata             `yaml:"metadata,omitempty"`
 	Spec                map[string]interface{} `yaml:"spec,omitempty"`
+	CRSAttempts         uint                   `yaml:"crsAttempts,omitempty"`
 }
 
 func (s *SecuredClusterConfig) EarlyReadinessEnabled() bool {
@@ -476,6 +477,15 @@ func (s *SecuredClusterConfig) GetWaitConfig() WaitConfig {
 		WaitFor:        waitFor,
 		Timeout:        s.DeployTimeout,
 	}
+}
+
+// CRSAttemptCount returns the total number of attempts for generating a CRS,
+// including the first try. An unset value (0) defaults to DefaultCRSAttempts.
+func (s *SecuredClusterConfig) CRSAttemptCount() uint {
+	if s.CRSAttempts == 0 {
+		return DefaultCRSAttempts
+	}
+	return s.CRSAttempts
 }
 
 // ConfigureSpec applies feature flags and the central endpoint to the SecuredCluster spec.
