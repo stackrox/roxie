@@ -3,11 +3,14 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	"github.com/creativeprojects/go-selfupdate"
 	"github.com/spf13/cobra"
 	log "github.com/stackrox/roxie/internal/logger"
 )
+
+var gitDescribeSuffix = regexp.MustCompile(`-\d+-g[0-9a-f]+$`)
 
 const (
 	updateRepoOwner = "stackrox"
@@ -45,7 +48,13 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("no releases found for %s/%s", updateRepoOwner, updateRepoName)
 	}
 
-	if latest.LessOrEqual(version) {
+	compareVersion := version
+	if base := gitDescribeSuffix.ReplaceAllString(version, ""); base != version {
+		log.Infof("Detected non-release version %s, using base version %s for comparison.", version, base)
+		compareVersion = base
+	}
+
+	if latest.LessOrEqual(compareVersion) {
 		log.Infof("Already up to date (latest: %s).", latest.Version())
 		return nil
 	}
