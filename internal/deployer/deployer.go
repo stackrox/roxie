@@ -20,6 +20,7 @@ import (
 	"github.com/stackrox/roxie/internal/containerrt"
 	"github.com/stackrox/roxie/internal/dockerauth"
 	"github.com/stackrox/roxie/internal/env"
+	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagecache"
 	"github.com/stackrox/roxie/internal/k8s"
 	log "github.com/stackrox/roxie/internal/logger"
@@ -431,6 +432,7 @@ func (d *Deployer) prepareCredentials(ctx context.Context) error {
 
 func (d *Deployer) deployCentral(ctx context.Context) error {
 	log.Infof("Deploying Central to namespace %s", d.config.Central.Namespace)
+	log.Infof("Central resource profile: %s", d.config.Central.ResourceProfile)
 	if d.namespaceExists(d.config.Central.Namespace) {
 		log.Info("Existing Central deployment found, tearing down...")
 		if err := d.teardownCentralWithAddOns(ctx); err != nil {
@@ -454,6 +456,7 @@ func (d *Deployer) deployCentral(ctx context.Context) error {
 
 func (d *Deployer) deploySecuredCluster(ctx context.Context) error {
 	log.Infof("Deploying SecuredCluster to namespace %s", d.config.SecuredCluster.Namespace)
+	log.Infof("SecuredCluster resource profile: %s", d.config.SecuredCluster.ResourceProfile)
 	if d.namespaceExists(d.config.SecuredCluster.Namespace) {
 		log.Info("Existing SecuredCluster deployment found, tearing down...")
 		if err := d.teardownSecuredCluster(ctx); err != nil {
@@ -844,7 +847,7 @@ func (d *Deployer) cleanupTempDir(path string, description string) {
 func (d *Deployer) writeEnvrcFile(ctx context.Context, filename string) error {
 	var content strings.Builder
 	for name, val := range roxieenv.AssembleRoxieEnvironment(d.GetCentralDeploymentInfo()).Export() {
-		fmt.Fprintf(&content, "export %s=%q\n", name, val)
+		fmt.Fprintf(&content, "export %s=%s\n", name, helpers.ShellQuote(val))
 	}
 
 	if d.portForwardPID != 0 {

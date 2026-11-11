@@ -7,8 +7,8 @@ import (
 	"os"
 	"reflect"
 
-	"dario.cat/mergo"
 	"github.com/fatih/color"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/helpers"
@@ -23,6 +23,8 @@ var (
 	verbose bool
 	shell   string
 	dryRun  bool
+
+	evalMode bool
 
 	skipUserConfig bool
 
@@ -57,7 +59,7 @@ func tryApplyUserDefaults(config *deployer.Config) error {
 	if err := yaml.Unmarshal(data, &userDefaults); err != nil {
 		return fmt.Errorf("parsing user config %q: %w", path, err)
 	}
-	if err := mergo.Merge(config, &userDefaults, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+	if err := deployer.MergeConfig(config, &userDefaults); err != nil {
 		return fmt.Errorf("merging user config %q: %w", path, err)
 	}
 	log.Dimf("Applied user config from %s", path)
@@ -78,6 +80,12 @@ Red Hat Advanced Cluster Security (ACS) on any Kubernetes/OpenShift cluster.`,
 }
 
 func init() {
+	// All log output goes to stderr, so base the color decision on stderr's TTY status
+	// instead of the fatih/color default (stdout). This keeps colors working when stdout
+	// is captured, e.g. eval "$(roxie deploy --eval)".
+	_, noColorSet := os.LookupEnv("NO_COLOR")
+	color.NoColor = noColorSet || os.Getenv("TERM") == "dumb" || !isatty.IsTerminal(os.Stderr.Fd())
+
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output (show CRs)")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Do not actually modify cluster")
 	rootCmd.PersistentFlags().BoolVar(&skipUserConfig, "skip-user-config", false,
@@ -102,7 +110,7 @@ func init() {
 			if err := yaml.Unmarshal(data, &configFromFile); err != nil {
 				return fmt.Errorf("failed to unmarshal config from %q: %w", filename, err)
 			}
-			if err := mergo.Merge(config, &configFromFile, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+			if err := deployer.MergeConfig(config, &configFromFile); err != nil {
 				return fmt.Errorf("merging config from %q into deployer Config: %w", filename, err)
 			}
 			return nil
@@ -126,7 +134,7 @@ func init() {
 				return fmt.Errorf("set expression %q had no effect -- typo?", expr)
 			}
 
-			if err := mergo.Merge(config, &patch, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+			if err := deployer.MergeConfig(config, &patch); err != nil {
 				return fmt.Errorf("merging set-expression %q into deployer Config: %w", expr, err)
 			}
 

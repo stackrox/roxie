@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"reflect"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -61,26 +61,13 @@ func LoadYAMLFile(path string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-// MergeMaps deeply merges multiple maps, with later maps taking precedence
-func MergeMaps(base map[string]interface{}, overlays ...map[string]interface{}) (map[string]interface{}, error) {
-	result := deepCopy(base)
-
-	for _, overlay := range overlays {
-		if err := DeepMerge(result, overlay); err != nil {
-			return nil, err
-		}
-	}
-
-	return result, nil
-}
-
-// deepCopy creates a deep copy of a map
-func deepCopy(m map[string]interface{}) map[string]interface{} {
+// DeepCopyMap creates a deep copy of an unstructured map.
+func DeepCopyMap(m map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
 	for k, v := range m {
 		switch val := v.(type) {
 		case map[string]interface{}:
-			result[k] = deepCopy(val)
+			result[k] = DeepCopyMap(val)
 		case []interface{}:
 			result[k] = deepCopySlice(val)
 		default:
@@ -96,7 +83,7 @@ func deepCopySlice(s []interface{}) []interface{} {
 	for i, v := range s {
 		switch val := v.(type) {
 		case map[string]interface{}:
-			result[i] = deepCopy(val)
+			result[i] = DeepCopyMap(val)
 		case []interface{}:
 			result[i] = deepCopySlice(val)
 		default:
@@ -104,31 +91,6 @@ func deepCopySlice(s []interface{}) []interface{} {
 		}
 	}
 	return result
-}
-
-// deepMerge recursively merges overlay into base
-func DeepMerge(base, overlay map[string]interface{}) error {
-	for k, v := range overlay {
-		if IsNil(v) {
-			continue
-		}
-		if baseVal, ok := base[k]; ok {
-			// Both are maps - merge recursively
-			if baseMap, baseIsMap := baseVal.(map[string]interface{}); baseIsMap {
-				if overlayMap, overlayIsMap := v.(map[string]interface{}); overlayIsMap {
-					if err := DeepMerge(baseMap, overlayMap); err != nil {
-						return err
-					}
-					continue
-				} else {
-					return fmt.Errorf("incompatible types in maps to merge (map vs. %T)", v)
-				}
-			}
-		}
-		// Override with overlay value
-		base[k] = v
-	}
-	return nil
 }
 
 func MapToStruct(m map[string]interface{}, out interface{}) error {
@@ -139,14 +101,7 @@ func MapToStruct(m map[string]interface{}, out interface{}) error {
 	return yaml.Unmarshal(bytes, out)
 }
 
-// IsNil uses reflection to reliably check if the provided argument is a Nil pointer.
-func IsNil(i interface{}) bool {
-	if i == nil {
-		return true
-	}
-	switch reflect.TypeOf(i).Kind() {
-	case reflect.Pointer, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
-		return reflect.ValueOf(i).IsNil()
-	}
-	return false
+// ShellQuote wraps s in POSIX single quotes, safe for use in shell eval contexts.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }

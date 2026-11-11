@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/stackrox/roxie/internal/constants"
+	"github.com/stackrox/roxie/internal/envvars"
 	"github.com/stackrox/roxie/internal/helpers"
 	"github.com/stackrox/roxie/internal/imagetag"
+	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/types"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // Config is the top-level deployment configuration, combining settings for
@@ -35,6 +39,42 @@ func NewConfig() Config {
 		Roxie:          NewRoxieConfig(),
 		Central:        NewCentralConfig(),
 		SecuredCluster: NewSecuredClusterConfig(),
+	}
+}
+
+// MergeConfig merges overlay into base with envVar-aware handling.
+// Generic slices use replacement semantics (overlay wins), but
+// customize.envVars entries are merged by name across sources
+// (--config, --set, user defaults) with last-one-wins deduplication.
+func MergeConfig(base, overlay *Config) error {
+	envVarsPath := []string{"customize", "envVars"}
+	baseCentralEnvVars, _, _ := unstructured.NestedSlice(base.Central.Spec, envVarsPath...)
+	baseSCEnvVars, _, _ := unstructured.NestedSlice(base.SecuredCluster.Spec, envVarsPath...)
+
+	if err := mergo.Merge(base, overlay, mergo.WithOverride, mergo.WithoutDereference); err != nil {
+		return err
+	}
+
+	if err := envvars.MergeByNameInUnstructured(base.Central.Spec, baseCentralEnvVars, envVarsPath...); err != nil {
+		return fmt.Errorf("merging Central env vars: %w", err)
+	}
+	if err := envvars.MergeByNameInUnstructured(base.SecuredCluster.Spec, baseSCEnvVars, envVarsPath...); err != nil {
+		return fmt.Errorf("merging SecuredCluster env vars: %w", err)
+	}
+
+	warnUnresolvedEnvVarRefs("Central", base.Central.Spec, envVarsPath)
+	warnUnresolvedEnvVarRefs("SecuredCluster", base.SecuredCluster.Spec, envVarsPath)
+	return nil
+}
+
+func warnUnresolvedEnvVarRefs(component string, spec map[string]any, path []string) {
+	envVars, found, _ := unstructured.NestedSlice(spec, path...)
+	if !found {
+		return
+	}
+	for _, ref := range envvars.FindUnresolvedRefs(envVars) {
+		log.Warningf("%s env var %s references $(%s), which is not defined at that point — Kubernetes will not resolve it",
+			component, ref.Name, ref.RefName)
 	}
 }
 
@@ -323,15 +363,20 @@ func (c *CentralConfig) GetExposure() types.Exposure {
 
 // ConfigureSpec applies feature flags and exposure settings to the Central spec.
 func (c *CentralConfig) ConfigureSpec(roxieConfig *RoxieConfig) error {
-	err := helpers.DeepMerge(c.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags))
-	if err != nil {
+	envVarsPath := []string{"customize", "envVars"}
+	baseEnvVars, _, _ := unstructured.NestedSlice(c.Spec, envVarsPath...)
+	if err := mergo.Merge(&c.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags), mergo.WithOverride); err != nil {
 		return err
 	}
-	if err = helpers.DeepMerge(c.Spec, map[string]interface{}{
-		"central": map[string]interface{}{
+	if err := envvars.MergeByNameInUnstructured(c.Spec, baseEnvVars, envVarsPath...); err != nil {
+		return fmt.Errorf("merging Central env vars by name: %w", err)
+	}
+	warnUnresolvedEnvVarRefs("Central", c.Spec, []string{"customize", "envVars"})
+	if err := mergo.Merge(&c.Spec, map[string]any{
+		"central": map[string]any{
 			"exposure": c.Exposure.ToUnstructuredConfig(),
 		},
-	}); err != nil {
+	}, mergo.WithOverride); err != nil {
 		return err
 	}
 	return nil
@@ -361,14 +406,15 @@ func (c *CentralConfig) CustomResource() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("resource profile 'auto' should have been resolved before building the CR")
 	}
 	if c.ResourceProfile != types.ResourceProfileAcsDefaults {
-		if err := helpers.DeepMerge(cr, getCentralResourcesOperator(c.ResourceProfile)); err != nil {
+		profileCopy := helpers.DeepCopyMap(getCentralResourcesOperator(c.ResourceProfile))
+		if err := mergo.Merge(&cr, profileCopy, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 			return nil, fmt.Errorf("merging resource profile into Central CR: %w", err)
 		}
 	}
-	if err := helpers.DeepMerge(cr, map[string]interface{}{
+	if err := mergo.Merge(&cr, map[string]interface{}{
 		"metadata": c.Metadata.toMap(),
 		"spec":     c.Spec,
-	}); err != nil {
+	}, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 		return nil, fmt.Errorf("merging metadata and spec into Central CR: %w", err)
 	}
 	return cr, nil
@@ -434,10 +480,15 @@ func (s *SecuredClusterConfig) GetWaitConfig() WaitConfig {
 
 // ConfigureSpec applies feature flags and the central endpoint to the SecuredCluster spec.
 func (s *SecuredClusterConfig) ConfigureSpec(roxieConfig *RoxieConfig, centralConfig *CentralConfig) error {
-	if err := helpers.DeepMerge(s.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags)); err != nil {
+	envVarsPath := []string{"customize", "envVars"}
+	baseEnvVars, _, _ := unstructured.NestedSlice(s.Spec, envVarsPath...)
+	if err := mergo.Merge(&s.Spec, featureFlagsToOverrides(roxieConfig.FeatureFlags), mergo.WithOverride); err != nil {
 		return err
 	}
-
+	if err := envvars.MergeByNameInUnstructured(s.Spec, baseEnvVars, envVarsPath...); err != nil {
+		return fmt.Errorf("merging SecuredCluster env vars by name: %w", err)
+	}
+	warnUnresolvedEnvVarRefs("SecuredCluster", s.Spec, []string{"customize", "envVars"})
 	if _, exists := s.Spec["centralEndpoint"]; !exists {
 		s.Spec["centralEndpoint"] = internalCentralEndpoint(centralConfig.Namespace)
 	}
@@ -462,15 +513,16 @@ func (s *SecuredClusterConfig) CustomResource() (map[string]interface{}, error) 
 		return nil, fmt.Errorf("resource profile 'auto' must have been resolved before building the CR")
 	}
 	if s.ResourceProfile != types.ResourceProfileAcsDefaults {
-		if err := helpers.DeepMerge(cr, getSecuredClusterResourcesOperator(s.ResourceProfile)); err != nil {
+		profileCopy := helpers.DeepCopyMap(getSecuredClusterResourcesOperator(s.ResourceProfile))
+		if err := mergo.Merge(&cr, profileCopy, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 			return nil, fmt.Errorf("merging resource profile into SecuredCluster CR: %w", err)
 		}
 	}
 
-	if err := helpers.DeepMerge(cr, map[string]interface{}{
+	if err := mergo.Merge(&cr, map[string]interface{}{
 		"metadata": s.Metadata.toMap(),
 		"spec":     s.Spec,
-	}); err != nil {
+	}, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 		return nil, fmt.Errorf("merging metadata and spec into SecuredCluster CR: %w", err)
 	}
 	return cr, nil

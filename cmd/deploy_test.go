@@ -340,6 +340,130 @@ roxie:
 	}
 }
 
+// TestNewDeployCmd_ConfigMergePreservesEnvVars verifies that spec.customize.envVars
+// from multiple --config files and --set expressions are merged by name rather
+// than silently replaced. Overlapping names should use the last-specified value;
+// non-overlapping names from earlier sources must be preserved.
+func TestNewDeployCmd_ConfigMergePreservesEnvVars(t *testing.T) {
+	firstConfigPath := filepath.Join(t.TempDir(), "first.yaml")
+	secondConfigPath := filepath.Join(t.TempDir(), "second.yaml")
+
+	tests := []struct {
+		name            string
+		firstConfig     string
+		secondConfig    string
+		args            []string
+		expectedEnvVars map[string]string
+	}{
+		{
+			name: "second config preserves first config's non-overlapping envVars",
+			firstConfig: `
+central:
+  spec:
+    customize:
+      envVars:
+        - name: FIRST_ONLY
+          value: "from-first"
+`,
+			secondConfig: `
+central:
+  spec:
+    customize:
+      envVars:
+        - name: SECOND_ONLY
+          value: from-second
+`,
+			args: []string{"--config", firstConfigPath, "--config", secondConfigPath},
+			expectedEnvVars: map[string]string{
+				"FIRST_ONLY":  "from-first",
+				"SECOND_ONLY": "from-second",
+			},
+		},
+		{
+			name: "second config overrides overlapping envVar without losing others",
+			firstConfig: `
+central:
+  spec:
+    customize:
+      envVars:
+        - name: SHARED
+          value: from-first
+        - name: FIRST_ONLY
+          value: keep
+`,
+			secondConfig: `
+central:
+  spec:
+    customize:
+      envVars:
+        - name: SHARED
+          value: from-second
+`,
+			args: []string{"--config", firstConfigPath, "--config", secondConfigPath},
+			expectedEnvVars: map[string]string{
+				"SHARED":     "from-second",
+				"FIRST_ONLY": "keep",
+			},
+		},
+		{
+			name: "set expression preserves config file envVars",
+			firstConfig: `
+central:
+  spec:
+    customize:
+      envVars:
+        - name: FROM_CONFIG
+          value: keep
+`,
+			// The [0] index is strvals syntax for "first element of the array
+			// I'm constructing", not "replace element 0 of the existing array".
+			// strvals builds a standalone [{FROM_SET: also-keep}] which then
+			// gets merged at the struct level — the index is irrelevant to the
+			// merge. Both envVars should survive, merged by name.
+			args: []string{
+				"--config", firstConfigPath,
+				"--set", "central.spec.customize.envVars[0].name=FROM_SET_1,central.spec.customize.envVars[0].value=one",
+				"--set", "central.spec.customize.envVars[0].name=FROM_SET_2,central.spec.customize.envVars[0].value=two",
+			},
+			expectedEnvVars: map[string]string{
+				"FROM_CONFIG": "keep",
+				"FROM_SET_1":  "one",
+				"FROM_SET_2":  "two",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NoError(t, os.WriteFile(firstConfigPath, []byte(tt.firstConfig), 0o644))
+			if tt.secondConfig != "" {
+				require.NoError(t, os.WriteFile(secondConfigPath, []byte(tt.secondConfig), 0o644))
+			}
+
+			// Global variable that we keep reusing for the flags parsing.
+			deploySettingsFromArgs = deployer.NewConfig()
+			deployCmd, _, err := rootCmd.Find([]string{"deploy"})
+			require.NoError(t, err)
+			require.NoError(t, deployCmd.ParseFlags(tt.args))
+
+			spec := deploySettingsFromArgs.Central.Spec
+			customize, ok := spec["customize"].(map[string]any)
+			require.True(t, ok, "customize should be present in spec")
+			envVars, ok := customize["envVars"].([]any)
+			require.True(t, ok, "envVars should be present in customize")
+
+			got := make(map[string]string)
+			for _, item := range envVars {
+				ev := item.(map[string]any)
+				got[ev["name"].(string)] = ev["value"].(string)
+			}
+			assert.Equal(t, tt.expectedEnvVars, got)
+			assert.Equal(t, len(tt.expectedEnvVars), len(envVars),
+				"envVars slice should have no duplicates")
+		})
+	}
+}
+
 func TestNewDeployCmd_SetRejectsSpec(t *testing.T) {
 	tests := []struct {
 		name string
