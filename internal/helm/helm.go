@@ -201,6 +201,9 @@ func doListByPrefix(ctx context.Context, prefix, namespace string) ([]string, er
 
 	list := action.NewList(cfg)
 	list.Filter = "^" + regexp.QuoteMeta(prefix)
+	list.StateMask = action.ListDeployed | action.ListFailed |
+		action.ListPendingInstall | action.ListPendingUpgrade | action.ListPendingRollback |
+		action.ListUninstalling
 
 	results, err := list.Run()
 	if err != nil {
