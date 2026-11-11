@@ -18,15 +18,20 @@ const (
 )
 
 func newUpdateCmd() *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update roxie to the latest version",
 		Long:  `Download and install the latest roxie release from GitHub, replacing the current binary in-place.`,
-		RunE:  runUpdate,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUpdate(cmd, args, force)
+		},
 	}
+	cmd.Flags().BoolVar(&force, "force", false, "Skip version comparison and install the latest release unconditionally")
+	return cmd
 }
 
-func runUpdate(cmd *cobra.Command, _ []string) error {
+func runUpdate(cmd *cobra.Command, _ []string, force bool) error {
 	if version == "dev" {
 		return fmt.Errorf("cannot self-update a development build (version %q); install a released binary first", version)
 	}
@@ -48,15 +53,19 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("no releases found for %s/%s", updateRepoOwner, updateRepoName)
 	}
 
-	compareVersion := version
-	if base := gitDescribeSuffix.ReplaceAllString(version, ""); base != version {
-		log.Infof("Detected non-release version %s, using base version %s for comparison.", version, base)
-		compareVersion = base
-	}
+	if force {
+		log.Infof("Force flag set, skipping version comparison.")
+	} else {
+		compareVersion := version
+		if base := gitDescribeSuffix.ReplaceAllString(version, ""); base != version {
+			log.Infof("Detected non-release version %s, using base version %s for comparison.", version, base)
+			compareVersion = base
+		}
 
-	if latest.LessOrEqual(compareVersion) {
-		log.Infof("Already up to date (latest: %s).", latest.Version())
-		return nil
+		if latest.LessOrEqual(compareVersion) {
+			log.Infof("Already up to date (latest: %s).", latest.Version())
+			return nil
+		}
 	}
 
 	log.Infof("Updating to %s...", latest.Version())
