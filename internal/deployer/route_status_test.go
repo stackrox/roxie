@@ -6,9 +6,22 @@ import (
 )
 
 func TestRouteStatusParse(t *testing.T) {
-	raw := `{"spec":{"host":"central-acs-central.apps-crc.testing"},
-	         "status":{"ingress":[{"host":"central-acs-central.apps-crc.testing",
-	           "conditions":[{"type":"Admitted","status":"True","lastTransitionTime":"x"}]}]}}`
+	raw := `
+	{
+		"spec": {
+			"host": "central-acs-central.apps-crc.testing"
+		},
+		"status": {
+			"ingress": [{
+				"host": "central-acs-central.apps-crc.testing",
+				"conditions": [{
+					"type": "Admitted",
+					"status": "True",
+					"lastTransitionTime": "x"
+				}]
+			}]
+		}
+	}`
 	var r routeStatus
 	if err := json.Unmarshal([]byte(raw), &r); err != nil {
 		t.Fatal(err)
