@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/daemon"
@@ -17,6 +18,34 @@ import (
 
 	log "github.com/stackrox/roxie/internal/logger"
 )
+
+// ImageExistsInDaemon reports whether the image is available in the local
+// container runtime (Docker/Podman) reachable via containerRuntimeSocket.
+func ImageExistsInDaemon(ctx context.Context, imageRef, containerRuntimeSocket string) (bool, error) {
+	ref, err := name.ParseReference(imageRef)
+	if err != nil {
+		return false, fmt.Errorf("parsing image reference %q: %w", imageRef, err)
+	}
+
+	daemonOpts := []daemon.Option{daemon.WithContext(ctx)}
+	if containerRuntimeSocket != "" {
+		client, err := mobyclient.New(mobyclient.WithHost(containerRuntimeSocket))
+		if err != nil {
+			return false, fmt.Errorf("connecting to local daemon: %w", err)
+		}
+		defer client.Close()
+		daemonOpts = append(daemonOpts, daemon.WithClient(client))
+	}
+
+	_, err = daemon.Image(ref, daemonOpts...)
+	if cerrdefs.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspecting image %s: %w", ref, err)
+	}
+	return true, nil
+}
 
 // VerifyImageExistence verifies that an OCI image is accessible.
 // Authentication is handled automatically from ~/.docker/config.json or $REGISTRY_AUTH_FILE.

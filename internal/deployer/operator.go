@@ -211,6 +211,15 @@ func (d *Deployer) resolveBundleImage(ctx context.Context, instance OperatorInst
 		return bundleImage, nil
 	}
 
+	exists, err := ocihelper.ImageExistsInDaemon(ctx, bundleImage, d.containerRuntimeSocket)
+	if err != nil {
+		log.Dimf("Could not check local daemon for bundle image %s: %v", bundleImage, err)
+	}
+	if exists {
+		log.Dimf("✓ Bundle image %s found in local daemon, skipping remote registry check", bundleImage)
+		return bundleImage, nil
+	}
+
 	if err := ocihelper.VerifyImageExistence(ctx, bundleImage); err != nil {
 		var te *transport.Error
 		if errors.As(err, &te) && te.StatusCode == http.StatusNotFound {
