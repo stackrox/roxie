@@ -91,7 +91,7 @@ jobs:
           echo "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=" >> "$GITHUB_ENV"
 
       - name: Download production infractl
-        uses: stackrox/actions/infra/install-infractl@v1.0.48
+        uses: stackrox/actions/infra/install-infractl@v1.0.50
 
       - name: Download artifacts
         run: |
