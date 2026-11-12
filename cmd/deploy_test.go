@@ -223,6 +223,18 @@ central:
 		},
 
 		{
+			name: "config file sets crs issue attempts",
+			config: `
+securedCluster:
+  crsIssueAttempts: 5
+`,
+			args: []string{"--config", configFilePath},
+			assert: func(t *testing.T, cfg deployer.Config) {
+				assert.Equal(t, uint(5), cfg.SecuredCluster.CRSIssueAttempts, "SecuredCluster.CRSIssueAttempts mismatch")
+			},
+		},
+
+		{
 			name: "flags can override earlier specified config file",
 			config: `
 central:

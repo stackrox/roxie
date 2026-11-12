@@ -431,6 +431,7 @@ type SecuredClusterConfig struct {
 	EarlyReadiness      *bool                  `yaml:"earlyReadiness,omitempty"`
 	Metadata            CRMetadata             `yaml:"metadata,omitempty"`
 	Spec                map[string]interface{} `yaml:"spec,omitempty"`
+	CRSIssueAttempts    uint                   `yaml:"crsIssueAttempts,omitempty"`
 }
 
 func (s *SecuredClusterConfig) EarlyReadinessEnabled() bool {
@@ -450,6 +451,7 @@ func DefaultSecuredClusterConfig() SecuredClusterConfig {
 	cfg.DeployTimeout = DefaultSecuredClusterWaitTimeout
 	cfg.Namespace = "acs-sensor"
 	cfg.EarlyReadiness = new(true)
+	cfg.CRSIssueAttempts = DefaultCRSIssueAttempts
 	return cfg
 }
 

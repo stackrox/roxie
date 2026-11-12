@@ -49,7 +49,7 @@ type crsGenResponse struct {
 
 // generateCRS is a retrying wrapper on top of generateCRSOnce.
 func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string, error) {
-	const maxAttempts = 20
+	maxAttempts := d.config.SecuredCluster.CRSIssueAttempts
 	const retryWaitTime = 10 * time.Second
 
 	client, err := d.centralHTTPClient()
@@ -58,7 +58,7 @@ func (d *Deployer) generateCRS(ctx context.Context, clusterName string) (string,
 	}
 
 	var lastErr error
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+	for attempt := uint(1); attempt <= maxAttempts; attempt++ {
 		if attempt > 1 {
 			log.Infof("Retrying CRS generation (attempt %d/%d) after %v...", attempt, maxAttempts, retryWaitTime)
 			select {
