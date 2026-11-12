@@ -9,10 +9,7 @@ func imagesForConfig(config Config) []string {
 		for _, imageName := range relatedImages {
 			images = append(images, constructOperandImageFromInstance(instance, imageName))
 		}
-		images = append(images,
-			instance.OperatorImage(),
-			instance.BundleImage(),
-		)
+		images = append(images, instance.OperatorImage())
 	}
 
 	return images
