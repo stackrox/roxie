@@ -57,9 +57,9 @@ build-%: ## Build the roxie binary for a specific OS/ARCH (e.g., build-linux-amd
 		echo "Supported: linux, darwin"; \
 		exit 1; \
 	fi
-	@if ! echo "amd64 arm64" | grep -qw "$(TARGET_ARCH)"; then \
+	@if ! echo "amd64 arm64 s390x" | grep -qw "$(TARGET_ARCH)"; then \
 		echo "❌ Unsupported ARCH: $(TARGET_ARCH)"; \
-		echo "Supported: amd64, arm64"; \
+		echo "Supported: amd64, arm64, s390x"; \
 		exit 1; \
 	fi
 	@echo "🔨 Building roxie for $(TARGET_OS)/$(TARGET_ARCH)..."
