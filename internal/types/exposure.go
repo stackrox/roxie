@@ -9,12 +9,14 @@ type Exposure int
 const (
 	ExposureNone Exposure = iota
 	ExposureLoadBalancer
+	ExposureRoute
 )
 
 var (
 	exposureNames = map[Exposure]string{
 		ExposureNone:         "none",
 		ExposureLoadBalancer: "loadbalancer",
+		ExposureRoute:        "route",
 	}
 
 	exposureValues = func() map[string]Exposure {
@@ -64,6 +66,12 @@ func (e *Exposure) ToUnstructuredConfig() map[string]interface{} {
 			"loadBalancer": map[string]interface{}{
 				"enabled": true,
 				"port":    443,
+			},
+		}
+	case ExposureRoute:
+		return map[string]interface{}{
+			"route": map[string]interface{}{
+				"enabled": true,
 			},
 		}
 	case ExposureNone:
