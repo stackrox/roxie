@@ -223,14 +223,14 @@ central:
 		},
 
 		{
-			name: "config file sets crs issue attempts",
+			name: "config file sets crs issue retries",
 			config: `
 securedCluster:
-  crsIssueAttempts: 5
+  crsIssueRetries: 5
 `,
 			args: []string{"--config", configFilePath},
 			assert: func(t *testing.T, cfg deployer.Config) {
-				assert.Equal(t, uint(5), cfg.SecuredCluster.CRSIssueAttempts, "SecuredCluster.CRSIssueAttempts mismatch")
+				assert.Equal(t, uint(5), cfg.SecuredCluster.CRSIssueRetries, "SecuredCluster.CRSIssueRetries mismatch")
 			},
 		},
 
