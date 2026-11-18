@@ -434,9 +434,15 @@ func (d *Deployer) prepareCredentials(ctx context.Context) error {
 func (d *Deployer) deployCentral(ctx context.Context) error {
 	log.Infof("Deploying Central to namespace %s", d.config.Central.Namespace)
 	log.Infof("Central resource profile: %s", d.config.Central.ResourceProfile)
-	if d.namespaceExists(d.config.Central.Namespace) {
+	if ns := d.config.Central.Namespace; d.namespaceExists(ns) {
 		log.Info("Existing Central deployment found, tearing down...")
-		if err := d.teardownCentralWithAddOns(ctx); err != nil {
+		// Only clean up the namespace we are about to deploy into. Unlike explicit
+		// `roxie teardown`, a redeployment must not use cluster-wide discovery, which
+		// could find (and delete) a Central, including its PVCs and add-ons, living in
+		// a different namespace.
+		addOnsErr := d.teardownDiscoveredAddOns(ctx, ns)
+		centralErr := d.teardownCentral(ctx, ns)
+		if err := errors.Join(addOnsErr, centralErr); err != nil {
 			log.Warningf("Error during teardown: %v", err)
 		}
 	}
@@ -458,9 +464,13 @@ func (d *Deployer) deployCentral(ctx context.Context) error {
 func (d *Deployer) deploySecuredCluster(ctx context.Context) error {
 	log.Infof("Deploying SecuredCluster to namespace %s", d.config.SecuredCluster.Namespace)
 	log.Infof("SecuredCluster resource profile: %s", d.config.SecuredCluster.ResourceProfile)
-	if d.namespaceExists(d.config.SecuredCluster.Namespace) {
+	if ns := d.config.SecuredCluster.Namespace; d.namespaceExists(ns) {
 		log.Info("Existing SecuredCluster deployment found, tearing down...")
-		if err := d.teardownSecuredCluster(ctx); err != nil {
+		// Only clean up the namespace we are about to deploy into. Unlike explicit
+		// `roxie teardown`, a redeployment must not use cluster-wide discovery, which
+		// would tear down every SecuredCluster on the cluster, not just the one being
+		// replaced.
+		if err := d.teardownSecuredClusterInNamespace(ctx, ns); err != nil {
 			log.Warningf("Error during teardown: %v", err)
 		}
 	}
