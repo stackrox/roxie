@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stackrox/roxie/internal/helm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -86,6 +87,7 @@ func TestResolveAddOns(t *testing.T) {
 				assert.Equal(t, "example", ha.installOpts.ChartName)
 				assert.Equal(t, "1.0.0", ha.installOpts.ChartVersion)
 				assert.Equal(t, "acs-central", ha.installOpts.Namespace)
+				assert.Equal(t, map[string]string{addOnPriorityLabel: "0"}, ha.installOpts.Labels)
 			},
 		},
 		{
@@ -243,4 +245,38 @@ func TestResolveAddOns(t *testing.T) {
 			tt.assert(t, resolved, err)
 		})
 	}
+}
+
+func TestSortReleasesForTeardown(t *testing.T) {
+	withPrio := func(name, prio string) helm.Release {
+		return helm.Release{Name: name, Labels: map[string]string{"owner": "helm", addOnPriorityLabel: prio}}
+	}
+	releases := []helm.Release{
+		{Name: "roxie-addon-legacy-b"},
+		withPrio("roxie-addon-hi-prio", "10"),
+		withPrio("roxie-addon-alpha", "0"),
+		withPrio("roxie-addon-garbage", "not-a-number"),
+		withPrio("roxie-addon-mid-prio", "5"),
+		withPrio("roxie-addon-hi-prio-2", "10"),
+		{Name: "roxie-addon-legacy-a"},
+		withPrio("roxie-addon-zebra", "0"),
+	}
+
+	sortReleasesForTeardown(releases)
+
+	names := make([]string, len(releases))
+	for i, r := range releases {
+		names[i] = r.Name
+	}
+	// Exact reverse of the installation order; unlabeled/invalid releases count as lowest priority.
+	assert.Equal(t, []string{
+		"roxie-addon-zebra",
+		"roxie-addon-legacy-b",
+		"roxie-addon-legacy-a",
+		"roxie-addon-garbage",
+		"roxie-addon-alpha",
+		"roxie-addon-mid-prio",
+		"roxie-addon-hi-prio-2",
+		"roxie-addon-hi-prio",
+	}, names)
 }

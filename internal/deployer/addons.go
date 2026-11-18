@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 
 	"github.com/stackrox/roxie/internal/helm"
 	log "github.com/stackrox/roxie/internal/logger"
@@ -65,6 +66,8 @@ func (d *Deployer) teardownDiscoveredAddOns(ctx context.Context, namespace strin
 		return nil
 	}
 
+	sortReleasesForTeardown(releases)
+
 	log.Infof("Tearing down %d add-on(s)...", len(releases))
 	var errs []error
 	for _, release := range releases {
@@ -72,13 +75,35 @@ func (d *Deployer) teardownDiscoveredAddOns(ctx context.Context, namespace strin
 			errs = append(errs, err)
 			break
 		}
-		if err := helm.Uninstall(ctx, release, namespace); err != nil {
-			errs = append(errs, fmt.Errorf("tearing down add-on release %q: %w", release, err))
+		if err := helm.Uninstall(ctx, release.Name, namespace); err != nil {
+			errs = append(errs, fmt.Errorf("tearing down add-on release %q: %w", release.Name, err))
 			continue
 		}
-		log.Successf("Add-on release %q torn down", release)
+		log.Successf("Add-on release %q torn down", release.Name)
 	}
 	return errors.Join(errs...)
+}
+
+// sortReleasesForTeardown orders add-on releases in reverse installation order
+// (see sortAddOns): ascending priority, ties broken by descending name.
+func sortReleasesForTeardown(releases []helm.Release) {
+	slices.SortFunc(releases, func(a, b helm.Release) int {
+		return cmp.Or(
+			cmp.Compare(releasePriority(a), releasePriority(b)),
+			cmp.Compare(b.Name, a.Name), // ties: descending name
+		)
+	})
+}
+
+// releasePriority returns the priority stored on the release, falling back to the
+// lowest priority if the label is missing or invalid (e.g. releases installed by
+// older roxie versions).
+func releasePriority(release helm.Release) uint64 {
+	prio, err := strconv.ParseUint(release.Labels[addOnPriorityLabel], 10, 0)
+	if err != nil {
+		return 0
+	}
+	return prio
 }
 
 // ResolveEnabledAddOns returns the enabled add-ons sorted by descending priority (name for ties at zero).
