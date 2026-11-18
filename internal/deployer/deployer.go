@@ -491,33 +491,32 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 	case component.Operator:
 		return d.teardownOperator(ctx)
 	case component.Both, component.All:
+		// Each component is torn down independently; errors are collected rather than
+		// aborting early, so that one failing component does not prevent cleanup of the
+		// others. They are returned to the caller so that a partial failure is not
+		// reported as a successful teardown.
+		var securedClusterErr, centralErr, operatorErr error
 		var wg sync.WaitGroup
-		wg.Add(2)
-
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if err := d.teardownSecuredCluster(ctx); err != nil {
-				log.Warningf("Error tearing down secured cluster: %v", err)
+				securedClusterErr = fmt.Errorf("tearing down secured cluster: %w", err)
 			}
-		}()
-
-		go func() {
-			defer wg.Done()
+		})
+		wg.Go(func() {
 			if err := d.teardownCentralWithAddOns(ctx); err != nil {
-				log.Warningf("Error tearing down central: %v", err)
+				centralErr = fmt.Errorf("tearing down central: %w", err)
 			}
-		}()
-
+		})
 		wg.Wait()
 
 		// Tear down the operator strictly after Central/SecuredCluster are gone,
 		// because the operator manages finalizers on their custom resources.
 		if components == component.All {
 			if err := d.teardownOperator(ctx); err != nil {
-				log.Warningf("Error tearing down operator: %v", err)
+				operatorErr = fmt.Errorf("tearing down operator: %w", err)
 			}
 		}
-		return nil
+		return errors.Join(securedClusterErr, centralErr, operatorErr)
 	default:
 		return fmt.Errorf("unknown component: %s", components)
 	}
