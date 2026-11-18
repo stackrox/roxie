@@ -938,6 +938,7 @@ func (d *Deployer) PrintCentralDeploymentSummary() {
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
 	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
+	log.Info(cyan.Sprint("│") + createRow("Namespace", d.config.Central.Namespace))
 	log.Info(cyan.Sprint("│") + createRow("Image Tag", imageTag.String()))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
@@ -1116,6 +1117,7 @@ func (d *Deployer) PrintSecuredClusterDeploymentSummary() {
 	// Deployment details
 	log.Info(cyan.Sprint("│") + createRow("Component", component))
 	log.Info(cyan.Sprint("│") + createRow("Cluster Type", d.config.Roxie.ClusterType.String()))
+	log.Info(cyan.Sprint("│") + createRow("Namespace", d.config.SecuredCluster.Namespace))
 	log.Info(cyan.Sprint("│") + createRow("Image Tag", imageTag.String()))
 	log.Info(cyan.Sprint("│") + createRow("Kubernetes Context", kubeContext))
 
