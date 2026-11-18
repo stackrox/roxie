@@ -73,6 +73,14 @@ func DiscoverCRNamespaces(ctx context.Context, crType, crName string) ([]string,
 	if err != nil {
 		stderr := strings.ToLower(result.Stderr)
 		if strings.Contains(stderr, "the server doesn't have a resource type") {
+			// kubectl also reports a missing resource type when API discovery is only
+			// partially successful (e.g. an unavailable aggregated API server). Only
+			// trust the message if full API discovery succeeds; otherwise teardown
+			// would silently skip cleanup of CRs that do exist.
+			if _, discoveryErr := RunKubectl(ctx, KubectlOptions{Args: []string{"api-resources", "-o", "name"}}); discoveryErr != nil {
+				return nil, fmt.Errorf("discovering %s/%s: resource type reported as missing, but API discovery is incomplete: %w",
+					crType, crName, errors.Join(err, discoveryErr))
+			}
 			return nil, nil
 		}
 		return nil, fmt.Errorf("discovering %s/%s: %w", crType, crName, err)
