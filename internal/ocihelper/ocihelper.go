@@ -35,24 +35,32 @@ func ImageExistsInDaemon(ctx context.Context, imageRef, containerRuntimeSocket s
 	ctx, cancel := context.WithTimeout(ctx, daemonProbeTimeout)
 	defer cancel()
 
+	img, err := lookupImageFromDaemon(ctx, ref, containerRuntimeSocket)
+	if err != nil {
+		return false, err
+	}
+	return img != nil, nil
+}
+
+func lookupImageFromDaemon(ctx context.Context, ref name.Reference, containerRuntimeSocket string) (v1.Image, error) {
 	daemonOpts := []daemon.Option{daemon.WithContext(ctx)}
 	if containerRuntimeSocket != "" {
 		client, err := mobyclient.New(mobyclient.WithHost(containerRuntimeSocket))
 		if err != nil {
-			return false, fmt.Errorf("connecting to local daemon: %w", err)
+			return nil, fmt.Errorf("connecting to local daemon: %w", err)
 		}
 		defer client.Close()
 		daemonOpts = append(daemonOpts, daemon.WithClient(client))
 	}
 
-	_, err = daemon.Image(ref, daemonOpts...)
+	img, err := daemon.Image(ref, daemonOpts...)
 	if cerrdefs.IsNotFound(err) {
-		return false, nil
+		return nil, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("inspecting image %s: %w", ref, err)
+		return nil, fmt.Errorf("inspecting image %s: %w", ref, err)
 	}
-	return true, nil
+	return img, nil
 }
 
 // VerifyImageExistence verifies that an OCI image is accessible.
@@ -110,23 +118,17 @@ func assureImageExistsLocally(ctx context.Context, imageRef, containerRuntimeSoc
 		return nil, fmt.Errorf("invalid image reference: %w", err)
 	}
 
-	daemonOpts := []daemon.Option{daemon.WithContext(ctx)}
-	if containerRuntimeSocket != "" {
-		client, err := mobyclient.New(mobyclient.WithHost(containerRuntimeSocket))
-		if err == nil {
-			daemonOpts = append(daemonOpts, daemon.WithClient(client))
-		} else {
-			log.Dimf("Failed to create moby client for %s: %v", containerRuntimeSocket, err)
-		}
-	}
-
-	img, err := daemon.Image(ref, daemonOpts...)
-	if err == nil {
+	img, err := lookupImageFromDaemon(ctx, ref, containerRuntimeSocket)
+	if img != nil {
 		log.Dimf("✓ Image %s found in local daemon", imageRef)
 		return img, nil
 	}
 
-	log.Dimf("Image not found in local daemon, pulling from registry: %v", err)
+	if err != nil {
+		log.Dimf("Could not check local daemon, pulling from registry: %v", err)
+	} else {
+		log.Dim("Image not found in local daemon, pulling from registry")
+	}
 
 	// For operator bundles, we fetch linux/amd64 by default as they contain
 	// platform-agnostic YAML files.
