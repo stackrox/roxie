@@ -407,7 +407,7 @@ func verifyHelmReleaseExists(t *testing.T, ctx context.Context, releaseName, nam
 
 	releases, err := helm.ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err, "listing Helm releases in namespace %s", namespace)
-	if !slices.Contains(releases, releaseName) {
+	if !slices.ContainsFunc(releases, func(r helm.Release) bool { return r.Name == releaseName }) {
 		t.Fatalf("Helm release %s does not exist in namespace %s", releaseName, namespace)
 	}
 }
@@ -417,7 +417,7 @@ func verifyHelmReleaseNotExists(t *testing.T, ctx context.Context, releaseName, 
 
 	releases, err := helm.ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err, "listing Helm releases in namespace %s", namespace)
-	if slices.Contains(releases, releaseName) {
+	if slices.ContainsFunc(releases, func(r helm.Release) bool { return r.Name == releaseName }) {
 		t.Fatalf("Helm release %s already exists in namespace %s", releaseName, namespace)
 	}
 }
