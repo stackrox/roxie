@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -19,6 +20,10 @@ import (
 	log "github.com/stackrox/roxie/internal/logger"
 )
 
+// daemonProbeTimeout bounds the local daemon lookup so an unresponsive
+// Docker/Podman socket doesn't block callers that have other fallbacks.
+const daemonProbeTimeout = 5 * time.Second
+
 // ImageExistsInDaemon reports whether the image is available in the local
 // container runtime (Docker/Podman) reachable via containerRuntimeSocket.
 func ImageExistsInDaemon(ctx context.Context, imageRef, containerRuntimeSocket string) (bool, error) {
@@ -26,6 +31,9 @@ func ImageExistsInDaemon(ctx context.Context, imageRef, containerRuntimeSocket s
 	if err != nil {
 		return false, fmt.Errorf("parsing image reference %q: %w", imageRef, err)
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, daemonProbeTimeout)
+	defer cancel()
 
 	daemonOpts := []daemon.Option{daemon.WithContext(ctx)}
 	if containerRuntimeSocket != "" {
