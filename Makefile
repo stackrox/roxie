@@ -19,6 +19,9 @@ BUILD_DIR := .
 BINARY := $(BUILD_DIR)/$(BINARY_NAME)
 INSTALLED_BINARY := $(GOPATH)/bin/$(BINARY_NAME)
 
+# Platforms supported by build-<os>-<arch>.
+SUPPORTED_PLATFORMS := linux-amd64 linux-arm64 linux-s390x darwin-amd64 darwin-arm64
+
 # Convention is that the git tags are of the form
 #      v<major>.<minor>.<patch>-<build-number>-<commit-hash>[-dirty]
 #   or v<major>.<minor>.<patch>
@@ -52,14 +55,9 @@ build-%: ## Build the roxie binary for a specific OS/ARCH (e.g., build-linux-amd
 	@$(eval PARTS := $(subst -, ,$*))
 	@$(eval TARGET_OS := $(word 1,$(PARTS)))
 	@$(eval TARGET_ARCH := $(word 2,$(PARTS)))
-	@if ! echo "linux darwin" | grep -qw "$(TARGET_OS)"; then \
-		echo "❌ Unsupported OS: $(TARGET_OS)"; \
-		echo "Supported: linux, darwin"; \
-		exit 1; \
-	fi
-	@if ! echo "amd64 arm64 s390x" | grep -qw "$(TARGET_ARCH)"; then \
-		echo "❌ Unsupported ARCH: $(TARGET_ARCH)"; \
-		echo "Supported: amd64, arm64, s390x"; \
+	@if [ -z "$(filter $*,$(SUPPORTED_PLATFORMS))" ]; then \
+		echo "❌ Unsupported platform: $*"; \
+		echo "Supported: $(SUPPORTED_PLATFORMS)"; \
 		exit 1; \
 	fi
 	@echo "🔨 Building roxie for $(TARGET_OS)/$(TARGET_ARCH)..."
