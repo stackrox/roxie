@@ -267,8 +267,8 @@ func TestImagesForConfig_MixedVersions(t *testing.T) {
 	assert.Contains(t, images, "quay.io/rhacs-eng/main:4.9.0")
 	assert.Contains(t, images, "quay.io/rhacs-eng/stackrox-operator:4.8.0")
 	assert.Contains(t, images, "quay.io/rhacs-eng/stackrox-operator:4.9.0")
-	assert.Contains(t, images, "quay.io/rhacs-eng/stackrox-operator-bundle:v4.8.0")
-	assert.Contains(t, images, "quay.io/rhacs-eng/stackrox-operator-bundle:v4.9.0")
+	assert.NotContains(t, images, "quay.io/rhacs-eng/stackrox-operator-bundle:v4.8.0")
+	assert.NotContains(t, images, "quay.io/rhacs-eng/stackrox-operator-bundle:v4.9.0")
 }
 
 func TestImagesForConfig_SingleVersionUnchanged(t *testing.T) {
@@ -282,7 +282,7 @@ func TestImagesForConfig_SingleVersionUnchanged(t *testing.T) {
 	images := imagesForConfig(cfg)
 	assert.Contains(t, images, "quay.io/rhacs-eng/main:4.9.0")
 	assert.Contains(t, images, "quay.io/rhacs-eng/stackrox-operator:4.9.0")
-	assert.Contains(t, images, "quay.io/rhacs-eng/stackrox-operator-bundle:v4.9.0")
+	assert.NotContains(t, images, "quay.io/rhacs-eng/stackrox-operator-bundle:v4.9.0")
 
 	mainCount := 0
 	for _, img := range images {
