@@ -11,7 +11,7 @@ jobs:
   delete-dev-cluster:
     runs-on: ubuntu-latest
     env:
-      INFRA_TOKEN: ${{ secrets.INFRA_CI_TOKEN }}
+      INFRA_TOKEN: ${{ secrets.INFRA_TOKEN }}
     steps:
       - name: Install infractl
         uses: stackrox/actions/infra/install-infractl@v1.0.48

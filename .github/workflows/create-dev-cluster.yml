@@ -34,4 +34,4 @@ jobs:
           args: ${{ inputs.args }}
           lifespan: ${{ inputs.lifespan }}
           wait: true
-          token: ${{ secrets.INFRA_CI_TOKEN }}
+          token: ${{ secrets.INFRA_TOKEN }}
