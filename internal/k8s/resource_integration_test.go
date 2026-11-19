@@ -28,3 +28,9 @@ func TestRetrieveResourceFromCluster_Found(t *testing.T) {
 	assert.Nil(t, err, "Expected no error to be returned when resource is found")
 	assert.Equal(t, "default", obj.GetName(), "Expected resource name to match")
 }
+
+func TestDiscoverCRNamespaces_UnknownResourceType(t *testing.T) {
+	namespaces, err := DiscoverCRNamespaces(context.Background(), "roxienonexistentkind", "whatever")
+	assert.NoError(t, err, "Expected an unregistered resource type to be reported as absent, not as an error")
+	assert.Empty(t, namespaces)
+}

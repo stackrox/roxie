@@ -138,7 +138,7 @@ func requireKubeContext() (string, error) {
 	return ctx, nil
 }
 
-func runCommand(t *testing.T, timeout time.Duration, env map[string]string, args ...string) {
+func runCommandPrefixed(t *testing.T, prefix string, timeout time.Duration, env map[string]string, args ...string) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -156,8 +156,8 @@ func runCommand(t *testing.T, timeout time.Duration, env map[string]string, args
 
 	// Stream output to both test log and buffers
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &testWriter{t: t, prefix: "[stdout] ", buf: &stdout}
-	cmd.Stderr = &testWriter{t: t, prefix: "[stderr] ", buf: &stderr}
+	cmd.Stdout = &testWriter{t: t, prefix: fmt.Sprintf("[%sstdout] ", prefix), buf: &stdout}
+	cmd.Stderr = &testWriter{t: t, prefix: fmt.Sprintf("[%sstderr] ", prefix), buf: &stderr}
 
 	t.Logf("Running: %s", strings.Join(args, " "))
 
@@ -166,6 +166,11 @@ func runCommand(t *testing.T, timeout time.Duration, env map[string]string, args
 		t.Fatalf("Command failed: %v", err)
 	}
 	t.Logf("Command completed successfully")
+}
+
+func runCommand(t *testing.T, timeout time.Duration, env map[string]string, args ...string) {
+	t.Helper()
+	runCommandPrefixed(t, "", timeout, env, args...)
 }
 
 // testWriter writes to both test log and a buffer
@@ -407,7 +412,7 @@ func verifyHelmReleaseExists(t *testing.T, ctx context.Context, releaseName, nam
 
 	releases, err := helm.ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err, "listing Helm releases in namespace %s", namespace)
-	if !slices.Contains(releases, releaseName) {
+	if !slices.ContainsFunc(releases, func(r helm.Release) bool { return r.Name == releaseName }) {
 		t.Fatalf("Helm release %s does not exist in namespace %s", releaseName, namespace)
 	}
 }
@@ -417,7 +422,7 @@ func verifyHelmReleaseNotExists(t *testing.T, ctx context.Context, releaseName, 
 
 	releases, err := helm.ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err, "listing Helm releases in namespace %s", namespace)
-	if slices.Contains(releases, releaseName) {
+	if slices.ContainsFunc(releases, func(r helm.Release) bool { return r.Name == releaseName }) {
 		t.Fatalf("Helm release %s already exists in namespace %s", releaseName, namespace)
 	}
 }
