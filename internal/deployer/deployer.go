@@ -440,9 +440,7 @@ func (d *Deployer) deployCentral(ctx context.Context) error {
 		// `roxie teardown`, a redeployment must not use cluster-wide discovery, which
 		// could find (and delete) a Central, including its PVCs and add-ons, living in
 		// a different namespace.
-		addOnsErr := d.teardownDiscoveredAddOns(ctx, ns)
-		centralErr := d.teardownCentral(ctx, ns)
-		if err := errors.Join(addOnsErr, centralErr); err != nil {
+		if err := d.teardownCentralWithAddOnsInNamespace(ctx, ns); err != nil {
 			log.Warningf("Error during teardown: %v", err)
 		}
 	}
@@ -522,23 +520,30 @@ func (d *Deployer) Teardown(ctx context.Context, components component.Component)
 	}
 }
 
-// teardownCentralWithAddOns discovers the Central CR namespace from the
-// cluster and tears down add-ons and Central resources in that namespace.
+// teardownCentralWithAddOns tears down add-ons and Central resources. If a Central
+// namespace is configured (only explicit user configuration, see runTeardown), only that
+// namespace is cleaned up; otherwise the Central CR namespace is discovered from the cluster.
 func (d *Deployer) teardownCentralWithAddOns(ctx context.Context) error {
+	if ns := d.config.Central.Namespace; ns != "" {
+		if !d.namespaceExists(ns) {
+			log.Infof("Namespace %s doesn't exist, skipping Central teardown", ns)
+			return nil
+		}
+		return d.teardownCentralWithAddOnsInNamespace(ctx, ns)
+	}
+
 	namespace, err := k8s.DiscoverCRNamespace(ctx, "central", centralCrName)
 	if err != nil {
 		return fmt.Errorf("discovering Central namespace: %w", err)
 	}
 	if namespace == "" {
-		if d.config.Central.Namespace != "" && d.namespaceExists(d.config.Central.Namespace) {
-			namespace = d.config.Central.Namespace
-			log.Dimf("No Central CR found, falling back to configured namespace %s for resource cleanup", namespace)
-		} else {
-			log.Infof("No Central CR found on cluster, skipping Central teardown")
-			return d.teardownAddOns(ctx)
-		}
+		log.Infof("No Central CR found on cluster, skipping Central teardown")
+		return nil
 	}
+	return d.teardownCentralWithAddOnsInNamespace(ctx, namespace)
+}
 
+func (d *Deployer) teardownCentralWithAddOnsInNamespace(ctx context.Context, namespace string) error {
 	addOnsErr := d.teardownDiscoveredAddOns(ctx, namespace)
 	if addOnsErr != nil {
 		addOnsErr = fmt.Errorf("tearing down add-ons: %w", addOnsErr)
@@ -550,22 +555,20 @@ func (d *Deployer) teardownCentralWithAddOns(ctx context.Context) error {
 }
 
 func (d *Deployer) teardownAddOns(ctx context.Context) error {
+	if ns := d.config.Central.Namespace; ns != "" {
+		if !d.namespaceExists(ns) {
+			log.Infof("Namespace %s doesn't exist, skipping add-on teardown", ns)
+			return nil
+		}
+		return d.teardownDiscoveredAddOns(ctx, ns)
+	}
+
 	namespace, err := k8s.DiscoverCRNamespace(ctx, "central", centralCrName)
 	if err != nil {
 		return fmt.Errorf("discovering Central namespace: %w", err)
 	}
-	// Add-ons are Helm releases owned by roxie, not by the operator. Fall back to
-	// the configured namespace so they can get cleaned up even if the Central CR is gone.
-	if namespace == "" && d.config.Central.Namespace != "" {
-		namespace = d.config.Central.Namespace
-		if !d.namespaceExists(namespace) {
-			log.Infof("No Central CR found and namespace %s does not exist, skipping add-on teardown", namespace)
-			return nil
-		}
-		log.Dimf("No Central CR found, falling back to configured namespace %s for add-on teardown", namespace)
-	}
 	if namespace == "" {
-		log.Infof("No Central CR found and no configured namespace, skipping add-on teardown")
+		log.Infof("No Central CR found and no namespace configured, skipping add-on teardown")
 		return nil
 	}
 	return d.teardownDiscoveredAddOns(ctx, namespace)
@@ -593,19 +596,26 @@ func (d *Deployer) teardownCentral(ctx context.Context, namespace string) error 
 	return nil
 }
 
+// teardownSecuredCluster tears down SecuredCluster resources. If a SecuredCluster
+// namespace is configured (only explicit user configuration, see runTeardown), only that
+// namespace is cleaned up; otherwise all SecuredCluster CRs on the cluster are discovered
+// and torn down.
 func (d *Deployer) teardownSecuredCluster(ctx context.Context) error {
+	if ns := d.config.SecuredCluster.Namespace; ns != "" {
+		if !d.namespaceExists(ns) {
+			log.Infof("Namespace %s doesn't exist, skipping SecuredCluster teardown", ns)
+			return nil
+		}
+		return d.teardownSecuredClusterInNamespace(ctx, ns)
+	}
+
 	namespaces, err := k8s.DiscoverCRNamespaces(ctx, "securedcluster", securedClusterCrName)
 	if err != nil {
 		return fmt.Errorf("discovering SecuredCluster namespaces: %w", err)
 	}
 	if len(namespaces) == 0 {
-		if d.config.SecuredCluster.Namespace != "" && d.namespaceExists(d.config.SecuredCluster.Namespace) {
-			namespaces = []string{d.config.SecuredCluster.Namespace}
-			log.Dimf("No SecuredCluster CRs found, falling back to configured namespace %s for resource cleanup", d.config.SecuredCluster.Namespace)
-		} else {
-			log.Infof("No SecuredCluster CRs found on cluster, skipping SecuredCluster teardown")
-			return nil
-		}
+		log.Infof("No SecuredCluster CRs found on cluster, skipping SecuredCluster teardown")
+		return nil
 	}
 
 	var group errgroup.Group
