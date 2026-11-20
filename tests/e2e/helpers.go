@@ -31,6 +31,7 @@ const (
 	operatorSystemNamespace  = "rhacs-operator-system"
 	operatorCentralNamespace = "rhacs-operator-central"
 	operatorSensorNamespace  = "rhacs-operator-sensor"
+	olmControllerNamespace   = "openshift-operator-lifecycle-manager"
 
 	centralNamespace = "acs-central"
 	sensorNamespace  = "acs-sensor"
@@ -269,6 +270,7 @@ func verifySecuredClusterInstalled(t *testing.T, namespace string) {
 }
 
 var clusterDumpNamespaces = []string{
+	olmControllerNamespace,
 	operatorSystemNamespace,
 	operatorCentralNamespace,
 	operatorSensorNamespace,
