@@ -355,7 +355,7 @@ type containerRestartStatus struct {
 	RestartCount int32 `json:"restartCount"`
 }
 
-type podLogDumpPod struct {
+type podSummary struct {
 	Metadata struct {
 		Name string `json:"name"`
 	} `json:"metadata"`
@@ -367,11 +367,11 @@ type podLogDumpPod struct {
 	} `json:"status"`
 }
 
-type podLogDumpList struct {
-	Items []podLogDumpPod `json:"items"`
+type podSummaryList struct {
+	Items []podSummary `json:"items"`
 }
 
-func (pod podLogDumpPod) restartCount() int32 {
+func (pod podSummary) restartCount() int32 {
 	var total int32
 	for _, status := range pod.Status.ContainerStatuses {
 		total += status.RestartCount
@@ -397,7 +397,7 @@ func dumpLogsForFailingPods(namespace string) {
 		return
 	}
 
-	var pods podLogDumpList
+	var pods podSummaryList
 	if err := json.Unmarshal(output, &pods); err != nil {
 		fmt.Fprintf(os.Stderr, "[dump] failed to parse pods in %s: %v\n", namespace, err)
 		return
