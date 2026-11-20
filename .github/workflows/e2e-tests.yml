@@ -42,13 +42,6 @@ jobs:
       - name: Fix repository ownership
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Log in to Quay.io
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_TOKEN }}
-
       - name: Extract roxie binary from image
         run: |
           docker create --name roxie-extract "${{ inputs.image }}"

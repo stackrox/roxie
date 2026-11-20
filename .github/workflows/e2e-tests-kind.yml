@@ -33,8 +33,8 @@ jobs:
         uses: docker/login-action@v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_TOKEN }}
+          username: ${{ secrets.QUAY_RHACS_ENG_RO_USERNAME }}
+          password: ${{ secrets.QUAY_RHACS_ENG_RO_PASSWORD }}
 
       - name: Extract roxie binary from image
         run: |
