@@ -424,7 +424,16 @@ func dumpLogsForFailingPods(namespace string) {
 			pod.Status.Phase,
 		)
 		runKubectlDump("logs", "-n", namespace, pod.Metadata.Name, "--all-containers", "--tail=100")
-		runKubectlDump("logs", "-n", namespace, pod.Metadata.Name, "--all-containers", "--previous", "--tail=50")
+		runKubectlDump(
+			"logs",
+			"-n",
+			namespace,
+			pod.Metadata.Name,
+			"--all-containers",
+			"--previous",
+			"--ignore-errors=true",
+			"--tail=50",
+		)
 	}
 }
 
