@@ -29,13 +29,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Log in to Quay.io
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.QUAY_RHACS_ENG_RO_USERNAME }}
-          password: ${{ secrets.QUAY_RHACS_ENG_RO_PASSWORD }}
-
       - name: Extract roxie binary from image
         run: |
           docker create --name roxie-extract "${{ inputs.image }}"
