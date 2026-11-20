@@ -3,7 +3,7 @@
 # Supports multi-architecture builds (amd64, arm64)
 
 # Stage 1: Build roxie binary
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.25@sha256:90a36bc2013b3fcb28e2a4b082c9b895d7c2c679e58b95aed9721970f3339d0e AS builder
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.9@sha256:a2ad457dc7525635613d2355037239ca9bf4374ba3b59961d1cdaa4d5f1af7d8 AS builder
 
 # Build arguments for cross-compilation
 # These are automatically provided by Docker buildx
