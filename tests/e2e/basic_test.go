@@ -81,8 +81,7 @@ func TestDetachedPortForwarding(t *testing.T) {
 	// This assertion depends on teardown having run, so we keep it explicit
 	// rather than relying on t.Cleanup ordering.
 	t.Log("=== Cleaning up ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
-	runCommand(t, teardownTimeout, env, teardownArgs...)
+	runCommand(t, teardownTimeout, env, teardownCommandArgs("central")...)
 
 	// We can't use kill(pid, 0) because CI containers often lack a proper init to reap
 	// zombies, causing the check to pass for dead processes. Binding to the

@@ -46,8 +46,7 @@ central:
 	verifyHelmReleaseExists(t, t.Context(), "roxie-addon-test-chart", centralNamespace)
 
 	t.Log("=== Tearing down Central ===")
-	teardownArgs := []string{roxieBinary, "teardown", "--skip-user-config", "central"}
-	runCommand(t, teardownTimeout, nil, teardownArgs...)
+	runCommand(t, teardownTimeout, nil, teardownCommandArgs("central")...)
 
 	verifyHelmReleaseNotExists(t, t.Context(), "roxie-addon-test-chart", centralNamespace)
 }
