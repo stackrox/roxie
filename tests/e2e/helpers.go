@@ -351,30 +351,89 @@ func runKubectlDump(args ...string) {
 	fmt.Fprintln(os.Stderr)
 }
 
+type containerRestartStatus struct {
+	RestartCount int32 `json:"restartCount"`
+}
+
+type podSummary struct {
+	Metadata struct {
+		Name string `json:"name"`
+	} `json:"metadata"`
+	Status struct {
+		Phase                      string                   `json:"phase"`
+		ContainerStatuses          []containerRestartStatus `json:"containerStatuses"`
+		InitContainerStatuses      []containerRestartStatus `json:"initContainerStatuses"`
+		EphemeralContainerStatuses []containerRestartStatus `json:"ephemeralContainerStatuses"`
+	} `json:"status"`
+}
+
+type podSummaryList struct {
+	Items []podSummary `json:"items"`
+}
+
+func (pod podSummary) restartCount() int32 {
+	var total int32
+	for _, status := range pod.Status.ContainerStatuses {
+		total += status.RestartCount
+	}
+	for _, status := range pod.Status.InitContainerStatuses {
+		total += status.RestartCount
+	}
+	for _, status := range pod.Status.EphemeralContainerStatuses {
+		total += status.RestartCount
+	}
+	return total
+}
+
+func shouldDumpPodLogs(phase string, restartCount int32) bool {
+	return (phase != "Running" && phase != "Succeeded") || restartCount > 0
+}
+
 func dumpLogsForFailingPods(namespace string) {
-	cmd := exec.Command("kubectl", "get", "pods", "-n", namespace,
-		"-o", "jsonpath={range .items[*]}{.metadata.name}{\"\\t\"}{.status.phase}{\"\\n\"}{end}")
+	cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-o", "json")
 	output, err := cmd.Output()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[dump] failed to list pods in %s: %v\n", namespace, err)
 		return
 	}
 
-	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
-		if line == "" {
+	var pods podSummaryList
+	if err := json.Unmarshal(output, &pods); err != nil {
+		fmt.Fprintf(os.Stderr, "[dump] failed to parse pods in %s: %v\n", namespace, err)
+		return
+	}
+
+	for _, pod := range pods.Items {
+		restartCount := pod.restartCount()
+		fmt.Fprintf(
+			os.Stderr,
+			"[dump] pod %s/%s (phase=%s, restarts=%d)\n",
+			namespace,
+			pod.Metadata.Name,
+			pod.Status.Phase,
+			restartCount,
+		)
+		if !shouldDumpPodLogs(pod.Status.Phase, restartCount) {
 			continue
 		}
-		parts := strings.SplitN(line, "\t", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		podName, phase := parts[0], parts[1]
-		if phase == "Running" || phase == "Succeeded" {
-			continue
-		}
-		fmt.Fprintf(os.Stderr, "[dump] logs for pod %s/%s (phase=%s):\n", namespace, podName, phase)
-		runKubectlDump("logs", "-n", namespace, podName, "--all-containers", "--tail=100")
-		runKubectlDump("logs", "-n", namespace, podName, "--all-containers", "--previous", "--tail=50")
+		fmt.Fprintf(
+			os.Stderr,
+			"[dump] logs for pod %s/%s (phase=%s):\n",
+			namespace,
+			pod.Metadata.Name,
+			pod.Status.Phase,
+		)
+		runKubectlDump("logs", "-n", namespace, pod.Metadata.Name, "--all-containers", "--tail=100")
+		runKubectlDump(
+			"logs",
+			"-n",
+			namespace,
+			pod.Metadata.Name,
+			"--all-containers",
+			"--previous",
+			"--ignore-errors=true",
+			"--tail=50",
+		)
 	}
 }
 
