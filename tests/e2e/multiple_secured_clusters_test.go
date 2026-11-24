@@ -7,12 +7,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 // TestMultipleSecuredClusters verifies that several SecuredClusters can be deployed side by side,
@@ -45,27 +45,31 @@ func TestMultipleSecuredClusters(t *testing.T) {
 	// Deploy two SecuredClusters.
 	envrcEnv := loadEnvrcFile(t, envrcPath)
 	var securedClusterCounter atomic.Int64
-	deploySecuredCluster := func(ns string) {
+	deploySecuredCluster := func(ns string) error {
 		t.Logf("=== Deploying SecuredCluster into namespace %s ===", ns)
 		clusterName := fmt.Sprintf("sc-%d", securedClusterCounter.Add(1)) // For redeployment test we need fresh cluster names.
 		roxieCmd := append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster", "--tag", nightlyTag,
 			"--set", `securedCluster.metadata.annotations.platform\.stackrox\.io/namespace-prefix-global-resources=true`,
 			"--set", "securedCluster.namespace=" + ns, "--set", "securedCluster.spec.clusterName=" + clusterName},
 			modifiedCommonDeployArgs...)
-		runCommandPrefixed(t, ns+" ", deployTimeout, envrcEnv, roxieCmd...)
+		if err := runCommandPrefixed(t, ns+" ", deployTimeout, envrcEnv, roxieCmd...); err != nil {
+			return fmt.Errorf("deploying SecuredCluster into %s: %w", ns, err)
+		}
+		return nil
 	}
-	var wg sync.WaitGroup
+	var g errgroup.Group
 	for _, ns := range []string{nsA, nsB} {
-		wg.Go(func() {
-			deploySecuredCluster(ns)
+		g.Go(func() error {
+			return deploySecuredCluster(ns)
 		})
 	}
-	wg.Wait()
+	require.NoError(t, g.Wait(), "Deploying SecuredClusters failed")
+
 	assert.ElementsMatch(t, []string{nsA, nsB}, crNamespaces(t, "securedcluster"))
 	uidB := securedClusterUID(t, nsB)
 
 	// Redeploying A must not touch B: B's CR keeps its UID (i.e. was not deleted and recreated).
-	deploySecuredCluster(nsA)
+	require.NoError(t, deploySecuredCluster(nsA), "Redeploying SecuredCluster A failed")
 	assert.ElementsMatch(t, []string{nsA, nsB}, crNamespaces(t, "securedcluster"))
 	assert.Equal(t, uidB, securedClusterUID(t, nsB), "SecuredCluster in %s was replaced by redeploying %s", nsB, nsA)
 
