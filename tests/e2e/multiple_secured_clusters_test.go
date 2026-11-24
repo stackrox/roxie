@@ -43,7 +43,6 @@ func TestMultipleSecuredClusters(t *testing.T) {
 		"--tag", nightlyTag, "--envrc", envrcPath}, modifiedCommonDeployArgs...)...)
 
 	// Deploy two SecuredClusters.
-	// TODO, using async waitgroup.
 	envrcEnv := loadEnvrcFile(t, envrcPath)
 	var securedClusterCounter atomic.Int64
 	deploySecuredCluster := func(ns string) {
