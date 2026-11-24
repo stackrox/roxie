@@ -236,6 +236,24 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 	return cmd
 }
 
+// canSkipMainImageTagLookup reports whether no requested deployment behavior needs the main tag.
+func canSkipMainImageTagLookup(components component.Component, config deployer.Config) bool {
+	if !config.Operator.SkipDeploymentEnabled() {
+		return false
+	}
+	if components.IncludesCentral() && !config.Central.EarlyReadinessEnabled() && config.CentralVersion() == "" {
+		return false
+	}
+	if components.IncludesSensor() && !config.SecuredCluster.EarlyReadinessEnabled() && config.SecuredClusterVersion() == "" {
+		return false
+	}
+	if config.Roxie.ClusterType.IsLocal() && !config.Roxie.KonfluxImagesEnabled() &&
+		(config.CentralVersion() == "" || config.SecuredClusterVersion() == "") {
+		return false
+	}
+	return true
+}
+
 func runDeploy(cmd *cobra.Command, args []string) error {
 	if !dryRun {
 		if err := env.Initialize(); err != nil {
@@ -271,7 +289,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
-	} else if deploySettings.Operator.SkipDeploymentEnabled() {
+	} else if canSkipMainImageTagLookup(components, deploySettings) {
 		log.Dim("Skipping main image tag lookup because operator deployment is disabled")
 	} else {
 		mainImageTag, err := helpers.LookupMainImageTag(ctx, deploySettings.Roxie.ImageRegistry)

@@ -352,6 +352,76 @@ roxie:
 	}
 }
 
+func TestCanSkipMainImageTagLookup(t *testing.T) {
+	tests := []struct {
+		name       string
+		components component.Component
+		configure  func(*deployer.Config)
+		want       bool
+	}{
+		{
+			name:       "skip when operator is disabled and no other consumer needs the tag",
+			components: component.Central,
+			configure: func(config *deployer.Config) {
+				config.Operator.SkipDeployment = new(true)
+			},
+			want: true,
+		},
+		{
+			name:       "do not skip when operator deployment is enabled",
+			components: component.Central,
+			want:       false,
+		},
+		{
+			name:       "keep tag for central early-readiness validation",
+			components: component.Central,
+			configure: func(config *deployer.Config) {
+				config.Operator.SkipDeployment = new(true)
+				config.Central.EarlyReadiness = new(false)
+			},
+			want: false,
+		},
+		{
+			name:       "keep tag for secured-cluster early-readiness validation",
+			components: component.SecuredCluster,
+			configure: func(config *deployer.Config) {
+				config.Operator.SkipDeployment = new(true)
+				config.SecuredCluster.EarlyReadiness = new(false)
+			},
+			want: false,
+		},
+		{
+			name:       "keep tag for local image preloading",
+			components: component.Central,
+			configure: func(config *deployer.Config) {
+				config.Operator.SkipDeployment = new(true)
+				config.Roxie.ClusterType = types.ClusterTypeKind
+			},
+			want: false,
+		},
+		{
+			name:       "skip local image preload when all operator versions are configured",
+			components: component.Central,
+			configure: func(config *deployer.Config) {
+				config.Operator.SkipDeployment = new(true)
+				config.Operator.Version = imagetag.MainTag("4.10.0")
+				config.Roxie.ClusterType = types.ClusterTypeKind
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := deployer.DefaultConfig()
+			if tt.configure != nil {
+				tt.configure(&config)
+			}
+			assert.Equal(t, tt.want, canSkipMainImageTagLookup(tt.components, config))
+		})
+	}
+}
+
 // TestNewDeployCmd_ConfigMergePreservesEnvVars verifies that spec.customize.envVars
 // from multiple --config files and --set expressions are merged by name rather
 // than silently replaced. Overlapping names should use the last-specified value;
