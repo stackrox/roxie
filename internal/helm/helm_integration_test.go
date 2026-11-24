@@ -15,7 +15,7 @@ const (
 	testChartPath = "testdata/minimal-test-chart"
 )
 
-func TestInstallAndUninstall(t *testing.T) {
+func TestInstallAndUninstall_Integration(t *testing.T) {
 	ctx := t.Context()
 
 	namespace := createTestNamespace(t)
@@ -53,7 +53,7 @@ func TestInstallAndUninstall(t *testing.T) {
 	require.NoError(t, err, "uninstall of already-removed release should succeed")
 }
 
-func TestInstallWithValues(t *testing.T) {
+func TestInstallWithValues_Integration(t *testing.T) {
 	ctx := t.Context()
 
 	namespace := createTestNamespace(t)
@@ -74,7 +74,7 @@ func TestInstallWithValues(t *testing.T) {
 	assert.Equal(t, "mundo", string(out))
 }
 
-func TestListByPrefix_NoMatches(t *testing.T) {
+func TestListByPrefix_NoMatches_Integration(t *testing.T) {
 	ctx := t.Context()
 	releases, err := ListByPrefix(ctx, "nonexistent-prefix-xyz-", "default")
 	require.NoError(t, err)
