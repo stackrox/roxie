@@ -114,7 +114,7 @@ func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 			return nil
 		}
 
-		content, err := os.ReadFile(path)
+		file, err := os.Open(path)
 		if err != nil {
 			log.Warningf("Failed to read file %q from extracted bundle: %v", path, err)
 			return nil
@@ -123,9 +123,14 @@ func (d *Deployer) identifyCRDFileNames(bundleDir string) ([]string, error) {
 		var meta struct {
 			Kind string `yaml:"kind"`
 		}
-		if err := yaml.Unmarshal(content, &meta); err != nil {
-			log.Warningf("Failed to unmarshal file %q from extracted bundle: %v", path, err)
+		decodeErr := yaml.NewDecoder(file).Decode(&meta)
+		closeErr := file.Close()
+		if decodeErr != nil {
+			log.Warningf("Failed to unmarshal file %q from extracted bundle: %v", path, decodeErr)
 			return nil
+		}
+		if closeErr != nil {
+			log.Warningf("Failed to close file %q from extracted bundle: %v", path, closeErr)
 		}
 
 		if meta.Kind == "CustomResourceDefinition" {
