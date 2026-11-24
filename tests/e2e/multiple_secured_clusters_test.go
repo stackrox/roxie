@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,11 +45,10 @@ func TestMultipleSecuredClusters(t *testing.T) {
 	// Deploy two SecuredClusters.
 	// TODO, using async waitgroup.
 	envrcEnv := loadEnvrcFile(t, envrcPath)
-	securedClusterCounter := 0
+	var securedClusterCounter atomic.Int64
 	deploySecuredCluster := func(ns string) {
 		t.Logf("=== Deploying SecuredCluster into namespace %s ===", ns)
-		securedClusterCounter++
-		clusterName := fmt.Sprintf("sc-%d", securedClusterCounter) // For redeployment test we need fresh cluster names.
+		clusterName := fmt.Sprintf("sc-%d", securedClusterCounter.Add(1)) // For redeployment test we need fresh cluster names.
 		roxieCmd := append([]string{roxieBinary, "deploy", "--early-readiness", "secured-cluster", "--tag", nightlyTag,
 			"--set", `securedCluster.metadata.annotations.platform\.stackrox\.io/namespace-prefix-global-resources=true`,
 			"--set", "securedCluster.namespace=" + ns, "--set", "securedCluster.spec.clusterName=" + clusterName},
