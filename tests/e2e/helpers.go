@@ -139,7 +139,7 @@ func requireKubeContext() (string, error) {
 	return ctx, nil
 }
 
-func runCommandPrefixed(t *testing.T, prefix string, timeout time.Duration, env map[string]string, args ...string) {
+func runCommandPrefixed(t *testing.T, prefix string, timeout time.Duration, env map[string]string, args ...string) error {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -162,16 +162,16 @@ func runCommandPrefixed(t *testing.T, prefix string, timeout time.Duration, env 
 
 	t.Logf("Running: %s", strings.Join(args, " "))
 
-	err := cmd.Run()
-	if err != nil {
-		t.Fatalf("Command failed: %v", err)
-	}
-	t.Logf("Command completed successfully")
+	return cmd.Run()
 }
 
 func runCommand(t *testing.T, timeout time.Duration, env map[string]string, args ...string) {
 	t.Helper()
-	runCommandPrefixed(t, "", timeout, env, args...)
+	err := runCommandPrefixed(t, "", timeout, env, args...)
+	if err != nil {
+		t.Fatalf("Command failed: %v", err)
+	}
+	t.Log("Command completed successfully")
 }
 
 // testWriter writes to both test log and a buffer
