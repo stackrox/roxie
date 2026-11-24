@@ -254,6 +254,16 @@ func canSkipMainImageTagLookup(components component.Component, config deployer.C
 	return true
 }
 
+func ensureClusterType(config *deployer.Config, detect func() types.ClusterType) {
+	if config.Roxie.ClusterType != "" {
+		return
+	}
+
+	clusterType := detect()
+	log.Dimf("Detected cluster type: %v", clusterType)
+	config.Roxie.ClusterType = clusterType
+}
+
 func runDeploy(cmd *cobra.Command, args []string) error {
 	if !dryRun {
 		if err := env.Initialize(); err != nil {
@@ -283,6 +293,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	ensureClusterType(&deploySettings, env.GetAutoDetectedClusterType)
 
 	ctx, cancel := context.WithTimeout(context.Background(), computeDeployContextTimeout(components, deploySettings))
 	defer cancel()
@@ -485,11 +496,7 @@ func retrieveClusterConfigForComponents(
 }
 
 func configureConfig(components component.Component, deploySettings *deployer.Config) error {
-	if deploySettings.Roxie.ClusterType == "" {
-		clusterType := env.GetAutoDetectedClusterType()
-		log.Dimf("Detected cluster type: %v", clusterType)
-		deploySettings.Roxie.ClusterType = clusterType
-	}
+	ensureClusterType(deploySettings, env.GetAutoDetectedClusterType)
 	clusterType := deploySettings.Roxie.ClusterType
 	centralDeployLocally := components.IncludesCentral() && clusterType.IsLocal()
 	sensorDeployLocally := components.IncludesSensor() && clusterType.IsLocal()

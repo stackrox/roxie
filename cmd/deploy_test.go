@@ -422,6 +422,16 @@ func TestCanSkipMainImageTagLookup(t *testing.T) {
 	}
 }
 
+func TestCanSkipMainImageTagLookupWithAutoDetectedLocalCluster(t *testing.T) {
+	config := deployer.DefaultConfig()
+	config.Operator.SkipDeployment = new(true)
+	ensureClusterType(&config, func() types.ClusterType {
+		return types.ClusterTypeKind
+	})
+
+	assert.False(t, canSkipMainImageTagLookup(component.Central, config))
+}
+
 // TestNewDeployCmd_ConfigMergePreservesEnvVars verifies that spec.customize.envVars
 // from multiple --config files and --set expressions are merged by name rather
 // than silently replaced. Overlapping names should use the last-specified value;
