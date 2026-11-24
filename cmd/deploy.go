@@ -271,6 +271,8 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	if deploySettings.Roxie.Version != "" {
 		log.Dimf("Using main image tag %s", deploySettings.Roxie.Version)
+	} else if deploySettings.Operator.SkipDeploymentEnabled() {
+		log.Dim("Skipping main image tag lookup because operator deployment is disabled")
 	} else {
 		mainImageTag, err := helpers.LookupMainImageTag(ctx, deploySettings.Roxie.ImageRegistry)
 		if err != nil {
