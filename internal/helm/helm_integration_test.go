@@ -4,6 +4,7 @@ package helm
 
 import (
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 
@@ -31,7 +32,11 @@ func TestInstallAndUninstall_Integration(t *testing.T) {
 	releases, err := ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err)
 	assert.Len(t, releases, 1, "multiple releases listed")
-	assert.Contains(t, releases, releaseName, "release should exist after install")
+	assert.Truef(t, slices.ContainsFunc(releases, func(release Release) bool {
+		return release.Name == releaseName
+	}),
+		"release should exist after install",
+	)
 
 	err = Install(ctx, opts)
 	require.NoError(t, err, "idempotent re-install")
@@ -39,14 +44,17 @@ func TestInstallAndUninstall_Integration(t *testing.T) {
 	releases, err = ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err)
 	assert.Len(t, releases, 1, "multiple releases listed")
-	assert.Contains(t, releases, releaseName, "release should exist after install")
+	assert.Truef(t, slices.ContainsFunc(releases, func(release Release) bool {
+		return release.Name == releaseName
+	}),
+		"release should exist after re-install",
+	)
 
 	err = Uninstall(ctx, releaseName, namespace)
 	require.NoError(t, err, "uninstall")
 
 	releases, err = ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err)
-	assert.NotContains(t, releases, releaseName, "release should be gone after uninstall")
 	assert.Empty(t, releases, "releases still listed")
 
 	err = Uninstall(ctx, releaseName, namespace)
