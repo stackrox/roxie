@@ -29,8 +29,7 @@ jobs:
     env:
       CLUSTER_NAME: ${{ inputs.cluster-name }}
       KUBECONFIG: /github/home/artifacts/kubeconfig
-      INFRA_TOKEN: ${{ secrets.INFRA_CI_TOKEN }}
-      INFRACTL: bin/infractl -k -e localhost:8443
+      INFRA_TOKEN: ${{ secrets.INFRA_TOKEN }}
       ROXIE_RESOURCE_PROFILE: "small"
     steps:
       - name: Checkout
@@ -41,13 +40,6 @@ jobs:
 
       - name: Fix repository ownership
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-      - name: Log in to Quay.io
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_TOKEN }}
 
       - name: Extract roxie binary from image
         run: |
