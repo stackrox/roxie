@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/stackrox/roxie/internal/helm"
+	"github.com/stackrox/roxie/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -128,6 +130,31 @@ func skipUnlessOLM(t *testing.T) {
 	}
 }
 
+// detectClusterType returns the type of the current cluster, as detected by "roxie env".
+func detectClusterType() (types.ClusterType, error) {
+	cmd := exec.Command(roxieBinary, "env")
+	cmd.Stderr = os.Stderr
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("running roxie env: %w", err)
+	}
+
+	for line := range strings.Lines(string(output)) {
+		value, found := strings.CutPrefix(line, "Cluster Type:")
+		if !found {
+			continue
+		}
+		clusterType := strings.TrimSpace(value)
+		for _, ct := range types.AllClusterTypes() {
+			if ct.String() == clusterType {
+				return ct, nil
+			}
+		}
+		return "", fmt.Errorf("unknown cluster type %q in roxie env output", clusterType)
+	}
+	return "", errors.New("no cluster type found in roxie env output")
+}
+
 func requireBinary(name string) error {
 	_, err := exec.LookPath(name)
 	return err
@@ -148,7 +175,7 @@ func requireKubeContext() (string, error) {
 	return ctx, nil
 }
 
-func runCommand(t *testing.T, timeout time.Duration, env map[string]string, args ...string) {
+func runCommandPrefixed(t *testing.T, prefix string, timeout time.Duration, env map[string]string, args ...string) error {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -166,16 +193,21 @@ func runCommand(t *testing.T, timeout time.Duration, env map[string]string, args
 
 	// Stream output to both test log and buffers
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &testWriter{t: t, prefix: "[stdout] ", buf: &stdout}
-	cmd.Stderr = &testWriter{t: t, prefix: "[stderr] ", buf: &stderr}
+	cmd.Stdout = &testWriter{t: t, prefix: fmt.Sprintf("[%sstdout] ", prefix), buf: &stdout}
+	cmd.Stderr = &testWriter{t: t, prefix: fmt.Sprintf("[%sstderr] ", prefix), buf: &stderr}
 
 	t.Logf("Running: %s", strings.Join(args, " "))
 
-	err := cmd.Run()
+	return cmd.Run()
+}
+
+func runCommand(t *testing.T, timeout time.Duration, env map[string]string, args ...string) {
+	t.Helper()
+	err := runCommandPrefixed(t, "", timeout, env, args...)
 	if err != nil {
 		t.Fatalf("Command failed: %v", err)
 	}
-	t.Logf("Command completed successfully")
+	t.Log("Command completed successfully")
 }
 
 // testWriter writes to both test log and a buffer
@@ -477,7 +509,7 @@ func verifyHelmReleaseExists(t *testing.T, ctx context.Context, releaseName, nam
 
 	releases, err := helm.ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err, "listing Helm releases in namespace %s", namespace)
-	if !slices.Contains(releases, releaseName) {
+	if !slices.ContainsFunc(releases, func(r helm.Release) bool { return r.Name == releaseName }) {
 		t.Fatalf("Helm release %s does not exist in namespace %s", releaseName, namespace)
 	}
 }
@@ -487,7 +519,7 @@ func verifyHelmReleaseNotExists(t *testing.T, ctx context.Context, releaseName, 
 
 	releases, err := helm.ListByPrefix(ctx, releaseName, namespace)
 	require.NoError(t, err, "listing Helm releases in namespace %s", namespace)
-	if slices.Contains(releases, releaseName) {
+	if slices.ContainsFunc(releases, func(r helm.Release) bool { return r.Name == releaseName }) {
 		t.Fatalf("Helm release %s already exists in namespace %s", releaseName, namespace)
 	}
 }

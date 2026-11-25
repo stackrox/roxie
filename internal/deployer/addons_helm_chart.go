@@ -3,6 +3,7 @@ package deployer
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/stackrox/roxie/internal/helm"
 	log "github.com/stackrox/roxie/internal/logger"
@@ -11,6 +12,9 @@ import (
 const (
 	addOnReleasePrefix    = "roxie-addon-"
 	maxHelmReleaseNameLen = 53
+	// addOnPriorityLabel is stored on the add-on's Helm release, so that teardown can
+	// restore the reverse installation order without consulting local config.
+	addOnPriorityLabel = "roxie.stackrox.io/addon-priority"
 )
 
 type helmAddOn struct {
@@ -54,6 +58,9 @@ func newHelmAddOn(
 	}
 	opts.ReleaseName = releaseName
 	opts.Namespace = namespace
+	opts.Labels = map[string]string{
+		addOnPriorityLabel: strconv.FormatUint(uint64(commonProperties.Priority), 10),
+	}
 	return &helmAddOn{
 		name:        name,
 		releaseName: releaseName,
