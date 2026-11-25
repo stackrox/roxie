@@ -39,7 +39,8 @@ const (
 )
 
 var (
-	commonDeployArgs = deployArgsFromEnv()
+	commonArgs       = []string{"--skip-user-config"}
+	commonDeployArgs = append(deployArgsFromEnv(), commonArgs...)
 
 	roxieBinary = "roxie"
 )
@@ -49,7 +50,13 @@ func deployArgsFromEnv() []string {
 	if profile == "" {
 		profile = "small"
 	}
-	return []string{"--resources=" + profile, "--skip-user-config"}
+	return []string{"--resources=" + profile}
+}
+
+func teardownCommandArgs(args ...string) []string {
+	commandArgs := []string{roxieBinary, "teardown"}
+	commandArgs = append(commandArgs, commonArgs...)
+	return append(commandArgs, args...)
 }
 
 func registerClusterDumpAndCleanup(t *testing.T) {
@@ -91,7 +98,8 @@ func teardownAllDeployments() error {
 	// Teardown standard deployments
 	// Teardown "both" components to keep operator running.
 	// This will be improved once the automatic discovery for teardown lands.
-	cmd := exec.CommandContext(ctx, roxieBinary, "teardown", "--skip-user-config", "both")
+	teardownArgs := teardownCommandArgs("both")
+	cmd := exec.CommandContext(ctx, teardownArgs[0], teardownArgs[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -101,7 +109,8 @@ func teardownAllDeployments() error {
 	// Teardown single-namespace deployments
 	ctx, cancel = context.WithTimeout(context.Background(), teardownTimeout)
 	defer cancel()
-	cmd = exec.CommandContext(ctx, roxieBinary, "teardown", "--skip-user-config", "--single-namespace")
+	teardownArgs = teardownCommandArgs("--single-namespace")
+	cmd = exec.CommandContext(ctx, teardownArgs[0], teardownArgs[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
