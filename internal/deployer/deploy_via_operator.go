@@ -370,6 +370,39 @@ func getCentralResourcesOperator(resourcesProfile types.ResourceProfile) map[str
 						},
 					},
 				},
+				"centralWorker": map[string]any{
+					"resources": map[string]any{
+						"requests": map[string]any{"cpu": "10m", "memory": "128Mi"},
+						"limits":   map[string]any{"memory": "128Mi"},
+					},
+				},
+				// Only replace args: retain the image entrypoint and standard config file.
+				// Optional because external-DB deployments have no central-db Deployment.
+				"overlays": []any{
+					map[string]any{
+						"apiVersion": "apps/v1",
+						"kind":       "Deployment",
+						"name":       "central-db",
+						"optional":   true,
+						"patches": []any{
+							map[string]any{
+								"path": "spec.template.spec.containers[name:central-db].args",
+								"value": `- postgres
+- -c
+- config_file=/etc/stackrox.d/config/postgresql.conf
+- -c
+- shared_buffers=128MB
+- -c
+- work_mem=4MB
+- -c
+- maintenance_work_mem=64MB
+- -c
+- autovacuum_work_mem=32MB
+`,
+							},
+						},
+					},
+				},
 				"scanner": map[string]interface{}{
 					"scannerComponent": "Disabled",
 				},
@@ -906,7 +939,13 @@ func getSecuredClusterResourcesOperator(resourceProfile types.ResourceProfile) m
 		return map[string]interface{}{
 			"spec": map[string]interface{}{
 				"admissionControl": map[string]interface{}{
-					"replicas": 1,
+					"replicas":  1,
+					"resources": map[string]any{"requests": map[string]any{"cpu": "10m"}},
+				},
+				"perNode": map[string]any{
+					"collector":     map[string]any{"resources": map[string]any{"requests": map[string]any{"cpu": "10m"}}},
+					"compliance":    map[string]any{"resources": map[string]any{"requests": map[string]any{"cpu": "10m"}}},
+					"nodeInventory": map[string]any{"resources": map[string]any{"requests": map[string]any{"cpu": "10m"}}},
 				},
 				"sensor": map[string]interface{}{
 					"resources": securedClusterSensorResourcesTiny,
