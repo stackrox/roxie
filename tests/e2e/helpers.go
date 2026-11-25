@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/stackrox/roxie/internal/helm"
+	"github.com/stackrox/roxie/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -126,6 +128,31 @@ func skipUnlessOLM(t *testing.T) {
 	if os.Getenv("SKIP_OLM_TESTS") != "" {
 		t.Skip("SKIP_OLM_TESTS is set")
 	}
+}
+
+// detectClusterType returns the type of the current cluster, as detected by "roxie env".
+func detectClusterType() (types.ClusterType, error) {
+	cmd := exec.Command(roxieBinary, "env")
+	cmd.Stderr = os.Stderr
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("running roxie env: %w", err)
+	}
+
+	for line := range strings.Lines(string(output)) {
+		value, found := strings.CutPrefix(line, "Cluster Type:")
+		if !found {
+			continue
+		}
+		clusterType := strings.TrimSpace(value)
+		for _, ct := range types.AllClusterTypes() {
+			if ct.String() == clusterType {
+				return ct, nil
+			}
+		}
+		return "", fmt.Errorf("unknown cluster type %q in roxie env output", clusterType)
+	}
+	return "", errors.New("no cluster type found in roxie env output")
 }
 
 func requireBinary(name string) error {

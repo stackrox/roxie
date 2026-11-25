@@ -19,6 +19,16 @@ import (
 // that teardown with an explicit namespace only removes the SecuredCluster in that namespace, and
 // that teardown without configured namespaces discovers and removes everything.
 func TestMultipleSecuredClusters(t *testing.T) {
+	// On OpenShift the operator also deploys a cluster-scoped ConsolePlugin, whose name
+	// ("advanced-cluster-security") is not namespace-prefixed by the
+	// platform.stackrox.io/namespace-prefix-global-resources annotation.
+	// Hence, deploying multiple SecuredClusters is currently not possible on OpenShift.
+	clusterType, err := detectClusterType()
+	require.NoError(t, err, "Failed to detect cluster type")
+	if clusterType.IsOpenShift() {
+		t.Skip("Skipping on OpenShift")
+	}
+
 	modifiedCommonDeployArgs := append(commonDeployArgs, "--resources=tiny")
 	const nsA, nsB = "acs-sensor-a", "acs-sensor-b"
 	// roxie teardown removes the SecuredCluster resources but not the namespaces they
