@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/stackrox/roxie/internal/component"
 	"github.com/stackrox/roxie/internal/deployer"
 	"github.com/stackrox/roxie/internal/env"
-	"github.com/stackrox/roxie/internal/k8s"
 	log "github.com/stackrox/roxie/internal/logger"
 	"github.com/stackrox/roxie/internal/manifest"
 )
@@ -60,28 +58,11 @@ func runTeardown(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	var clusterConfig *deployer.Config
-	clusterManifest, err := manifest.LoadManifestSecret(ctx)
-	if errors.Is(err, k8s.ErrResourceNotFound) {
-		log.Infof("No roxie manifest found in cluster, proceeding without it")
-	} else if err != nil {
-		log.Warningf("Failed to load manifest from cluster: %v", err)
-	} else {
-		clusterConfig = &clusterManifest.Config
-	}
-
-	deploySettings, err := assembleConfigForCommand(clusterConfig, deploySettingsFromArgs, skipUserConfig)
-	if err != nil {
-		return err
-	}
-
 	d, err := deployer.New()
 	if err != nil {
 		return fmt.Errorf("failed to create deployer: %w", err)
 	}
 	defer d.Cleanup()
-
-	d.SetConfig(deploySettings)
 
 	if err := d.Teardown(ctx, components); err != nil {
 		return fmt.Errorf("teardown failed: %w", err)

@@ -26,6 +26,14 @@ type InstallOptions struct {
 	ChartVersion string
 	Namespace    string
 	Values       map[string]any
+	// Labels are attached to the Helm release (stored on the release's storage Secret).
+	Labels map[string]string
+}
+
+// Release is a minimal view of an installed Helm release.
+type Release struct {
+	Name   string
+	Labels map[string]string
 }
 
 const (
@@ -72,9 +80,9 @@ func Uninstall(ctx context.Context, releaseName, namespace string) error {
 		})
 }
 
-// ListByPrefix returns the names of Helm releases whose name starts with the given prefix.
-func ListByPrefix(ctx context.Context, prefix, namespace string) ([]string, error) {
-	var releases []string
+// ListByPrefix returns the Helm releases whose name starts with the given prefix.
+func ListByPrefix(ctx context.Context, prefix, namespace string) ([]Release, error) {
+	var releases []Release
 
 	err := executeHelmActionWithRetries(ctx, "list",
 		func(ctx context.Context) error {
@@ -154,6 +162,7 @@ func doInstall(ctx context.Context, opts InstallOptions) error {
 	install.ReleaseName = opts.ReleaseName
 	install.Namespace = opts.Namespace
 	install.Wait = false
+	install.Labels = opts.Labels
 
 	chart, err := loader.Load(chartPath)
 	if err != nil {
@@ -170,6 +179,7 @@ func doUpgrade(ctx context.Context, cfg *action.Configuration, opts InstallOptio
 	upgrade := action.NewUpgrade(cfg)
 	upgrade.Namespace = opts.Namespace
 	upgrade.Wait = false
+	upgrade.Labels = opts.Labels
 
 	chart, err := loader.Load(chartPath)
 	if err != nil {
@@ -193,7 +203,7 @@ func doUninstall(ctx context.Context, releaseName, namespace string) error {
 	return err
 }
 
-func doListByPrefix(ctx context.Context, prefix, namespace string) ([]string, error) {
+func doListByPrefix(ctx context.Context, prefix, namespace string) ([]Release, error) {
 	cfg, err := newActionConfig(ctx, namespace)
 	if err != nil {
 		return nil, err
@@ -201,15 +211,18 @@ func doListByPrefix(ctx context.Context, prefix, namespace string) ([]string, er
 
 	list := action.NewList(cfg)
 	list.Filter = "^" + regexp.QuoteMeta(prefix)
+	list.StateMask = action.ListDeployed | action.ListFailed |
+		action.ListPendingInstall | action.ListPendingUpgrade | action.ListPendingRollback |
+		action.ListUninstalling
 
 	results, err := list.Run()
 	if err != nil {
 		return nil, err
 	}
 
-	var releases []string
+	var releases []Release
 	for _, r := range results {
-		releases = append(releases, r.Name)
+		releases = append(releases, Release{Name: r.Name, Labels: r.Labels})
 	}
 	return releases, nil
 }

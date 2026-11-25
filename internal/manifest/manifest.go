@@ -24,11 +24,39 @@ const (
 	manifestKey        = "manifest"
 )
 
-// RoxieManifest represents the data stored in the roxie manifest secret.
-// We include the whole deployer Config for reproducibility purposes.
+// RoxieManifest represents the data stored in the roxie manifest secret. It
+// holds only the fields that cannot be discovered from the cluster:
+//
+//   - Exposure — used by 'roxie shell' to determine the base URL shown in the
+//     subshell banner.
+//   - HAProxy — used by 'roxie shell' to re-spawn the HAProxy sidecar for local
+//     HTTP access to Central.
+//
+// Everything else (the Central namespace, deployed add-ons) is discovered
+// directly from the cluster at teardown/shell time.
 type RoxieManifest struct {
 	RoxieEnvironment types.RoxieEnvironment `yaml:"roxieEnvironment"`
-	Config           deployer.Config        `yaml:"config"`
+	Exposure         *types.Exposure        `yaml:"exposure,omitempty"`
+	HAProxy          deployer.HAProxyConfig `yaml:"haProxy,omitempty"`
+}
+
+// NewManifest builds a RoxieManifest from a RoxieEnvironment and the deploy
+// config, extracting only the fields that are persisted on the cluster.
+func NewManifest(roxieEnv types.RoxieEnvironment, config deployer.Config) RoxieManifest {
+	return RoxieManifest{
+		RoxieEnvironment: roxieEnv,
+		Exposure:         config.Central.Exposure,
+		HAProxy:          config.Roxie.HAProxy,
+	}
+}
+
+// GetExposure returns the configured exposure, defaulting to ExposureNone when
+// unset. Mirrors CentralConfig.GetExposure.
+func (m *RoxieManifest) GetExposure() types.Exposure {
+	if m.Exposure == nil {
+		return types.ExposureNone
+	}
+	return *m.Exposure
 }
 
 func manifestToSecret(m RoxieManifest) (*unstructured.Unstructured, error) {
@@ -159,7 +187,15 @@ func ensureRoxieNamespace(ctx context.Context) error {
 func ManifestToCentralDeploymentInfo(ctx context.Context, tempDir string, m *RoxieManifest) (types.CentralDeploymentInfo, error) {
 	roxieEnv := m.RoxieEnvironment
 
-	caCertFile, err := fetchCACertForShell(ctx, m.Config.Central.Namespace, tempDir)
+	namespace, err := k8s.DiscoverCRNamespace(ctx, "central", "stackrox-central-services")
+	if err != nil {
+		return types.CentralDeploymentInfo{}, fmt.Errorf("discovering Central namespace: %w", err)
+	}
+	if namespace == "" {
+		return types.CentralDeploymentInfo{}, errors.New("no Central CR found on cluster")
+	}
+
+	caCertFile, err := fetchCACertForShell(ctx, namespace, tempDir)
 	if err != nil {
 		// Nothing we expect to happen, but in any case, don't let the deployment fail here.
 		log.Warningf("Could not fetch CA cert: %v", err)
@@ -170,7 +206,7 @@ func ManifestToCentralDeploymentInfo(ctx context.Context, tempDir string, m *Rox
 		Username:    roxieEnv.RoxUsername,
 		Password:    roxieEnv.RoxAdminPassword,
 		KubeContext: env.GetCurrentContext(),
-		Exposure:    m.Config.Central.GetExposure(),
+		Exposure:    m.GetExposure(),
 		CACertFile:  caCertFile,
 	}, nil
 }

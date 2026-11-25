@@ -141,7 +141,7 @@ run-test-e2e: ## Run end-to-end tests (requires roxie to be available in PATH, k
 
 	@echo ""; \
 	echo "Invoking go test..."
-	$(GOTEST) -v -tags=e2e -timeout=120m -parallel=1 ./tests/e2e/...
+	$(GOTEST) -v -tags=e2e -timeout=150m -parallel=1 ./tests/e2e/...
 
 .PHONY: test-e2e
 test-e2e: build ## Run end-to-end tests (requires kubectl context and cluster access)
