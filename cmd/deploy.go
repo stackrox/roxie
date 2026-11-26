@@ -105,7 +105,7 @@ this flag can be used to tell roxie how to pre-load images for the current clust
 		}),
 	)
 
-	registerFlag(cmd, settings, "exposure", "Central exposure backend (loadbalancer, none)",
+	registerFlag(cmd, settings, "exposure", "Central exposure backend (loadbalancer, route, none)",
 		withApplyFn("exposure", func(config *deployer.Config, val string) error {
 			var exposure types.Exposure
 			if err := yaml.Unmarshal([]byte(val), &exposure); err != nil {

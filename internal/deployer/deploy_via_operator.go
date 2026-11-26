@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -686,10 +687,93 @@ func (d *Deployer) waitForLoadBalancer(ctx context.Context, namespace, serviceNa
 			}
 		}
 
-		time.Sleep(5 * time.Second)
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			return "", fmt.Errorf("cancelled waiting for LoadBalancer to get external address: %w", ctx.Err())
+		}
 	}
 
 	return "", errors.New("timeout waiting for LoadBalancer to get external address")
+}
+
+// routeStatus is the subset of the OpenShift Route object waitForRoute needs.
+type routeStatus struct {
+	Spec struct {
+		Host string `json:"host"`
+	} `json:"spec"`
+	Status struct {
+		Ingress []struct {
+			Host       string `json:"host"`
+			Conditions []struct {
+				Type   string `json:"type"`
+				Status string `json:"status"`
+			} `json:"conditions"`
+		} `json:"ingress"`
+	} `json:"status"`
+}
+
+// fetchRouteStatus reads the Route's host and admission state from a single
+// object, so both reflect the same state of the Route. Admission conditions
+// live on the per-router status.ingress entries; a host conflict can leave the
+// Route unadmitted with a host set, so admission is only reported when an
+// ingress entry for the host carries Admitted=True.
+func fetchRouteStatus(ctx context.Context, namespace, routeName string) (host string, admitted bool, err error) {
+	result, err := k8s.RunKubectl(ctx, k8s.KubectlOptions{
+		Args: []string{"get", "route", routeName, "-n", namespace, "-o", "json"},
+	})
+	if err != nil {
+		return "", false, err
+	}
+	var route routeStatus
+	if err := json.Unmarshal([]byte(result.Stdout), &route); err != nil {
+		return "", false, err
+	}
+	host, admitted = routeAdmittedFor(route)
+	return host, admitted, nil
+}
+
+// routeAdmittedFor reports the Route's host and whether an ingress entry for
+// that host carries an Admitted=True condition.
+func routeAdmittedFor(route routeStatus) (string, bool) {
+	for _, ingress := range route.Status.Ingress {
+		if ingress.Host != route.Spec.Host {
+			continue
+		}
+		for _, condition := range ingress.Conditions {
+			if condition.Type == "Admitted" && condition.Status == "True" {
+				return route.Spec.Host, true
+			}
+		}
+	}
+	return route.Spec.Host, false
+}
+
+// waitForRoute waits for an OpenShift Route to be admitted by the router.
+// Returns the endpoint as "host:port", with no https:// prefix.
+func (d *Deployer) waitForRoute(ctx context.Context, namespace, routeName string, waitTime time.Duration) (string, error) {
+	log.Infof("⏳ Waiting %s for Route %s to be admitted...", waitTime, routeName)
+
+	start := time.Now()
+	for time.Since(start) < waitTime {
+		hostname, admitted, err := fetchRouteStatus(ctx, namespace, routeName)
+		if err == nil && hostname != "" && admitted {
+			if env.RunningInteractively {
+				log.Successf("✓ Route admitted with hostname: %s", hostname)
+			} else {
+				log.Success("✓ Route admitted")
+			}
+			return fmt.Sprintf("%s:443", hostname), nil
+		}
+
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			return "", fmt.Errorf("cancelled waiting for Route to be admitted: %w", ctx.Err())
+		}
+	}
+
+	return "", errors.New("timeout waiting for Route to be admitted")
 }
 
 // fetchCentralCACerts fetches CA certificates needed to verify Central's TLS cert.
@@ -830,6 +914,12 @@ func (d *Deployer) configureCentralEndpoint(ctx context.Context) error {
 		endpoint, err := d.waitForLoadBalancer(ctx, d.config.Central.Namespace, "central-loadbalancer", loadBalancerWaitTime)
 		if err != nil {
 			return fmt.Errorf("failed to get LoadBalancer endpoint: %w", err)
+		}
+		d.centralEndpoint = endpoint
+	} else if exposure == types.ExposureRoute {
+		endpoint, err := d.waitForRoute(ctx, d.config.Central.Namespace, "central", loadBalancerWaitTime)
+		if err != nil {
+			return fmt.Errorf("failed to get Route endpoint: %w", err)
 		}
 		d.centralEndpoint = endpoint
 	} else {
